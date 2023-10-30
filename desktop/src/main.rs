@@ -17,7 +17,7 @@ pub fn main() {
 
   let mut cpu = CPU::new(fs::read("../SCPH1001.BIN").unwrap());
 
-  for _ in 0..512 {
+  loop {
     cpu.step();
   }
 }
