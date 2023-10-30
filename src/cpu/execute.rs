@@ -1,7 +1,11 @@
 use super::{CPU, instruction::Instruction};
 
 impl CPU {
-  pub fn execute(&mut self, instr: Instruction) {
+
+  /**
+   * returns true on branches and false otherwise
+   */
+  pub fn execute(&mut self, instr: Instruction) -> bool {
     let op_code = instr.op_code();
 
     println!("received op code {}", self.parse_op_code(op_code));
@@ -27,38 +31,51 @@ impl CPU {
     }
   }
 
-  fn j(&mut self, instr: Instruction) {
+  fn j(&mut self, instr: Instruction) -> bool {
     println!("jump address = {:x}, upper pc = {:x}", instr.j_imm() << 2, self.pc & 0xf0000000);
+    self.previous_pc = self.pc - 4;
     self.pc = (self.pc & 0xf000_0000) | (instr.j_imm() << 2);
+
+    false
   }
 
-  fn sll(&mut self, instr: Instruction) {
+  fn sll(&mut self, instr: Instruction) -> bool {
     let result = self.r[instr.rt()] << instr.imm5();
 
     self.set_reg(instr.rd(), result);
+
+    true
   }
 
-  fn lui(&mut self, instr: Instruction) {
+  fn lui(&mut self, instr: Instruction) -> bool {
     self.set_reg(instr.rt(), instr.immediate() << 16);
+
+    true
   }
 
-  fn ori(&mut self, instr: Instruction) {
+  fn ori(&mut self, instr: Instruction) -> bool {
     let result = self.r[instr.rs()] | instr.immediate();
 
     self.set_reg(instr.rt(), result);
+
+    true
   }
 
-  fn addiu(&mut self, instr: Instruction) {
+  fn addiu(&mut self, instr: Instruction) -> bool {
     let result = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
     self.set_reg(instr.rt(), result);
+
+    true
   }
 
-  fn swi(&mut self, instr: Instruction) {
+  fn swi(&mut self, instr: Instruction) -> bool {
     let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
     let value = self.r[instr.rt()];
 
     self.bus.mem_write_32(address, value);
+
+    true
   }
 
   fn parse_special(&self, op_code: u32) -> &'static str {

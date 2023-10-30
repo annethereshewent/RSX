@@ -38,10 +38,11 @@ impl CPU {
 
     println!("executing instruction {:032b} at address {:08x}", instr, self.previous_pc);
 
-    self.previous_pc = self.pc - 4;
     self.pc = self.pc.wrapping_add(4);
 
-    self.execute(Instruction::new(instr));
+    if self.execute(Instruction::new(instr)) {
+      self.previous_pc = self.pc - 4;
+    }
   }
 
   pub fn set_reg(&mut self, rt: usize, val: u32) {
