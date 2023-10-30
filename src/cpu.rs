@@ -40,7 +40,9 @@ impl CPU {
 
     self.pc = self.pc.wrapping_add(4);
 
-    if self.execute(Instruction::new(instr)) {
+    let should_update = self.execute(Instruction::new(instr));
+
+    if should_update {
       self.previous_pc = self.pc - 4;
     }
   }

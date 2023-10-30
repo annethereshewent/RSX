@@ -3,7 +3,7 @@ use super::{CPU, instruction::Instruction};
 impl CPU {
 
   /**
-   * returns true on branches and false otherwise
+   * returns true if operation is non-branching, false otherwise
    */
   pub fn execute(&mut self, instr: Instruction) -> bool {
     let op_code = instr.op_code();
@@ -14,10 +14,11 @@ impl CPU {
       0 => {
         let op_code = instr.op_code_special();
 
-        println!("received special op {}", self.parse_special(op_code));
+        println!("received secondary op {}", self.parse_secondary(op_code));
 
         match op_code {
           0 => self.sll(instr),
+          0x25 => self.or(instr),
           _ => todo!("invalid or unimplemented special op code: {:06b}", op_code)
         }
 
@@ -61,6 +62,16 @@ impl CPU {
     true
   }
 
+  fn or(&mut self, instr: Instruction) -> bool {
+    let result = self.r[instr.rs()] | self.r[instr.rt()];
+
+    println!("rs = {} rt = {} rd = {}", instr.rs(), instr.rt(), instr.rd());
+
+    self.set_reg(instr.rd(), result);
+
+    true
+  }
+
   fn addiu(&mut self, instr: Instruction) -> bool {
     let result = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
     self.set_reg(instr.rt(), result);
@@ -78,9 +89,10 @@ impl CPU {
     true
   }
 
-  fn parse_special(&self, op_code: u32) -> &'static str {
+  fn parse_secondary(&self, op_code: u32) -> &'static str {
     match op_code {
       0 => "SLL",
+      0x25 => "OR",
       _ => todo!("Invalid or unimplemented special op: {:06b}", op_code)
     }
   }
