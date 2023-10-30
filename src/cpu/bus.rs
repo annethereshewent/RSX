@@ -58,7 +58,35 @@ impl Bus {
 
     match address {
       0x0000_0000..=0x001f_ffff => self.ram[address as usize] = value,
-      _ => ()
+      0x1f80_1d80..=0x1f80_1dbc => println!("ignoring writes to SPU registers"),
+      0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
+      0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
+      0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
+      0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
+      _ => panic!("write to unsupported address: {:08x}", address)
+    }
+  }
+
+  pub fn mem_write_16(&mut self, address: u32, value: u16) {
+    if (address & 0b1) != 0 {
+      panic!("unaligned address received: {:X}", address);
+    }
+
+    let address = Bus::translate_address(address);
+
+    match address {
+      0x0000_0000..=0x001f_ffff => {
+        let offset = address as usize;
+
+        self.ram[offset] = (value & 0xff) as u8;
+        self.ram[offset + 1] = ((value >> 8) & 0xff) as u8;
+      }
+      0x1f80_1d80..=0x1f80_1dbc => println!("ignoring writes to SPU registers"),
+      0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
+      0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
+      0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
+      0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
+      _ => panic!("write to unsupported address: {:08x}", address)
     }
   }
 
@@ -78,12 +106,12 @@ impl Bus {
         self.ram[offset + 2] = ((value >> 16) & 0xff) as u8;
         self.ram[offset + 3] = ((value >> 24)) as u8;
       }
+      0x1f80_1d80..=0x1f80_1dbc => println!("ignoring writes to SPU registers"),
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
+      0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
       0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
       _ => panic!("write to unsupported address: {:06x}", address)
     }
-
-
   }
 }

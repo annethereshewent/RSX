@@ -1,5 +1,8 @@
 use super::{CPU, instruction::Instruction};
 
+
+const RA_REGISTER: usize = 31;
+
 impl CPU {
 
   /**
@@ -26,16 +29,48 @@ impl CPU {
 
       }
       0x2 => self.j(instr),
+      0x3 => self.jal(instr),
       0x5 => self.bne(instr),
       0x8 => self.addi(instr),
       0x9 => self.addiu(instr),
-      0x10 => self.execute_cop0(instr),
+      0xc => self.andi(instr),
       0xd => self.ori(instr),
       0xf => self.lui(instr),
+      0x10 => self.execute_cop0(instr),
       0x23 => self.lw(instr),
+      0x28 => self.sb(instr),
+      0x29 => self.sh(instr),
       0x2b => self.swi(instr),
       _ => todo!("invalid or unimplemented op code: {:03x}", op_code)
     }
+  }
+
+  fn sh(&mut self, instr: Instruction) -> bool {
+    if self.sr & 0x10000 == 0 {
+      let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
+
+      let value = self.r[instr.rt()];
+
+      self.bus.mem_write_16(address, value as u16);
+    } else {
+      println!("ignoring writes to cache");
+    }
+
+    true
+  }
+
+  fn sb(&mut self, instr: Instruction) -> bool {
+    if self.sr & 0x10000 == 0 {
+      let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
+
+      let value = self.r[instr.rt()];
+
+      self.bus.mem_write_8(address, value as u8);
+    } else {
+      println!("ignoring writes to cache");
+    }
+
+    true
   }
 
   fn execute_cop0(&mut self, instr: Instruction) -> bool {
@@ -123,6 +158,12 @@ impl CPU {
     false
   }
 
+  fn jal(&mut self, instr: Instruction) -> bool {
+    self.set_reg(RA_REGISTER, self.pc);
+
+    self.j(instr)
+  }
+
   fn sll(&mut self, instr: Instruction) -> bool {
     let result = self.r[instr.rt()] << instr.imm5();
 
@@ -149,6 +190,14 @@ impl CPU {
     let result = self.r[instr.rs()] | self.r[instr.rt()];
 
     self.set_reg(instr.rd(), result);
+
+    true
+  }
+
+  fn andi(&mut self, instr: Instruction) -> bool {
+    let result = self.r[instr.rs()] & instr.immediate();
+
+    self.set_reg(instr.rt(), result);
 
     true
   }
@@ -207,13 +256,17 @@ impl CPU {
     match op_code {
       0 => "Secondary",
       0x2 => "J",
+      0x3 => "JAL",
       0x5 => "BNE",
       0x8 => "ADDI",
       0x9 => "ADDIU",
-      0x10 => "COP0",
+      0xc => "ANDI",
       0xd => "ORI",
       0xf => "LUI",
+      0x10 => "COP0",
       0x23 => "LW",
+      0x28 => "SB",
+      0x29 => "SH",
       0x2b => "SWI",
       _ => todo!("invalid or unimplemented op code: {:03x}", op_code)
     }
