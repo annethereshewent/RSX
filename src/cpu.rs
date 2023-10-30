@@ -6,6 +6,20 @@ pub mod bus;
 pub mod execute;
 pub mod instruction;
 
+struct OutRegister {
+  pub val: u32,
+  pub reg: usize
+}
+
+impl OutRegister {
+  pub fn new(val: u32, reg: usize) -> Self {
+    Self {
+      val,
+      reg
+    }
+  }
+}
+
 pub struct CPU {
   pub pc: u32,
   pub r: [u32; 32],
@@ -14,7 +28,10 @@ pub struct CPU {
   low: u32,
   bus: Bus,
   pipeline: [u32; 2],
-  previous_pc: u32
+  previous_pc: u32,
+  delayed_register: usize,
+  delayed_load: Option<u32>,
+  out_registers: Vec<OutRegister>
 }
 
 impl CPU {
@@ -27,7 +44,10 @@ impl CPU {
       hi: 0,
       low: 0,
       bus: Bus::new(bios),
-      pipeline: [0; 2]
+      pipeline: [0; 2],
+      delayed_register: 0,
+      delayed_load: None,
+      out_registers: Vec::new()
     }
   }
   pub fn step(&mut self) {
@@ -38,6 +58,13 @@ impl CPU {
     self.pipeline[0] = self.pipeline[1];
     self.pipeline[1] = next_instr;
 
+    if let Some(delayed_load) = self.delayed_load {
+      self.set_reg(self.delayed_register, delayed_load)
+    }
+
+    self.delayed_load = None;
+    self.delayed_register = 0;
+
     println!("executing instruction {:032b} at address {:08x}", instr, self.previous_pc);
 
     self.pc = self.pc.wrapping_add(4);
@@ -47,11 +74,16 @@ impl CPU {
     if should_update {
       self.previous_pc = self.pc - 4;
     }
+
+    while !self.out_registers.is_empty() {
+      let register = self.out_registers.pop().unwrap();
+      self.r[register.reg] = register.val;
+    }
   }
 
   pub fn set_reg(&mut self, rt: usize, val: u32) {
     if rt != 0 {
-      self.r[rt] = val
+      self.out_registers.push(OutRegister::new(val, rt))
     }
   }
 }

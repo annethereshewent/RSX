@@ -12,14 +12,16 @@ impl CPU {
 
     match op_code {
       0 => {
-        let op_code = instr.op_code_special();
+        let op_code = instr.op_code_secondary();
 
         println!("received secondary op {}", self.parse_secondary(op_code));
 
         match op_code {
           0 => self.sll(instr),
+          0x21 => self.addu(instr),
           0x25 => self.or(instr),
-          _ => todo!("invalid or unimplemented special op code: {:06b}", op_code)
+          0x2b => self.sltu(instr),
+          _ => todo!("invalid or unimplemented secondary op code: {:03x}", op_code)
         }
 
       }
@@ -30,8 +32,9 @@ impl CPU {
       0x10 => self.execute_cop0(instr),
       0xd => self.ori(instr),
       0xf => self.lui(instr),
+      0x23 => self.lw(instr),
       0x2b => self.swi(instr),
-      _ => todo!("invalid or unimplemented op code: {:06b}", op_code)
+      _ => todo!("invalid or unimplemented op code: {:03x}", op_code)
     }
   }
 
@@ -66,16 +69,51 @@ impl CPU {
     self.pc = self.pc.wrapping_add(offset).wrapping_sub(4);
   }
 
+  fn sltu(&mut self, instr: Instruction) -> bool {
+    let result: u32 = if self.r[instr.rs()] < self.r[instr.rt()] {
+      1
+    } else {
+      0
+    };
+
+    self.set_reg(instr.rd(), result);
+
+    true
+  }
+
   fn mtc0(&mut self, instr: Instruction) {
 
     let cop0_reg = instr.rd();
-
+    let value = self.r[instr.rt()];
 
     match cop0_reg {
-      12 => self.sr = self.r[instr.rt()],
+      3 | 5 | 6 | 7 | 9 | 11 => {
+        if value != 0 {
+          panic!("unhandled write to debug registers");
+        }
+      }
+      12 => self.sr = value,
+      13 => {
+        if value != 0 {
+          panic!("unhandled write to cause register");
+        }
+      }
       _ => todo!("cop0 register not implemented in mtc0: {}", cop0_reg)
     }
 
+  }
+
+  fn lw(&mut self, instr: Instruction) -> bool {
+    if self.sr & 0x10000 == 0 {
+      let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
+
+      self.delayed_load = Some(self.bus.mem_read_32(address));
+      self.delayed_register = instr.rt();
+    } else {
+      println!("cache not implemented yet for loads");
+    }
+
+    true
   }
 
   fn j(&mut self, instr: Instruction) -> bool {
@@ -110,8 +148,6 @@ impl CPU {
   fn or(&mut self, instr: Instruction) -> bool {
     let result = self.r[instr.rs()] | self.r[instr.rt()];
 
-    println!("rs = {} rt = {} rd = {}", instr.rs(), instr.rt(), instr.rd());
-
     self.set_reg(instr.rd(), result);
 
     true
@@ -135,6 +171,14 @@ impl CPU {
     true
   }
 
+  fn addu(&mut self, instr: Instruction) -> bool {
+    let result = self.r[instr.rs()].wrapping_add(self.r[instr.rt()]);
+
+    self.set_reg(instr.rd(), result);
+
+    true
+  }
+
   fn swi(&mut self, instr: Instruction) -> bool {
     if self.sr & 0x10000 == 0 {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
@@ -152,14 +196,16 @@ impl CPU {
   fn parse_secondary(&self, op_code: u32) -> &'static str {
     match op_code {
       0 => "SLL",
+      0x21 => "ADDU",
       0x25 => "OR",
-      _ => todo!("Invalid or unimplemented special op: {:06b}", op_code)
+      0x2b => "SLTU",
+      _ => todo!("Invalid or unimplemented secondary op: {:03x}", op_code)
     }
   }
 
   fn parse_op_code(&self, op_code: u32) -> &'static str {
     match op_code {
-      0 => "Special",
+      0 => "Secondary",
       0x2 => "J",
       0x5 => "BNE",
       0x8 => "ADDI",
@@ -167,8 +213,9 @@ impl CPU {
       0x10 => "COP0",
       0xd => "ORI",
       0xf => "LUI",
+      0x23 => "LW",
       0x2b => "SWI",
-      _ => todo!("invalid or unimplemented op code: {:06b}", op_code)
+      _ => todo!("invalid or unimplemented op code: {:03x}", op_code)
     }
   }
 }

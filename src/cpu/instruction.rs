@@ -16,7 +16,7 @@ impl Instruction {
     ((self.0 >> 21) & 0b11111)
   }
 
-  pub fn op_code_special(&self) -> u32 {
+  pub fn op_code_secondary(&self) -> u32 {
     self.0 & 0b111111
   }
 
