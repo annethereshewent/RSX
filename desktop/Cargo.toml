@@ -1,0 +1,12 @@
+[package]
+name = "rustation-desktop"
+version = "0.1.0"
+authors = ["Anne Castrillon <anne.castrillon@gmail.com>"]
+edition = "2021"
+
+[dependencies.rustation]
+path = "../"
+
+[dependencies.sdl2]
+version = "0.35"
+features=["gfx"]
