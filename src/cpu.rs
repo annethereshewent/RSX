@@ -9,6 +9,7 @@ pub mod instruction;
 pub struct CPU {
   pub pc: u32,
   pub r: [u32; 32],
+  pub sr: u32,
   hi: u32,
   low: u32,
   bus: Bus,
@@ -20,6 +21,7 @@ impl CPU {
   pub fn new(bios: Vec<u8>) -> Self {
     Self {
       pc: 0xbfc0_0000,
+      sr: 0,
       previous_pc: 0,
       r: [0; 32],
       hi: 0,

@@ -32,7 +32,7 @@ impl Bus {
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
-      _ => todo!("memory not implemented yet at address {:X}", address)
+      _ => println!("memory not implemented yet at address {:X}", address)
     }
 
 
