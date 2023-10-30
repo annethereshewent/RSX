@@ -13,10 +13,22 @@ impl Bus {
     }
   }
 
+  fn translate_address(address: u32) -> u32 {
+    match address >> 29 {
+      0b000..=0b011 => address,
+      0b100 => address & 0x7fff_ffff,
+      0b101 => address & 0x1fff_ffff,
+      0b110..=0b111 => address,
+      _ => unreachable!("not possible")
+    }
+  }
+
   fn mem_read_8(&self, address: u32) -> u8 {
+    let address = Bus::translate_address(address);
+
     match address {
-      0xbfc0_0000..=0xbfc7_ffff => self.bios[(address - 0xbfc0_0000) as usize],
-      0xa000_0000..=0xa01f_ffff => self.ram[(address - 0xa000_0000) as usize],
+      0x1fc0_0000..=0x1fc7_ffff => self.bios[(address - 0x1fc0_0000) as usize],
+      0x0000_0000..=0x001f_ffff => self.ram[address as usize],
       _ => panic!("not implemented: {:08x}", address)
     }
   }
@@ -25,12 +37,27 @@ impl Bus {
     if (address & 0b11) != 0 {
       panic!("unaligned address received: {:032b}", address);
     }
-    (self.mem_read_8(address) as u32) | ((self.mem_read_8(address + 1) as u32) << 8) | ((self.mem_read_8(address + 2) as u32) << 16) | ((self.mem_read_8(address + 3) as u32) << 24)
+
+    let address = Bus::translate_address(address);
+
+    match address {
+      0x0000_0000..=0x001f_ffff => {
+        let offset = address as usize;
+        (self.ram[offset] as u32) | ((self.ram[offset + 1] as u32) << 8) | ((self.ram[offset + 2] as u32) << 16) | (self.ram[offset + 3] as u32) << 24
+      }
+      0x1fc0_0000..=0x1fc7_ffff => {
+        let offset = (address - 0x1fc0_0000) as usize;
+        (self.bios[offset] as u32) | ((self.bios[offset + 1] as u32) << 8) | ((self.bios[offset + 2] as u32) << 16) | (self.bios[offset + 3] as u32) << 24
+      }
+      _ => panic!("not implemented: {:08x}", address)
+    }
   }
 
   pub fn mem_write_8(&mut self, address: u32, value: u8) {
+    let address = Bus::translate_address(address);
+
     match address {
-      0xa000_0000..=0xa01f_ffff => self.ram[(address - 0xa000_0000) as usize] = value,
+      0x0000_0000..=0x001f_ffff => self.ram[address as usize] = value,
       _ => ()
     }
   }
@@ -40,16 +67,21 @@ impl Bus {
       panic!("unaligned address received: {:X}", address);
     }
 
+    let address = Bus::translate_address(address);
+
     match address {
+      0x0000_0000..=0x001f_ffff => {
+        let offset = address as usize;
+
+        self.ram[offset] = (value & 0xff) as u8;
+        self.ram[offset + 1] = ((value >> 8) & 0xff) as u8;
+        self.ram[offset + 2] = ((value >> 16) & 0xff) as u8;
+        self.ram[offset + 3] = ((value >> 24)) as u8;
+      }
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
-      _ => {
-        self.mem_write_8(address, (value & 0xff) as u8);
-        self.mem_write_8(address + 1, ((value >> 8) & 0xff) as u8);
-        self.mem_write_8(address + 2, ((value >> 16) & 0xff) as u8);
-        self.mem_write_8(address + 3, (value >> 24) as u8);
-      }
+      _ => panic!("write to unsupported address: {:06x}", address)
     }
 
 

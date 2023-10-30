@@ -50,6 +50,7 @@ impl CPU {
       out_registers: Vec::new()
     }
   }
+
   pub fn step(&mut self) {
     let next_instr = self.bus.mem_read_32(self.pc);
 
