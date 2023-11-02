@@ -21,6 +21,7 @@ impl CPU {
 
         match op_code {
           0 => self.sll(instr),
+          0x8 => self.jr(instr),
           0x21 => self.addu(instr),
           0x25 => self.or(instr),
           0x2b => self.sltu(instr),
@@ -30,6 +31,7 @@ impl CPU {
       }
       0x2 => self.j(instr),
       0x3 => self.jal(instr),
+      0x4 => self.beq(instr),
       0x5 => self.bne(instr),
       0x8 => self.addi(instr),
       0x9 => self.addiu(instr),
@@ -37,6 +39,7 @@ impl CPU {
       0xd => self.ori(instr),
       0xf => self.lui(instr),
       0x10 => self.execute_cop0(instr),
+      0x20 => self.lb(instr),
       0x23 => self.lw(instr),
       0x28 => self.sb(instr),
       0x29 => self.sh(instr),
@@ -73,6 +76,21 @@ impl CPU {
     true
   }
 
+  fn lb(&mut self, instr: Instruction) -> bool {
+    if self.sr & 0x1000 == 0 {
+      let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
+
+      let value = self.bus.mem_read_8(address);
+
+      self.delayed_load = Some(value as i8 as i32 as u32);
+      self.delayed_register = instr.rt();
+    } else {
+      println!("cache not implemented yet for loads");
+    }
+
+    true
+  }
+
   fn execute_cop0(&mut self, instr: Instruction) -> bool {
     let op_code = instr.cop0_code();
 
@@ -87,7 +105,17 @@ impl CPU {
   fn bne(&mut self, instr: Instruction) -> bool {
     let offset = instr.immediate_signed();
 
-    if self.r[instr.rs()] != self.r[instr.rt()] {
+    self.branch_if(offset, self.r[instr.rs()] != self.r[instr.rt()])
+  }
+
+  fn beq(&mut self, instr: Instruction) -> bool {
+    let offset = instr.immediate_signed();
+
+    self.branch_if(offset, self.r[instr.rs()] == self.r[instr.rt()])
+  }
+
+  fn branch_if(&mut self, offset: u32, condition: bool) -> bool {
+    if condition {
       self.branch(offset);
       false
     } else {
@@ -162,6 +190,13 @@ impl CPU {
     self.set_reg(RA_REGISTER, self.pc);
 
     self.j(instr)
+  }
+
+  fn jr(&mut self, instr: Instruction) -> bool {
+    self.previous_pc = self.pc.wrapping_sub(4);
+    self.pc = self.r[instr.rs()];
+
+    false
   }
 
   fn sll(&mut self, instr: Instruction) -> bool {
@@ -245,6 +280,7 @@ impl CPU {
   fn parse_secondary(&self, op_code: u32) -> &'static str {
     match op_code {
       0 => "SLL",
+      0x8 => "JR",
       0x21 => "ADDU",
       0x25 => "OR",
       0x2b => "SLTU",
@@ -257,6 +293,7 @@ impl CPU {
       0 => "Secondary",
       0x2 => "J",
       0x3 => "JAL",
+      0x4 => "BEQ",
       0x5 => "BNE",
       0x8 => "ADDI",
       0x9 => "ADDIU",
@@ -264,6 +301,7 @@ impl CPU {
       0xd => "ORI",
       0xf => "LUI",
       0x10 => "COP0",
+      0x20 => "LB",
       0x23 => "LW",
       0x28 => "SB",
       0x29 => "SH",

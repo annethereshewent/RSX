@@ -23,10 +23,11 @@ impl Bus {
     }
   }
 
-  fn mem_read_8(&self, address: u32) -> u8 {
+  pub fn mem_read_8(&self, address: u32) -> u8 {
     let address = Bus::translate_address(address);
 
     match address {
+      0x1f00_0000..=0x1f08_0000 => 0xff,
       0x1fc0_0000..=0x1fc7_ffff => self.bios[(address - 0x1fc0_0000) as usize],
       0x0000_0000..=0x001f_ffff => self.ram[address as usize],
       _ => panic!("not implemented: {:08x}", address)
@@ -45,6 +46,7 @@ impl Bus {
         let offset = address as usize;
         (self.ram[offset] as u32) | ((self.ram[offset + 1] as u32) << 8) | ((self.ram[offset + 2] as u32) << 16) | (self.ram[offset + 3] as u32) << 24
       }
+      // 0x1f00_0000..=0x1f08_0000 => 0xffffffff,
       0x1fc0_0000..=0x1fc7_ffff => {
         let offset = (address - 0x1fc0_0000) as usize;
         (self.bios[offset] as u32) | ((self.bios[offset + 1] as u32) << 8) | ((self.bios[offset + 2] as u32) << 16) | (self.bios[offset + 3] as u32) << 24
