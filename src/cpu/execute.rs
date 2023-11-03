@@ -17,13 +17,20 @@ impl CPU {
 
         match op_code {
           0 => self.sll(instr),
+          0x2 => self.srl(instr),
+          0x3 => self.sra(instr),
           0x8 => self.jr(instr),
           0x9 => self.jalr(instr),
+          0x10 => self.mfhi(instr),
+          0x12 => self.mflo(instr),
+          0x1a => self.div(instr),
+          0x1b => self.divu(instr),
           0x20 => self.add(instr),
           0x21 => self.addu(instr),
           0x23 => self.subu(instr),
           0x24 => self.and(instr),
           0x25 => self.or(instr),
+          0x2a => self.slt(instr),
           0x2b => self.sltu(instr),
           _ => todo!("invalid or unimplemented secondary op code: {:03x}", op_code)
         }
@@ -45,6 +52,7 @@ impl CPU {
       0x8 => self.addi(instr),
       0x9 => self.addiu(instr),
       0xa => self.slti(instr),
+      0xb => self.sltiu(instr),
       0xc => self.andi(instr),
       0xd => self.ori(instr),
       0xf => self.lui(instr),
@@ -185,6 +193,26 @@ impl CPU {
     self.set_reg(instr.rd(), result);
   }
 
+  fn slt(&mut self, instr: Instruction) {
+    let result: u32 = if (self.r[instr.rs()] as i32) < (self.r[instr.rt()] as i32) {
+      1
+    } else {
+      0
+    };
+
+    self.set_reg(instr.rd(), result);
+  }
+
+  fn sltiu(&mut self, instr: Instruction) {
+    let result: u32 = if self.r[instr.rs()] < instr.immediate_signed() {
+      1
+    } else {
+      0
+    };
+
+    self.set_reg(instr.rt(), result);
+  }
+
   fn slti(&mut self, instr: Instruction) {
     let result: u32 = if (self.r[instr.rs()] as i32) < (instr.immediate_signed() as i32) {
       1
@@ -263,8 +291,28 @@ impl CPU {
     self.set_reg(instr.rd(), result);
   }
 
+  fn sra(&mut self, instr: Instruction) {
+    let result = (self.r[instr.rt()] as i32) >> instr.imm5();
+
+    self.set_reg(instr.rd(), result as u32);
+  }
+
+  fn srl(&mut self, instr: Instruction) {
+    let result = self.r[instr.rt()] >> instr.imm5();
+
+    self.set_reg(instr.rd(), result);
+  }
+
   fn lui(&mut self, instr: Instruction) {
     self.set_reg(instr.rt(), instr.immediate() << 16);
+  }
+
+  fn mflo(&mut self, instr: Instruction) {
+    self.set_reg(instr.rd(), self.low);
+  }
+
+  fn mfhi(&mut self, instr: Instruction) {
+    self.set_reg(instr.rd(), self.hi);
   }
 
   fn ori(&mut self, instr: Instruction) {
@@ -325,6 +373,35 @@ impl CPU {
     self.set_reg(instr.rd(), result);
   }
 
+  fn div(&mut self, instr: Instruction) {
+    let numerator = self.r[instr.rs()] as i32;
+    let denominator = self.r[instr.rt()] as i32;
+
+    if denominator == 0 {
+      self.low = if numerator >= 0 { 0xffffffff } else { 1 };
+      self.hi = numerator as u32;
+    } else if (numerator as u32)  == 0x80000000 && denominator == -1 {
+      self.low = numerator as u32;
+      self.hi = 0;
+    } else {
+      self.low = (numerator / denominator) as u32;
+      self.hi = (numerator % denominator) as u32;
+    }
+  }
+
+  fn divu(&mut self, instr: Instruction) {
+    let numerator = self.r[instr.rs()];
+    let denominator = self.r[instr.rt()];
+
+    if denominator == 0 {
+      self.low = 0xffffffff;
+      self.hi = numerator;
+    }  else {
+      self.low = numerator / denominator;
+      self.hi = numerator % denominator;
+    }
+  }
+
   fn swi(&mut self, instr: Instruction) {
     if self.sr & 0x10000 == 0 {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
@@ -340,13 +417,20 @@ impl CPU {
   fn parse_secondary(&self, op_code: u32) -> &'static str {
     match op_code {
       0 => "SLL",
+      0x2 => "SRL",
+      0x3 => "SRA",
       0x8 => "JR",
       0x9 => "JALR",
+      0x10 => "MFHI",
+      0x12 => "MFLO",
+      0x1a => "DIV",
+      0x1b => "DIVU",
       0x20 => "ADD",
       0x21 => "ADDU",
       0x23 => "SUBU",
       0x24 => "AND",
       0x25 => "OR",
+      0x2a => "SLT",
       0x2b => "SLTU",
       _ => todo!("Invalid or unimplemented secondary op: {:03x}", op_code)
     }
@@ -365,6 +449,7 @@ impl CPU {
       0x8 => "ADDI",
       0x9 => "ADDIU",
       0xa => "SLTI",
+      0xb => "SLTIU",
       0xc => "ANDI",
       0xd => "ORI",
       0xf => "LUI",
