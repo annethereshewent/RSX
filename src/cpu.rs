@@ -22,8 +22,8 @@ impl COP0 {
     (self.sr >> 22) & 0b1 == 1
   }
 
-  pub fn is_cache_isolated(&self) -> bool {
-    self.sr & 0x10000 == 1
+  pub fn is_cache_disabled(&self) -> bool {
+    self.sr & 0x10000 == 0
   }
 
   pub fn enter_exception(&mut self, cause: Cause) -> u32 {

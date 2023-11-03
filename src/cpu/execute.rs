@@ -69,7 +69,7 @@ impl CPU {
   }
 
   fn sh(&mut self, instr: Instruction) {
-    if !self.cop0.is_cache_isolated() {
+    if self.cop0.is_cache_disabled() {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
       let value = self.r[instr.rt()];
@@ -81,7 +81,7 @@ impl CPU {
   }
 
   fn sb(&mut self, instr: Instruction) {
-    if !self.cop0.is_cache_isolated() {
+    if self.cop0.is_cache_disabled() {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
       let value = self.r[instr.rt()];
@@ -93,7 +93,7 @@ impl CPU {
   }
 
   fn lb(&mut self, instr: Instruction) {
-    if !self.cop0.is_cache_isolated() {
+    if self.cop0.is_cache_disabled() {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
       let value = self.bus.mem_read_8(address);
@@ -106,7 +106,7 @@ impl CPU {
   }
 
   fn lbu(&mut self, instr: Instruction) {
-    if !self.cop0.is_cache_isolated() {
+    if self.cop0.is_cache_disabled() {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
       let value = self.bus.mem_read_8(address);
@@ -251,7 +251,7 @@ impl CPU {
   }
 
   fn lw(&mut self, instr: Instruction) {
-    if !self.cop0.is_cache_isolated() {
+    if self.cop0.is_cache_disabled() {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
       self.delayed_load = Some(self.bus.mem_read_32(address));
@@ -399,7 +399,7 @@ impl CPU {
   }
 
   fn swi(&mut self, instr: Instruction) {
-    if !self.cop0.is_cache_isolated() {
+    if self.cop0.is_cache_disabled() {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
       let value = self.r[instr.rt()];
