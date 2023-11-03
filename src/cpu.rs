@@ -22,13 +22,13 @@ impl OutRegister {
 
 pub struct CPU {
   pub pc: u32,
+  pub next_pc: u32,
+  current_pc: u32,
   pub r: [u32; 32],
   pub sr: u32,
   hi: u32,
   low: u32,
   bus: Bus,
-  pipeline: [u32; 2],
-  previous_pc: u32,
   delayed_register: usize,
   delayed_load: Option<u32>,
   out_registers: Vec<OutRegister>
@@ -38,13 +38,13 @@ impl CPU {
   pub fn new(bios: Vec<u8>) -> Self {
     Self {
       pc: 0xbfc0_0000,
+      next_pc: 0xbfc0_0004,
+      current_pc: 0xbfc0_0000,
       sr: 0,
-      previous_pc: 0,
       r: [0; 32],
       hi: 0,
       low: 0,
       bus: Bus::new(bios),
-      pipeline: [0; 2],
       delayed_register: 0,
       delayed_load: None,
       out_registers: Vec::new()
@@ -52,12 +52,8 @@ impl CPU {
   }
 
   pub fn step(&mut self) {
-    let next_instr = self.bus.mem_read_32(self.pc);
-
-    let instr = self.pipeline[0];
-
-    self.pipeline[0] = self.pipeline[1];
-    self.pipeline[1] = next_instr;
+    self.current_pc = self.pc;
+    let instr = self.bus.mem_read_32(self.pc);
 
     if let Some(delayed_load) = self.delayed_load {
       self.set_reg(self.delayed_register, delayed_load)
@@ -66,15 +62,12 @@ impl CPU {
     self.delayed_load = None;
     self.delayed_register = 0;
 
-    println!("executing instruction {:032b} at address {:08x}", instr, self.previous_pc);
+    println!("executing instruction {:032b} at address {:08x}", instr, self.current_pc);
 
-    self.pc = self.pc.wrapping_add(4);
+    self.pc = self.next_pc;
+    self.next_pc = self.next_pc.wrapping_add(4);
 
-    let should_update = self.execute(Instruction::new(instr));
-
-    if should_update {
-      self.previous_pc = self.pc - 8;
-    }
+    self.execute(Instruction::new(instr));
 
     while !self.out_registers.is_empty() {
       let register = self.out_registers.pop().unwrap();

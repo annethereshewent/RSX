@@ -4,11 +4,7 @@ use super::{CPU, instruction::Instruction};
 const RA_REGISTER: usize = 31;
 
 impl CPU {
-
-  /**
-   * returns true if operation is non-branching, false otherwise
-   */
-  pub fn execute(&mut self, instr: Instruction) -> bool {
+  pub fn execute(&mut self, instr: Instruction) {
     let op_code = instr.op_code();
 
     println!("received op code {}", self.parse_op_code(op_code));
@@ -48,7 +44,7 @@ impl CPU {
     }
   }
 
-  fn sh(&mut self, instr: Instruction) -> bool {
+  fn sh(&mut self, instr: Instruction) {
     if self.sr & 0x10000 == 0 {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
@@ -58,11 +54,9 @@ impl CPU {
     } else {
       println!("ignoring writes to cache");
     }
-
-    true
   }
 
-  fn sb(&mut self, instr: Instruction) -> bool {
+  fn sb(&mut self, instr: Instruction) {
     if self.sr & 0x10000 == 0 {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
@@ -72,11 +66,9 @@ impl CPU {
     } else {
       println!("ignoring writes to cache");
     }
-
-    true
   }
 
-  fn lb(&mut self, instr: Instruction) -> bool {
+  fn lb(&mut self, instr: Instruction) {
     if self.sr & 0x1000 == 0 {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
@@ -87,11 +79,9 @@ impl CPU {
     } else {
       println!("cache not implemented yet for loads");
     }
-
-    true
   }
 
-  fn execute_cop0(&mut self, instr: Instruction) -> bool {
+  fn execute_cop0(&mut self, instr: Instruction) {
     let op_code = instr.cop0_code();
 
     match op_code {
@@ -99,42 +89,35 @@ impl CPU {
       0b00100 => self.mtc0(instr),
       _ => todo!("cop0 instruction not implemented yet")
     }
-
-    true
   }
 
-  fn bne(&mut self, instr: Instruction) -> bool {
+  fn bne(&mut self, instr: Instruction) {
     let offset = instr.immediate_signed();
 
-    self.branch_if(offset, self.r[instr.rs()] != self.r[instr.rt()])
+    self.branch_if(offset, self.r[instr.rs()] != self.r[instr.rt()]);
   }
 
-  fn beq(&mut self, instr: Instruction) -> bool {
+  fn beq(&mut self, instr: Instruction) {
     let offset = instr.immediate_signed();
 
-    self.branch_if(offset, self.r[instr.rs()] == self.r[instr.rt()])
+    self.branch_if(offset, self.r[instr.rs()] == self.r[instr.rt()]);
   }
 
-  fn branch_if(&mut self, offset: u32, condition: bool) -> bool {
+  fn branch_if(&mut self, offset: u32, condition: bool) {
     if condition {
       self.branch(offset);
-      false
-    } else {
-      true
     }
   }
 
   fn branch(&mut self, offset: u32) {
-    self.previous_pc = self.pc.wrapping_sub(8);
-
     let offset = offset << 2;
 
     println!("the offset is {:x}", offset);
 
-    self.pc = self.pc.wrapping_add(offset).wrapping_sub(8);
+    self.next_pc = self.pc.wrapping_add(offset)
   }
 
-  fn sltu(&mut self, instr: Instruction) -> bool {
+  fn sltu(&mut self, instr: Instruction) {
     let result: u32 = if self.r[instr.rs()] < self.r[instr.rt()] {
       1
     } else {
@@ -142,8 +125,6 @@ impl CPU {
     };
 
     self.set_reg(instr.rd(), result);
-
-    true
   }
 
   fn mfc0(&mut self, instr: Instruction) {
@@ -177,7 +158,7 @@ impl CPU {
 
   }
 
-  fn lw(&mut self, instr: Instruction) -> bool {
+  fn lw(&mut self, instr: Instruction) {
     if self.sr & 0x10000 == 0 {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
@@ -186,95 +167,71 @@ impl CPU {
     } else {
       println!("cache not implemented yet for loads");
     }
-
-    true
   }
 
-  fn j(&mut self, instr: Instruction) -> bool {
-    self.previous_pc = self.pc.wrapping_sub(8);
-    self.pc = (self.pc & 0xf000_0000) | (instr.j_imm() << 2);
-
-    false
+  fn j(&mut self, instr: Instruction) {
+    self.next_pc = (self.pc & 0xf000_0000) | (instr.j_imm() << 2);
   }
 
-  fn jal(&mut self, instr: Instruction) -> bool {
-    self.set_reg(RA_REGISTER, self.pc);
+  fn jal(&mut self, instr: Instruction) {
+    self.set_reg(RA_REGISTER, self.next_pc);
 
-    self.j(instr)
+    self.j(instr);
   }
 
-  fn jr(&mut self, instr: Instruction) -> bool {
-    self.previous_pc = self.pc.wrapping_sub(8);
-    self.pc = self.r[instr.rs()];
-
-    false
+  fn jr(&mut self, instr: Instruction) {
+    self.next_pc = self.r[instr.rs()];
   }
 
-  fn sll(&mut self, instr: Instruction) -> bool {
+  fn sll(&mut self, instr: Instruction) {
     let result = self.r[instr.rt()] << instr.imm5();
 
     self.set_reg(instr.rd(), result);
-
-    true
   }
 
-  fn lui(&mut self, instr: Instruction) -> bool {
+  fn lui(&mut self, instr: Instruction) {
     self.set_reg(instr.rt(), instr.immediate() << 16);
-
-    true
   }
 
-  fn ori(&mut self, instr: Instruction) -> bool {
+  fn ori(&mut self, instr: Instruction) {
     let result = self.r[instr.rs()] | instr.immediate();
 
     self.set_reg(instr.rt(), result);
-
-    true
   }
 
-  fn or(&mut self, instr: Instruction) -> bool {
+  fn or(&mut self, instr: Instruction) {
     let result = self.r[instr.rs()] | self.r[instr.rt()];
 
     self.set_reg(instr.rd(), result);
-
-    true
   }
 
-  fn andi(&mut self, instr: Instruction) -> bool {
+  fn andi(&mut self, instr: Instruction) {
     let result = self.r[instr.rs()] & instr.immediate();
 
     self.set_reg(instr.rt(), result);
-
-    true
   }
 
-  fn addi(&mut self, instr: Instruction) -> bool {
+  fn addi(&mut self, instr: Instruction) {
     if let Some(result) = (self.r[instr.rs()] as i32).checked_add(instr.immediate_signed() as i32) {
       self.set_reg(instr.rt(), result as u32);
     } else {
       // handle exceptions here later
       todo!("unhandled overflow occurred for instruction ADDI");
     }
-
-    true
   }
 
-  fn addiu(&mut self, instr: Instruction) -> bool {
+  fn addiu(&mut self, instr: Instruction) {
     let result = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
     self.set_reg(instr.rt(), result);
-
-    true
   }
 
-  fn addu(&mut self, instr: Instruction) -> bool {
+  fn addu(&mut self, instr: Instruction) {
     let result = self.r[instr.rs()].wrapping_add(self.r[instr.rt()]);
 
     self.set_reg(instr.rd(), result);
-
-    true
   }
 
-  fn swi(&mut self, instr: Instruction) -> bool {
+  fn swi(&mut self, instr: Instruction) {
     if self.sr & 0x10000 == 0 {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
@@ -284,8 +241,6 @@ impl CPU {
     } else {
       println!("ignoring writes to cache");
     }
-
-    true
   }
 
   fn parse_secondary(&self, op_code: u32) -> &'static str {
