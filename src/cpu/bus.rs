@@ -63,6 +63,7 @@ impl Bus {
       0x1f80_1d80..=0x1f80_1dbc => println!("ignoring writes to SPU registers"),
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
+      0x1f80_1070..=0x1f80_1077 => println!("ignoring writes to interrupt control registers"),
       0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
       0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
       _ => panic!("write to unsupported address: {:08x}", address)
@@ -86,6 +87,7 @@ impl Bus {
       0x1f80_1d80..=0x1f80_1dbc => println!("ignoring writes to SPU registers"),
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
+      0x1f80_1070..=0x1f80_1077 => println!("ignoring writes to interrupt control registers"),
       0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
       0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
       _ => panic!("write to unsupported address: {:08x}", address)
@@ -111,6 +113,7 @@ impl Bus {
       0x1f80_1d80..=0x1f80_1dbc => println!("ignoring writes to SPU registers"),
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
+      0x1f80_1070..=0x1f80_1077 => println!("ignoring writes to interrupt control registers"),
       0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
       0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
       _ => panic!("write to unsupported address: {:06x}", address)

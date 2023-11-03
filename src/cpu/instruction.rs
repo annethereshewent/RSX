@@ -43,4 +43,12 @@ impl Instruction {
   pub fn op_code(&self) -> u32 {
     self.0 >> 26
   }
+
+  pub fn bcond(&self) -> u32 {
+    (self.0 >> 16) & 0b1
+  }
+
+  pub fn should_link(&self) -> bool {
+    (self.0 >> 20) & 0b1 == 1
+  }
 }

@@ -18,25 +18,40 @@ impl CPU {
         match op_code {
           0 => self.sll(instr),
           0x8 => self.jr(instr),
+          0x9 => self.jalr(instr),
+          0x20 => self.add(instr),
           0x21 => self.addu(instr),
+          0x23 => self.subu(instr),
+          0x24 => self.and(instr),
           0x25 => self.or(instr),
           0x2b => self.sltu(instr),
           _ => todo!("invalid or unimplemented secondary op code: {:03x}", op_code)
         }
 
       }
+      0x1 => {
+        match instr.bcond() {
+          0 => self.bltz(instr),
+          1 => self.bgez(instr),
+          _ => unreachable!("can't happen")
+        }
+      }
       0x2 => self.j(instr),
       0x3 => self.jal(instr),
       0x4 => self.beq(instr),
       0x5 => self.bne(instr),
+      0x6 => self.blez(instr),
+      0x7 => self.bgtz(instr),
       0x8 => self.addi(instr),
       0x9 => self.addiu(instr),
+      0xa => self.slti(instr),
       0xc => self.andi(instr),
       0xd => self.ori(instr),
       0xf => self.lui(instr),
       0x10 => self.execute_cop0(instr),
       0x20 => self.lb(instr),
       0x23 => self.lw(instr),
+      0x24 => self.lbu(instr),
       0x28 => self.sb(instr),
       0x29 => self.sh(instr),
       0x2b => self.swi(instr),
@@ -81,6 +96,19 @@ impl CPU {
     }
   }
 
+  fn lbu(&mut self, instr: Instruction) {
+    if self.sr & 0x1000 == 0 {
+      let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
+
+      let value = self.bus.mem_read_8(address);
+
+      self.delayed_load = Some(value as u32);
+      self.delayed_register = instr.rt();
+    } else {
+      println!("cache not implemented yet for loads");
+    }
+  }
+
   fn execute_cop0(&mut self, instr: Instruction) {
     let op_code = instr.cop0_code();
 
@@ -95,6 +123,36 @@ impl CPU {
     let offset = instr.immediate_signed();
 
     self.branch_if(offset, self.r[instr.rs()] != self.r[instr.rt()]);
+  }
+
+  fn bltz(&mut self, instr: Instruction) {
+    let offset = instr.immediate_signed();
+    if instr.should_link() {
+      self.set_reg(RA_REGISTER, self.next_pc);
+    }
+
+    self.branch_if(offset, (self.r[instr.rs()] as i32) < 0);
+  }
+
+  fn bgez(&mut self, instr: Instruction) {
+    let offset = instr.immediate_signed();
+    if instr.should_link() {
+      self.set_reg(RA_REGISTER, self.next_pc);
+    }
+
+    self.branch_if(offset, (self.r[instr.rs()] as i32) >= 0);
+  }
+
+  fn bgtz(&mut self, instr: Instruction) {
+    let offset = instr.immediate_signed();
+
+    self.branch_if(offset, (self.r[instr.rs()] as i32) > 0);
+  }
+
+  fn blez(&mut self, instr: Instruction) {
+    let offset = instr.immediate_signed();
+
+    self.branch_if(offset, (self.r[instr.rs()] as i32) <= 0);
   }
 
   fn beq(&mut self, instr: Instruction) {
@@ -125,6 +183,16 @@ impl CPU {
     };
 
     self.set_reg(instr.rd(), result);
+  }
+
+  fn slti(&mut self, instr: Instruction) {
+    let result: u32 = if (self.r[instr.rs()] as i32) < (instr.immediate_signed() as i32) {
+      1
+    } else {
+      0
+    };
+
+    self.set_reg(instr.rt(), result);
   }
 
   fn mfc0(&mut self, instr: Instruction) {
@@ -179,6 +247,12 @@ impl CPU {
     self.j(instr);
   }
 
+  fn jalr(&mut self, instr: Instruction) {
+    self.set_reg(instr.rd(), self.next_pc);
+
+    self.next_pc = self.r[instr.rs()];
+  }
+
   fn jr(&mut self, instr: Instruction) {
     self.next_pc = self.r[instr.rs()];
   }
@@ -211,12 +285,26 @@ impl CPU {
     self.set_reg(instr.rt(), result);
   }
 
+  fn and(&mut self, instr: Instruction) {
+    let result = self.r[instr.rs()] & self.r[instr.rt()];
+
+    self.set_reg(instr.rd(), result);
+  }
+
   fn addi(&mut self, instr: Instruction) {
     if let Some(result) = (self.r[instr.rs()] as i32).checked_add(instr.immediate_signed() as i32) {
       self.set_reg(instr.rt(), result as u32);
     } else {
       // handle exceptions here later
       todo!("unhandled overflow occurred for instruction ADDI");
+    }
+  }
+
+  fn add(&mut self, instr: Instruction) {
+    if let Some(result) = (self.r[instr.rs()] as i32).checked_add(self.r[instr.rt()] as i32) {
+      self.set_reg(instr.rd(), result as u32);
+    } else {
+      todo!("unhandled overflow occurred for instruction ADD");
     }
   }
 
@@ -227,6 +315,12 @@ impl CPU {
 
   fn addu(&mut self, instr: Instruction) {
     let result = self.r[instr.rs()].wrapping_add(self.r[instr.rt()]);
+
+    self.set_reg(instr.rd(), result);
+  }
+
+  fn subu(&mut self, instr: Instruction) {
+    let result = self.r[instr.rs()].wrapping_sub(self.r[instr.rt()]);
 
     self.set_reg(instr.rd(), result);
   }
@@ -247,7 +341,11 @@ impl CPU {
     match op_code {
       0 => "SLL",
       0x8 => "JR",
+      0x9 => "JALR",
+      0x20 => "ADD",
       0x21 => "ADDU",
+      0x23 => "SUBU",
+      0x24 => "AND",
       0x25 => "OR",
       0x2b => "SLTU",
       _ => todo!("Invalid or unimplemented secondary op: {:03x}", op_code)
@@ -257,18 +355,23 @@ impl CPU {
   fn parse_op_code(&self, op_code: u32) -> &'static str {
     match op_code {
       0 => "Secondary",
+      0x1 => "BcondZ",
       0x2 => "J",
       0x3 => "JAL",
       0x4 => "BEQ",
       0x5 => "BNE",
+      0x6 => "BLEZ",
+      0x7 => "BGTZ",
       0x8 => "ADDI",
       0x9 => "ADDIU",
+      0xa => "SLTI",
       0xc => "ANDI",
       0xd => "ORI",
       0xf => "LUI",
       0x10 => "COP0",
       0x20 => "LB",
       0x23 => "LW",
+      0x24 => "LBU",
       0x28 => "SB",
       0x29 => "SH",
       0x2b => "SWI",
