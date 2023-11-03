@@ -1,4 +1,4 @@
-use super::{CPU, instruction::Instruction};
+use super::{CPU, instruction::Instruction, Cause};
 
 
 const RA_REGISTER: usize = 31;
@@ -7,13 +7,13 @@ impl CPU {
   pub fn execute(&mut self, instr: Instruction) {
     let op_code = instr.op_code();
 
-    println!("received op code {}", self.parse_op_code(op_code));
+    // println!("received op code {}", self.parse_op_code(op_code));
 
     match op_code {
       0 => {
         let op_code = instr.op_code_secondary();
 
-        println!("received secondary op {}", self.parse_secondary(op_code));
+        // println!("received secondary op {}", self.parse_secondary(op_code));
 
         match op_code {
           0 => self.sll(instr),
@@ -21,6 +21,7 @@ impl CPU {
           0x3 => self.sra(instr),
           0x8 => self.jr(instr),
           0x9 => self.jalr(instr),
+          0xc => self.syscall(instr),
           0x10 => self.mfhi(instr),
           0x12 => self.mflo(instr),
           0x1a => self.div(instr),
@@ -32,7 +33,7 @@ impl CPU {
           0x25 => self.or(instr),
           0x2a => self.slt(instr),
           0x2b => self.sltu(instr),
-          _ => todo!("invalid or unimplemented secondary op code: {:03x}", op_code)
+          _ => todo!("invalid or unimplemented secondary op code: {:02x}", op_code)
         }
 
       }
@@ -63,36 +64,36 @@ impl CPU {
       0x28 => self.sb(instr),
       0x29 => self.sh(instr),
       0x2b => self.swi(instr),
-      _ => todo!("invalid or unimplemented op code: {:03x}", op_code)
+      _ => todo!("invalid or unimplemented op code: {:02x}", op_code)
     }
   }
 
   fn sh(&mut self, instr: Instruction) {
-    if self.sr & 0x10000 == 0 {
+    if !self.cop0.is_cache_isolated() {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
       let value = self.r[instr.rt()];
 
       self.bus.mem_write_16(address, value as u16);
     } else {
-      println!("ignoring writes to cache");
+      // println!("ignoring writes to cache");
     }
   }
 
   fn sb(&mut self, instr: Instruction) {
-    if self.sr & 0x10000 == 0 {
+    if !self.cop0.is_cache_isolated() {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
       let value = self.r[instr.rt()];
 
       self.bus.mem_write_8(address, value as u8);
     } else {
-      println!("ignoring writes to cache");
+      // println!("ignoring writes to cache");
     }
   }
 
   fn lb(&mut self, instr: Instruction) {
-    if self.sr & 0x1000 == 0 {
+    if !self.cop0.is_cache_isolated() {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
       let value = self.bus.mem_read_8(address);
@@ -100,12 +101,12 @@ impl CPU {
       self.delayed_load = Some(value as i8 as i32 as u32);
       self.delayed_register = instr.rt();
     } else {
-      println!("cache not implemented yet for loads");
+      // println!("cache not implemented yet for loads");
     }
   }
 
   fn lbu(&mut self, instr: Instruction) {
-    if self.sr & 0x1000 == 0 {
+    if !self.cop0.is_cache_isolated() {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
       let value = self.bus.mem_read_8(address);
@@ -113,7 +114,7 @@ impl CPU {
       self.delayed_load = Some(value as u32);
       self.delayed_register = instr.rt();
     } else {
-      println!("cache not implemented yet for loads");
+      // println!("cache not implemented yet for loads");
     }
   }
 
@@ -178,8 +179,6 @@ impl CPU {
   fn branch(&mut self, offset: u32) {
     let offset = offset << 2;
 
-    println!("the offset is {:x}", offset);
-
     self.next_pc = self.pc.wrapping_add(offset)
   }
 
@@ -226,8 +225,9 @@ impl CPU {
   fn mfc0(&mut self, instr: Instruction) {
     self.delayed_register = instr.rt();
     self.delayed_load = match instr.rd() {
-      12 => Some(self.sr),
-      13 => panic!("unhandled read from cause register"),
+      12 => Some(self.cop0.sr),
+      13 => Some(self.cop0.cause),
+      14 => Some(self.cop0.epc),
       _ => panic!("unhandled read from cop0 register: {}", instr.rd())
     }
   }
@@ -243,25 +243,21 @@ impl CPU {
           panic!("unhandled write to debug registers");
         }
       }
-      12 => self.sr = value,
-      13 => {
-        if value != 0 {
-          panic!("unhandled write to cause register");
-        }
-      }
+      12 => self.cop0.sr = value,
+      13 => self.cop0.cause = value,
       _ => todo!("cop0 register not implemented in mtc0: {}", cop0_reg)
     }
 
   }
 
   fn lw(&mut self, instr: Instruction) {
-    if self.sr & 0x10000 == 0 {
+    if !self.cop0.is_cache_isolated() {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
       self.delayed_load = Some(self.bus.mem_read_32(address));
       self.delayed_register = instr.rt();
     } else {
-      println!("cache not implemented yet for loads");
+      // println!("cache not implemented yet for loads");
     }
   }
 
@@ -403,15 +399,19 @@ impl CPU {
   }
 
   fn swi(&mut self, instr: Instruction) {
-    if self.sr & 0x10000 == 0 {
+    if !self.cop0.is_cache_isolated() {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
       let value = self.r[instr.rt()];
 
       self.bus.mem_write_32(address, value);
     } else {
-      println!("ignoring writes to cache");
+      // println!("ignoring writes to cache");
     }
+  }
+
+  fn syscall(&mut self, _instr: Instruction) {
+    self.exception(Cause::SysCall);
   }
 
   fn parse_secondary(&self, op_code: u32) -> &'static str {
@@ -421,6 +421,7 @@ impl CPU {
       0x3 => "SRA",
       0x8 => "JR",
       0x9 => "JALR",
+      0xc => "SYSCALL",
       0x10 => "MFHI",
       0x12 => "MFLO",
       0x1a => "DIV",
