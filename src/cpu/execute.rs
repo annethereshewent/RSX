@@ -23,7 +23,9 @@ impl CPU {
           0x9 => self.jalr(instr),
           0xc => self.syscall(instr),
           0x10 => self.mfhi(instr),
+          0x11 => self.mthi(instr),
           0x12 => self.mflo(instr),
+          0x13 => self.mtlo(instr),
           0x1a => self.div(instr),
           0x1b => self.divu(instr),
           0x20 => self.add(instr),
@@ -307,8 +309,16 @@ impl CPU {
     self.set_reg(instr.rd(), self.low);
   }
 
+  fn mtlo(&mut self, instr: Instruction) {
+    self.low = self.r[instr.rs()];
+  }
+
   fn mfhi(&mut self, instr: Instruction) {
     self.set_reg(instr.rd(), self.hi);
+  }
+
+  fn mthi(&mut self, instr: Instruction) {
+    self.hi = self.r[instr.rs()];
   }
 
   fn ori(&mut self, instr: Instruction) {
@@ -423,7 +433,9 @@ impl CPU {
       0x9 => "JALR",
       0xc => "SYSCALL",
       0x10 => "MFHI",
+      0x11 => "MTHI",
       0x12 => "MFLO",
+      0x13 => "MTLO",
       0x1a => "DIV",
       0x1b => "DIVU",
       0x20 => "ADD",
