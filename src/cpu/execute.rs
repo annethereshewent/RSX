@@ -36,6 +36,7 @@ impl CPU {
           0x21 => self.addu(instr),
           0x23 => self.subu(instr),
           0x24 => self.and(instr),
+          0x26 => self.xor(instr),
           0x25 => self.or(instr),
           0x27 => self.nor(instr),
           0x2a => self.slt(instr),
@@ -407,6 +408,12 @@ impl CPU {
     self.set_reg(instr.rd(), result);
   }
 
+  fn xor(&mut self, instr: Instruction) {
+    let result = self.r[instr.rs()] ^ self.r[instr.rt()];
+
+    self.set_reg(instr.rd(), result);
+  }
+
   fn nor(&mut self, instr: Instruction) {
     let result = !(self.r[instr.rs()] | self.r[instr.rt()]);
 
@@ -547,6 +554,7 @@ impl CPU {
       0x23 => "SUBU",
       0x24 => "AND",
       0x25 => "OR",
+      0x26 => "XOR",
       0x27 => "NOR",
       0x2a => "SLT",
       0x2b => "SLTU",

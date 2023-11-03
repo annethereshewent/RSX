@@ -59,6 +59,16 @@ impl Bus {
         println!("ignoring reads to DMA");
         0
       }
+      0x1f80_1810..=0x1f80_1817 => {
+        let offset = address - 0x1f80_1810;
+
+        if offset == 4 {
+          return 0x10000000;
+        }
+
+        println!("ignoring reads to GPU");
+        0
+      }
       _ => panic!("not implemented: {:08x}", address)
     }
   }
@@ -160,6 +170,7 @@ impl Bus {
       0x1f80_1070..=0x1f80_1077 => println!("ignoring writes to interrupt control registers"),
       0x1f80_1080..=0x1f80_10ff => println!("ignoring writes to DMA"),
       0x1f80_1100..=0x1f80_1130 => println!("ignoring writes to timer registers"),
+      0x1f80_1810..=0x1f80_1817 => println!("ignoring writes to GPU registers"),
       0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
       0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
       _ => panic!("write to unsupported address: {:06x}", address)
