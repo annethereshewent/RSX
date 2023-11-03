@@ -41,6 +41,12 @@ impl COP0 {
 
     exception_address
   }
+
+  pub fn return_from_exception(&mut self) {
+    let mode = self.sr & 0x3f;
+    self.sr &= !0x3f;
+    self.sr |= mode >> 2;
+  }
 }
 
 struct OutRegister {

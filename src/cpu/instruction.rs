@@ -51,4 +51,8 @@ impl Instruction {
   pub fn should_link(&self) -> bool {
     (self.0 >> 20) & 0b1 == 1
   }
+
+  pub fn cop0_lower_bits(&self) -> u32 {
+    self.0 & 0x3f
+  }
 }

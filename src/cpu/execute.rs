@@ -124,8 +124,9 @@ impl CPU {
     let op_code = instr.cop0_code();
 
     match op_code {
-      0 => self.mfc0(instr),
+      0b00000 => self.mfc0(instr),
       0b00100 => self.mtc0(instr),
+      0b10000 => self.rfe(instr),
       _ => todo!("cop0 instruction not implemented yet")
     }
   }
@@ -422,6 +423,13 @@ impl CPU {
 
   fn syscall(&mut self, _instr: Instruction) {
     self.exception(Cause::SysCall);
+  }
+
+  fn rfe(&mut self, instr: Instruction) {
+    if instr.cop0_lower_bits() != 0b010000 {
+      panic!("illegal cop0 instruction received")
+    }
+    self.cop0.return_from_exception();
   }
 
   fn parse_secondary(&self, op_code: u32) -> &'static str {
