@@ -7,7 +7,10 @@ pub mod execute;
 pub mod instruction;
 
 pub enum Cause {
+  LoadAddressError = 0x4,
+  StoreAddressError = 0x5,
   SysCall = 0x8,
+  Overflow = 0xc
 
 }
 
@@ -68,7 +71,9 @@ pub struct CPU {
   pub next_pc: u32,
   current_pc: u32,
   pub r: [u32; 32],
-  pub cop0: COP0,
+  cop0: COP0,
+  branch: bool,
+  delay_slot: bool,
   hi: u32,
   low: u32,
   bus: Bus,
@@ -90,6 +95,8 @@ impl CPU {
       delayed_register: 0,
       delayed_load: None,
       out_registers: Vec::new(),
+      branch: false,
+      delay_slot: false,
       cop0: COP0 {
         sr: 0,
         cause: 0,
@@ -102,12 +109,24 @@ impl CPU {
     let exception_address = self.cop0.enter_exception(cause);
 
     self.cop0.epc = self.current_pc;
+
+    if self.delay_slot {
+      self.cop0.epc = self.cop0.epc.wrapping_sub(4);
+      self.cop0.cause |= 1 << 31;
+    }
+
     self.pc = exception_address;
     self.next_pc = self.pc.wrapping_add(4);
   }
 
   pub fn step(&mut self) {
     self.current_pc = self.pc;
+
+    if self.current_pc & 0b11 != 0 {
+      self.exception(Cause::LoadAddressError);
+      return;
+    }
+
     let instr = self.bus.mem_read_32(self.pc);
 
     if let Some(delayed_load) = self.delayed_load {
@@ -118,6 +137,9 @@ impl CPU {
     self.delayed_register = 0;
 
     // println!("executing instruction {:032b} at address {:08x}", instr, self.current_pc);
+
+    self.delay_slot = self.branch;
+    self.branch = false;
 
     self.pc = self.next_pc;
     self.next_pc = self.next_pc.wrapping_add(4);

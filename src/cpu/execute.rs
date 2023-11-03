@@ -76,7 +76,11 @@ impl CPU {
 
       let value = self.r[instr.rt()];
 
-      self.bus.mem_write_16(address, value as u16);
+      if address & 0b1 == 0 {
+        self.bus.mem_write_16(address, value as u16);
+      } else {
+        self.exception(Cause::StoreAddressError);
+      }
     } else {
       // println!("ignoring writes to cache");
     }
@@ -182,7 +186,9 @@ impl CPU {
   fn branch(&mut self, offset: u32) {
     let offset = offset << 2;
 
-    self.next_pc = self.pc.wrapping_add(offset)
+    self.next_pc = self.pc.wrapping_add(offset);
+
+    self.branch = true;
   }
 
   fn sltu(&mut self, instr: Instruction) {
@@ -257,8 +263,12 @@ impl CPU {
     if self.cop0.is_cache_disabled() {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
-      self.delayed_load = Some(self.bus.mem_read_32(address));
-      self.delayed_register = instr.rt();
+      if address & 0b11 == 0 {
+        self.delayed_load = Some(self.bus.mem_read_32(address));
+        self.delayed_register = instr.rt();
+      } else {
+        self.exception(Cause::LoadAddressError);
+      }
     } else {
       // println!("cache not implemented yet for loads");
     }
@@ -266,6 +276,8 @@ impl CPU {
 
   fn j(&mut self, instr: Instruction) {
     self.next_pc = (self.pc & 0xf000_0000) | (instr.j_imm() << 2);
+
+    self.branch = true;
   }
 
   fn jal(&mut self, instr: Instruction) {
@@ -278,10 +290,12 @@ impl CPU {
     self.set_reg(instr.rd(), self.next_pc);
 
     self.next_pc = self.r[instr.rs()];
+    self.branch = true;
   }
 
   fn jr(&mut self, instr: Instruction) {
     self.next_pc = self.r[instr.rs()];
+    self.branch = true;
   }
 
   fn sll(&mut self, instr: Instruction) {
@@ -350,8 +364,7 @@ impl CPU {
     if let Some(result) = (self.r[instr.rs()] as i32).checked_add(instr.immediate_signed() as i32) {
       self.set_reg(instr.rt(), result as u32);
     } else {
-      // handle exceptions here later
-      todo!("unhandled overflow occurred for instruction ADDI");
+      self.exception(Cause::Overflow);
     }
   }
 
@@ -359,7 +372,7 @@ impl CPU {
     if let Some(result) = (self.r[instr.rs()] as i32).checked_add(self.r[instr.rt()] as i32) {
       self.set_reg(instr.rd(), result as u32);
     } else {
-      todo!("unhandled overflow occurred for instruction ADD");
+      self.exception(Cause::Overflow);
     }
   }
 
@@ -415,7 +428,11 @@ impl CPU {
 
       let value = self.r[instr.rt()];
 
-      self.bus.mem_write_32(address, value);
+      if address & 0b11 == 0 {
+        self.bus.mem_write_32(address, value);
+      } else {
+        self.exception(Cause::StoreAddressError);
+      }
     } else {
       // println!("ignoring writes to cache");
     }
