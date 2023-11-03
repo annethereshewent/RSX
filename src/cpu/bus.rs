@@ -52,7 +52,45 @@ impl Bus {
         (self.bios[offset] as u32) | ((self.bios[offset + 1] as u32) << 8) | ((self.bios[offset + 2] as u32) << 16) | ((self.bios[offset + 3] as u32) << 24)
       }
       0x1f80_1070..=0x1f80_1077 => {
-        println!("ignoring writes to interrupt control registers");
+        println!("ignoring reads to interrupt control registers");
+        0
+      }
+      0x1f80_1080..=0x1f80_10ff => {
+        println!("ignoring reads to DMA");
+        0
+      }
+      _ => panic!("not implemented: {:08x}", address)
+    }
+  }
+
+  pub fn mem_read_16(&self, address: u32) -> u16 {
+    if (address & 0b1) != 0 {
+      panic!("unaligned address received: {:032b}", address);
+    }
+
+    let address = Bus::translate_address(address);
+
+    match address {
+      0x0000_0000..=0x001f_ffff => {
+        let offset = address as usize;
+        (self.ram[offset] as u16) | ((self.ram[offset + 1] as u16) << 8)
+      }
+      // 0x1f00_0000..=0x1f08_0000 => 0xffffffff,
+      0x1fc0_0000..=0x1fc7_ffff => {
+        let offset = (address - 0x1fc0_0000) as usize;
+        (self.bios[offset] as u16) | ((self.bios[offset + 1] as u16) << 8)
+      }
+
+      0x1f80_1c00..=0x1f80_1e80 => {
+        println!("ignoring reads to SPU registers");
+        0
+      }
+      0x1f80_1070..=0x1f80_1077 => {
+        println!("ignoring reads to interrupt control registers");
+        0
+      }
+      0x1f80_1080..=0x1f80_10ff => {
+        println!("ignoring reads to DMA");
         0
       }
       _ => panic!("not implemented: {:08x}", address)
@@ -64,7 +102,7 @@ impl Bus {
 
     match address {
       0x0000_0000..=0x001f_ffff => self.ram[address as usize] = value,
-      0x1f80_1d80..=0x1f80_1dbc => println!("ignoring writes to SPU registers"),
+      0x1f80_1c00..=0x1f80_1e80 => println!("ignoring writes to SPU registers"),
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070..=0x1f80_1077 => println!("ignoring writes to interrupt control registers"),
@@ -89,7 +127,7 @@ impl Bus {
         self.ram[offset] = (value & 0xff) as u8;
         self.ram[offset + 1] = ((value >> 8) & 0xff) as u8;
       }
-      0x1f80_1d80..=0x1f80_1dbc => println!("ignoring writes to SPU registers"),
+      0x1f80_1c00..=0x1f80_1e80 => println!("ignoring writes to SPU registers"),
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070..=0x1f80_1077 => println!("ignoring writes to interrupt control registers"),
@@ -116,10 +154,11 @@ impl Bus {
         self.ram[offset + 2] = ((value >> 16) & 0xff) as u8;
         self.ram[offset + 3] = ((value >> 24)) as u8;
       }
-      0x1f80_1d80..=0x1f80_1dbc => println!("ignoring writes to SPU registers"),
+      0x1f80_1c00..=0x1f80_1e80 => println!("ignoring writes to SPU registers"),
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070..=0x1f80_1077 => println!("ignoring writes to interrupt control registers"),
+      0x1f80_1080..=0x1f80_10ff => println!("ignoring writes to DMA"),
       0x1f80_1100..=0x1f80_1130 => println!("ignoring writes to timer registers"),
       0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
       0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),

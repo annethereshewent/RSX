@@ -13,12 +13,15 @@ impl CPU {
       0 => {
         let op_code = instr.op_code_secondary();
 
-        // println!("received secondary op {}", self.parse_secondary(op_code));
+       // println!("received secondary op {}", self.parse_secondary(op_code));
 
         match op_code {
           0 => self.sll(instr),
           0x2 => self.srl(instr),
           0x3 => self.sra(instr),
+          0x4 => self.sllv(instr),
+          0x6 => self.srlv(instr),
+          0x7 => self.srav(instr),
           0x8 => self.jr(instr),
           0x9 => self.jalr(instr),
           0xc => self.syscall(instr),
@@ -26,6 +29,7 @@ impl CPU {
           0x11 => self.mthi(instr),
           0x12 => self.mflo(instr),
           0x13 => self.mtlo(instr),
+          0x19 => self.multu(instr),
           0x1a => self.div(instr),
           0x1b => self.divu(instr),
           0x20 => self.add(instr),
@@ -33,6 +37,7 @@ impl CPU {
           0x23 => self.subu(instr),
           0x24 => self.and(instr),
           0x25 => self.or(instr),
+          0x27 => self.nor(instr),
           0x2a => self.slt(instr),
           0x2b => self.sltu(instr),
           _ => todo!("invalid or unimplemented secondary op code: {:02x}", op_code)
@@ -61,8 +66,10 @@ impl CPU {
       0xf => self.lui(instr),
       0x10 => self.execute_cop0(instr),
       0x20 => self.lb(instr),
+      0x21 => self.lh(instr),
       0x23 => self.lw(instr),
       0x24 => self.lbu(instr),
+      0x25 => self.lhu(instr),
       0x28 => self.sb(instr),
       0x29 => self.sh(instr),
       0x2b => self.swi(instr),
@@ -119,6 +126,40 @@ impl CPU {
 
       self.delayed_load = Some(value as u32);
       self.delayed_register = instr.rt();
+    } else {
+      // println!("cache not implemented yet for loads");
+    }
+  }
+
+  fn lhu(&mut self, instr: Instruction) {
+    if self.cop0.is_cache_disabled() {
+      let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
+
+      if address & 0b1 == 0 {
+        let value = self.bus.mem_read_16(address);
+
+        self.delayed_load = Some(value as u32);
+        self.delayed_register = instr.rt();
+      } else {
+        self.exception(Cause::LoadAddressError);
+      }
+    } else {
+      // println!("cache not implemented yet for loads");
+    }
+  }
+
+  fn lh(&mut self, instr: Instruction) {
+    if self.cop0.is_cache_disabled() {
+      let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
+
+      if address & 0b1 == 0 {
+        let value = self.bus.mem_read_16(address) as i16;
+
+        self.delayed_load = Some(value as u32);
+        self.delayed_register = instr.rt();
+      } else {
+        self.exception(Cause::LoadAddressError);
+      }
     } else {
       // println!("cache not implemented yet for loads");
     }
@@ -304,8 +345,26 @@ impl CPU {
     self.set_reg(instr.rd(), result);
   }
 
+  fn sllv(&mut self, instr: Instruction) {
+    let result = self.r[instr.rt()] << (self.r[instr.rs()] & 0x1f);
+
+    self.set_reg(instr.rd(), result);
+  }
+
+  fn srlv(&mut self, instr: Instruction) {
+    let result = self.r[instr.rt()] >> (self.r[instr.rs()] & 0x1f);
+
+    self.set_reg(instr.rd(), result);
+  }
+
   fn sra(&mut self, instr: Instruction) {
     let result = (self.r[instr.rt()] as i32) >> instr.imm5();
+
+    self.set_reg(instr.rd(), result as u32);
+  }
+
+  fn srav(&mut self, instr: Instruction) {
+    let result = (self.r[instr.rt()] as i32) >> (self.r[instr.rs()] & 0x1f);
 
     self.set_reg(instr.rd(), result as u32);
   }
@@ -344,6 +403,12 @@ impl CPU {
 
   fn or(&mut self, instr: Instruction) {
     let result = self.r[instr.rs()] | self.r[instr.rt()];
+
+    self.set_reg(instr.rd(), result);
+  }
+
+  fn nor(&mut self, instr: Instruction) {
+    let result = !(self.r[instr.rs()] | self.r[instr.rt()]);
 
     self.set_reg(instr.rd(), result);
   }
@@ -391,6 +456,16 @@ impl CPU {
     let result = self.r[instr.rs()].wrapping_sub(self.r[instr.rt()]);
 
     self.set_reg(instr.rd(), result);
+  }
+
+  fn multu(&mut self, instr: Instruction) {
+    let a = self.r[instr.rs()] as u64;
+    let b = self.r[instr.rt()] as u64;
+
+    let result = a * b;
+
+    self.low = result as u32;
+    self.hi = (result >> 32) as u32;
   }
 
   fn div(&mut self, instr: Instruction) {
@@ -451,9 +526,12 @@ impl CPU {
 
   fn parse_secondary(&self, op_code: u32) -> &'static str {
     match op_code {
-      0 => "SLL",
+      0x0 => "SLL",
       0x2 => "SRL",
       0x3 => "SRA",
+      0x4 => "SLLV",
+      0x6 => "SRLV",
+      0x7 => "SRAV",
       0x8 => "JR",
       0x9 => "JALR",
       0xc => "SYSCALL",
@@ -461,6 +539,7 @@ impl CPU {
       0x11 => "MTHI",
       0x12 => "MFLO",
       0x13 => "MTLO",
+      0x19 => "MULTU",
       0x1a => "DIV",
       0x1b => "DIVU",
       0x20 => "ADD",
@@ -468,6 +547,7 @@ impl CPU {
       0x23 => "SUBU",
       0x24 => "AND",
       0x25 => "OR",
+      0x27 => "NOR",
       0x2a => "SLT",
       0x2b => "SLTU",
       _ => todo!("Invalid or unimplemented secondary op: {:03x}", op_code)
@@ -476,7 +556,7 @@ impl CPU {
 
   fn parse_op_code(&self, op_code: u32) -> &'static str {
     match op_code {
-      0 => "Secondary",
+      0x0 => "Secondary",
       0x1 => "BcondZ",
       0x2 => "J",
       0x3 => "JAL",
@@ -493,8 +573,10 @@ impl CPU {
       0xf => "LUI",
       0x10 => "COP0",
       0x20 => "LB",
+      0x21 => "LH",
       0x23 => "LW",
       0x24 => "LBU",
+      0x25 => "LHU",
       0x28 => "SB",
       0x29 => "SH",
       0x2b => "SWI",
