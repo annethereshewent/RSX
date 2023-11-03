@@ -95,6 +95,7 @@ impl CPU {
     let op_code = instr.cop0_code();
 
     match op_code {
+      0 => self.mfc0(instr),
       0b00100 => self.mtc0(instr),
       _ => todo!("cop0 instruction not implemented yet")
     }
@@ -143,6 +144,15 @@ impl CPU {
     self.set_reg(instr.rd(), result);
 
     true
+  }
+
+  fn mfc0(&mut self, instr: Instruction) {
+    self.delayed_register = instr.rt();
+    self.delayed_load = match instr.rd() {
+      12 => Some(self.sr),
+      13 => panic!("unhandled read from cause register"),
+      _ => panic!("unhandled read from cop0 register: {}", instr.rd())
+    }
   }
 
   fn mtc0(&mut self, instr: Instruction) {

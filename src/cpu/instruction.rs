@@ -13,7 +13,7 @@ impl Instruction {
   }
 
   pub fn cop0_code(&self) -> u32 {
-    ((self.0 >> 21) & 0b11111)
+    (self.0 >> 21) & 0b11111
   }
 
   pub fn op_code_secondary(&self) -> u32 {
