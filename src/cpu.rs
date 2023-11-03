@@ -73,7 +73,7 @@ impl CPU {
     let should_update = self.execute(Instruction::new(instr));
 
     if should_update {
-      self.previous_pc = self.pc - 4;
+      self.previous_pc = self.pc - 8;
     }
 
     while !self.out_registers.is_empty() {

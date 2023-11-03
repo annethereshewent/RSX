@@ -1,7 +1,7 @@
 const RAM_SIZE: usize = 2 * 1024 * 1024;
 
 pub struct Bus {
-  bios: Vec<u8>,
+  pub bios: Vec<u8>,
   ram: [u8; RAM_SIZE]
 }
 
@@ -44,12 +44,12 @@ impl Bus {
     match address {
       0x0000_0000..=0x001f_ffff => {
         let offset = address as usize;
-        (self.ram[offset] as u32) | ((self.ram[offset + 1] as u32) << 8) | ((self.ram[offset + 2] as u32) << 16) | (self.ram[offset + 3] as u32) << 24
+        (self.ram[offset] as u32) | ((self.ram[offset + 1] as u32) << 8) | ((self.ram[offset + 2] as u32) << 16) | ((self.ram[offset + 3] as u32) << 24)
       }
       // 0x1f00_0000..=0x1f08_0000 => 0xffffffff,
       0x1fc0_0000..=0x1fc7_ffff => {
         let offset = (address - 0x1fc0_0000) as usize;
-        (self.bios[offset] as u32) | ((self.bios[offset + 1] as u32) << 8) | ((self.bios[offset + 2] as u32) << 16) | (self.bios[offset + 3] as u32) << 24
+        (self.bios[offset] as u32) | ((self.bios[offset + 1] as u32) << 8) | ((self.bios[offset + 2] as u32) << 16) | ((self.bios[offset + 3] as u32) << 24)
       }
       _ => panic!("not implemented: {:08x}", address)
     }

@@ -124,12 +124,13 @@ impl CPU {
   }
 
   fn branch(&mut self, offset: u32) {
-    self.previous_pc = self.pc.wrapping_sub(4);
+    self.previous_pc = self.pc.wrapping_sub(8);
 
     let offset = offset << 2;
 
-    // without the wrapping sub the PC would be one instruction ahead
-    self.pc = self.pc.wrapping_add(offset).wrapping_sub(4);
+    println!("the offset is {:x}", offset);
+
+    self.pc = self.pc.wrapping_add(offset).wrapping_sub(8);
   }
 
   fn sltu(&mut self, instr: Instruction) -> bool {
@@ -180,7 +181,7 @@ impl CPU {
   }
 
   fn j(&mut self, instr: Instruction) -> bool {
-    self.previous_pc = self.pc.wrapping_sub(4);
+    self.previous_pc = self.pc.wrapping_sub(8);
     self.pc = (self.pc & 0xf000_0000) | (instr.j_imm() << 2);
 
     false
@@ -193,7 +194,7 @@ impl CPU {
   }
 
   fn jr(&mut self, instr: Instruction) -> bool {
-    self.previous_pc = self.pc.wrapping_sub(4);
+    self.previous_pc = self.pc.wrapping_sub(8);
     self.pc = self.r[instr.rs()];
 
     false
