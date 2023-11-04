@@ -3,6 +3,38 @@ use super::{CPU, instruction::Instruction, Cause};
 
 const RA_REGISTER: usize = 31;
 
+const PRIMARY_OPS: [&str; 64] = [
+  "",     "BcondZ", "J",    "JAL",  "BEQ",
+  "BNE",  "BLEZ",   "BGTZ", "ADDI", "ADDIU",
+  "SLTI", "SLTIU",  "ANDI", "ORI",  "XORI",
+  "LUI",  "COP0",   "COP1", "COP2", "COP3",
+  "",     "",       "",     "",     "",
+  "",     "",       "",     "",     "",
+  "",     "",       "LB",   "LH",   "LWL",
+  "LW",   "LBU",    "LHU",  "LWR",  "",
+  "SB",   "SH",     "SWL",  "SWI",  "",
+  "",     "SWR",    "",     "LWC0", "LWC1",
+  "LWC2", "LWC3",   "",     "",     "",
+  "",     "SWC0",   "SWC1", "SWC2", "SWC3",
+  "",     "",       "",     ""
+];
+
+const SECONDARY_OPS: [&str; 64] = [
+  "SLL",   "",     "SRL",     "SRA",   "SLLV",
+  "",      "SRLV", "SRAV",    "JR",    "JALR",
+  "",      "",     "SYSCALL", "BREAK", "",
+  "",      "MFHI", "MTHI",    "MFLO",  "MTLO",
+  "",      "",     "",        "",      "MULT",
+  "MULTU", "DIV",  "DIVU",    "",      "",
+  "",      "",     "ADD",     "ADDU",  "SUB",
+  "SUBU",  "AND",  "OR",      "XOR",   "NOR",
+  "",      "",     "SLT",     "SLTU",  "",
+  "",      "",     "",        "",      "",
+  "",      "",     "",        "",      "",
+  "",      "",     "",        "",      "",
+  "",      "",     "",        "",
+];
+
 const PRIMARY_HANDLERS: [fn(&mut CPU, Instruction); 64] = [
   // 0x0
   CPU::secondary, CPU::bcondz,  CPU::j,       CPU::jal,     CPU::beq,
@@ -35,7 +67,7 @@ const SECONDARY_HANDLERS: [fn(&mut CPU, Instruction); 64] = [
   CPU::illegal, CPU::mfhi,    CPU::mthi,    CPU::mflo,     CPU::mtlo,
   // 0x14
   CPU::illegal, CPU::illegal, CPU::illegal, CPU::illegal,  CPU::mult,
-  CPU::multu,   CPU::div,     CPU::div,     CPU::illegal,  CPU::illegal,
+  CPU::multu,   CPU::div,     CPU::divu,    CPU::illegal,  CPU::illegal,
   // 0x1e
   CPU::illegal, CPU::illegal, CPU::add,     CPU::addu,     CPU::sub,
   CPU::subu,    CPU::and,     CPU::or,      CPU::xor,      CPU::nor,
@@ -53,6 +85,10 @@ impl CPU {
   pub fn execute(&mut self, instr: Instruction) {
     let op_code = instr.op_code();
 
+    // if op_code != 0 {
+    //   println!("op: {}", PRIMARY_OPS[op_code as usize]);
+    // }
+
     let handler_fn = PRIMARY_HANDLERS[op_code as usize];
 
     handler_fn(self, instr);
@@ -68,6 +104,8 @@ impl CPU {
 
   fn secondary(&mut self, instr: Instruction) {
     let op_code = instr.op_code_secondary();
+
+    // println!("op: {}", SECONDARY_OPS[op_code as usize]);
 
     let handler_fn = SECONDARY_HANDLERS[op_code as usize];
 
