@@ -114,6 +114,7 @@ impl CPU {
 
   fn illegal(&mut self, instr: Instruction) {
     // panic!("illegal instruction received: {:02x}", instr.op_code());
+    self.execute_load_delay();
     self.exception(Cause::IllegalInstruction);
   }
 
@@ -122,6 +123,8 @@ impl CPU {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
       let value = self.r[instr.rt()];
+
+      self.execute_load_delay();
 
       if address & 0b1 == 0 {
         self.bus.mem_write_16(address, value as u16);
@@ -139,6 +142,8 @@ impl CPU {
 
       let value = self.r[instr.rt()];
 
+      self.execute_load_delay();
+
       self.bus.mem_write_8(address, value as u8);
     } else {
       // println!("ignoring writes to cache");
@@ -151,8 +156,7 @@ impl CPU {
 
       let value = self.bus.mem_read_8(address);
 
-      self.delayed_load = Some(value as i8 as i32 as u32);
-      self.delayed_register = instr.rt();
+      self.update_load(instr.rt(), value as i8 as i32 as u32);
     } else {
       // println!("cache not implemented yet for loads");
     }
@@ -164,8 +168,7 @@ impl CPU {
 
       let value = self.bus.mem_read_8(address);
 
-      self.delayed_load = Some(value as u32);
-      self.delayed_register = instr.rt();
+      self.update_load(instr.rt(), value as u32);
     } else {
       // println!("cache not implemented yet for loads");
     }
@@ -178,9 +181,9 @@ impl CPU {
       if address & 0b1 == 0 {
         let value = self.bus.mem_read_16(address);
 
-        self.delayed_load = Some(value as u32);
-        self.delayed_register = instr.rt();
+        self.update_load(instr.rt(), value as u32);
       } else {
+        self.execute_load_delay();
         self.exception(Cause::LoadAddressError);
       }
     } else {
@@ -195,9 +198,9 @@ impl CPU {
       if address & 0b1 == 0 {
         let value = self.bus.mem_read_16(address) as i16;
 
-        self.delayed_load = Some(value as u32);
-        self.delayed_register = instr.rt();
+        self.update_load(instr.rt(), value as u32);
       } else {
+        self.execute_load_delay();
         self.exception(Cause::LoadAddressError);
       }
     } else {
@@ -217,46 +220,58 @@ impl CPU {
   }
 
   fn cop1(&mut self, _: Instruction) {
+    self.execute_load_delay();
     self.exception(Cause::CoprocessorError);
   }
 
   fn cop2(&mut self, _instr: Instruction) {
+    self.execute_load_delay();
     todo!("unhandled instruction to cop2 processor");
   }
 
   fn cop3(&mut self, _: Instruction) {
+    self.execute_load_delay();
     self.exception(Cause::CoprocessorError);
   }
 
   fn lwc0(&mut self, _instr: Instruction) {
+    self.execute_load_delay();
+
     self.exception(Cause::CoprocessorError);
   }
 
   fn lwc1(&mut self, _instr: Instruction) {
+    self.execute_load_delay();
     self.exception(Cause::CoprocessorError);
   }
 
   fn lwc2(&mut self, _instr: Instruction) {
+    self.execute_load_delay();
     todo!("load word to coprocessor 2 not implemented");
   }
 
   fn lwc3(&mut self, _instr: Instruction) {
+    self.execute_load_delay();
     self.exception(Cause::CoprocessorError);
   }
 
   fn swc0(&mut self, _instr: Instruction) {
+    self.execute_load_delay();
     self.exception(Cause::CoprocessorError);
   }
 
   fn swc1(&mut self, _instr: Instruction) {
+    self.execute_load_delay();
     self.exception(Cause::CoprocessorError);
   }
 
   fn swc2(&mut self, _instr: Instruction) {
+    self.execute_load_delay();
     todo!("store word to coprocessor 2 not implemented");
   }
 
   fn swc3(&mut self, _instr: Instruction) {
+    self.execute_load_delay();
     self.exception(Cause::CoprocessorError);
   }
 
@@ -306,6 +321,8 @@ impl CPU {
     if condition {
       self.branch(offset);
     }
+
+    self.execute_load_delay();
   }
 
   fn branch(&mut self, offset: u32) {
@@ -323,6 +340,8 @@ impl CPU {
       0
     };
 
+    self.execute_load_delay();
+
     self.set_reg(instr.rd(), result);
   }
 
@@ -332,6 +351,8 @@ impl CPU {
     } else {
       0
     };
+
+    self.execute_load_delay();
 
     self.set_reg(instr.rd(), result);
   }
@@ -343,6 +364,8 @@ impl CPU {
       0
     };
 
+    self.execute_load_delay();
+
     self.set_reg(instr.rt(), result);
   }
 
@@ -353,23 +376,29 @@ impl CPU {
       0
     };
 
+    self.execute_load_delay();
+
     self.set_reg(instr.rt(), result);
   }
 
   fn mfc0(&mut self, instr: Instruction) {
-    self.delayed_register = instr.rt();
-    self.delayed_load = match instr.rd() {
-      12 => Some(self.cop0.sr),
-      13 => Some(self.cop0.cause),
-      14 => Some(self.cop0.epc),
+    let delayed_register = instr.rt();
+    let delayed_load = match instr.rd() {
+      12 => self.cop0.sr,
+      13 => self.cop0.cause,
+      14 => self.cop0.epc,
       _ => panic!("unhandled read from cop0 register: {}", instr.rd())
-    }
+    };
+
+    self.update_load(delayed_register, delayed_load);
   }
 
   fn mtc0(&mut self, instr: Instruction) {
 
     let cop0_reg = instr.rd();
     let value = self.r[instr.rt()];
+
+    self.execute_load_delay();
 
     match cop0_reg {
       3 | 5 | 6 | 7 | 9 | 11 => {
@@ -381,7 +410,6 @@ impl CPU {
       13 => self.cop0.cause = value,
       _ => todo!("cop0 register not implemented in mtc0: {}", cop0_reg)
     }
-
   }
 
   fn lw(&mut self, instr: Instruction) {
@@ -389,9 +417,9 @@ impl CPU {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
       if address & 0b11 == 0 {
-        self.delayed_load = Some(self.bus.mem_read_32(address));
-        self.delayed_register = instr.rt();
+        self.update_load(instr.rt(), self.bus.mem_read_32(address))
       } else {
+        self.execute_load_delay();
         self.exception(Cause::LoadAddressError);
       }
     } else {
@@ -402,11 +430,13 @@ impl CPU {
   fn lwl(&mut self, instr: Instruction) {
     let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
-    let mut result = if let Some(val) = self.get_out_register_val(instr.rt()) {
-      val
-    } else {
-      self.r[instr.rt()]
-    };
+    let mut result = self.r[instr.rt()];
+
+    if let Some((reg, val)) = self.load {
+      if reg == instr.rt() {
+        result = val;
+      }
+    }
 
     let aligned_address = address & !0x3;
     let aligned_word = self.bus.mem_read_32(aligned_address);
@@ -419,18 +449,19 @@ impl CPU {
       _ => unreachable!("can't happen")
     };
 
-    self.delayed_load = Some(result);
-    self.delayed_register = instr.rt();
+    self.update_load(instr.rt(), result);
   }
 
   fn lwr(&mut self, instr: Instruction) {
     let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
-    let mut result = if let Some(val) = self.get_out_register_val(instr.rt()) {
-      val
-    } else {
-      self.r[instr.rt()]
-    };
+    let mut result = self.r[instr.rt()];
+
+    if let Some((reg, val)) = self.load {
+      if reg == instr.rt() {
+        result = val;
+      }
+    }
 
     let aligned_address = address & !0x3;
     let aligned_word = self.bus.mem_read_32(aligned_address);
@@ -443,14 +474,15 @@ impl CPU {
       _ => unreachable!("can't happen")
     };
 
-    self.delayed_load = Some(result);
-    self.delayed_register = instr.rt();
+    self.update_load(instr.rt(), result);
   }
 
   fn j(&mut self, instr: Instruction) {
     self.next_pc = (self.pc & 0xf000_0000) | (instr.j_imm() << 2);
 
     self.branch = true;
+
+    self.execute_load_delay();
   }
 
   fn jal(&mut self, instr: Instruction) {
@@ -464,15 +496,21 @@ impl CPU {
 
     self.next_pc = self.r[instr.rs()];
     self.branch = true;
+
+    self.execute_load_delay();
   }
 
   fn jr(&mut self, instr: Instruction) {
     self.next_pc = self.r[instr.rs()];
     self.branch = true;
+
+    self.execute_load_delay();
   }
 
   fn sll(&mut self, instr: Instruction) {
     let result = self.r[instr.rt()] << instr.imm5();
+
+    self.execute_load_delay();
 
     self.set_reg(instr.rd(), result);
   }
@@ -480,11 +518,15 @@ impl CPU {
   fn sllv(&mut self, instr: Instruction) {
     let result = self.r[instr.rt()] << (self.r[instr.rs()] & 0x1f);
 
+    self.execute_load_delay();
+
     self.set_reg(instr.rd(), result);
   }
 
   fn srlv(&mut self, instr: Instruction) {
     let result = self.r[instr.rt()] >> (self.r[instr.rs()] & 0x1f);
+
+    self.execute_load_delay();
 
     self.set_reg(instr.rd(), result);
   }
@@ -492,11 +534,15 @@ impl CPU {
   fn sra(&mut self, instr: Instruction) {
     let result = (self.r[instr.rt()] as i32) >> instr.imm5();
 
+    self.execute_load_delay();
+
     self.set_reg(instr.rd(), result as u32);
   }
 
   fn srav(&mut self, instr: Instruction) {
     let result = (self.r[instr.rt()] as i32) >> (self.r[instr.rs()] & 0x1f);
+
+    self.execute_load_delay();
 
     self.set_reg(instr.rd(), result as u32);
   }
@@ -504,31 +550,51 @@ impl CPU {
   fn srl(&mut self, instr: Instruction) {
     let result = self.r[instr.rt()] >> instr.imm5();
 
+    self.execute_load_delay();
+
     self.set_reg(instr.rd(), result);
   }
 
   fn lui(&mut self, instr: Instruction) {
-    self.set_reg(instr.rt(), instr.immediate() << 16);
+    let result = instr.immediate() << 16;
+
+    self.execute_load_delay();
+
+    self.set_reg(instr.rt(), result);
   }
 
   fn mflo(&mut self, instr: Instruction) {
-    self.set_reg(instr.rd(), self.low);
+    let result = self.low;
+
+    self.execute_load_delay();
+
+    self.set_reg(instr.rd(), result);
   }
 
   fn mtlo(&mut self, instr: Instruction) {
     self.low = self.r[instr.rs()];
+
+    self.execute_load_delay();
   }
 
   fn mfhi(&mut self, instr: Instruction) {
-    self.set_reg(instr.rd(), self.hi);
+    let result = self.hi;
+
+    self.execute_load_delay();
+
+    self.set_reg(instr.rd(), result);
   }
 
   fn mthi(&mut self, instr: Instruction) {
     self.hi = self.r[instr.rs()];
+
+    self.execute_load_delay();
   }
 
   fn ori(&mut self, instr: Instruction) {
     let result = self.r[instr.rs()] | instr.immediate();
+
+    self.execute_load_delay();
 
     self.set_reg(instr.rt(), result);
   }
@@ -536,11 +602,15 @@ impl CPU {
   fn or(&mut self, instr: Instruction) {
     let result = self.r[instr.rs()] | self.r[instr.rt()];
 
+    self.execute_load_delay();
+
     self.set_reg(instr.rd(), result);
   }
 
   fn xori(&mut self, instr: Instruction) {
     let result = self.r[instr.rs()] ^ instr.immediate();
+
+    self.execute_load_delay();
 
     self.set_reg(instr.rt(), result);
   }
@@ -548,11 +618,15 @@ impl CPU {
   fn xor(&mut self, instr: Instruction) {
     let result = self.r[instr.rs()] ^ self.r[instr.rt()];
 
+    self.execute_load_delay();
+
     self.set_reg(instr.rd(), result);
   }
 
   fn nor(&mut self, instr: Instruction) {
     let result = !(self.r[instr.rs()] | self.r[instr.rt()]);
+
+    self.execute_load_delay();
 
     self.set_reg(instr.rd(), result);
   }
@@ -560,17 +634,26 @@ impl CPU {
   fn andi(&mut self, instr: Instruction) {
     let result = self.r[instr.rs()] & instr.immediate();
 
+    self.execute_load_delay();
+
     self.set_reg(instr.rt(), result);
   }
 
   fn and(&mut self, instr: Instruction) {
     let result = self.r[instr.rs()] & self.r[instr.rt()];
 
+    self.execute_load_delay();
+
     self.set_reg(instr.rd(), result);
   }
 
   fn addi(&mut self, instr: Instruction) {
-    if let Some(result) = (self.r[instr.rs()] as i32).checked_add(instr.immediate_signed() as i32) {
+
+    let rs = self.r[instr.rs()] as i32;
+
+    self.execute_load_delay();
+
+    if let Some(result) = rs.checked_add(instr.immediate_signed() as i32) {
       self.set_reg(instr.rt(), result as u32);
     } else {
       self.exception(Cause::Overflow);
@@ -578,7 +661,11 @@ impl CPU {
   }
 
   fn add(&mut self, instr: Instruction) {
-    if let Some(result) = (self.r[instr.rs()] as i32).checked_add(self.r[instr.rt()] as i32) {
+    let rs = self.r[instr.rs()] as i32;
+
+    self.execute_load_delay();
+
+    if let Some(result) = rs.checked_add(self.r[instr.rt()] as i32) {
       self.set_reg(instr.rd(), result as u32);
     } else {
       self.exception(Cause::Overflow);
@@ -587,11 +674,16 @@ impl CPU {
 
   fn addiu(&mut self, instr: Instruction) {
     let result = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
+
+    self.execute_load_delay();
+
     self.set_reg(instr.rt(), result);
   }
 
   fn addu(&mut self, instr: Instruction) {
     let result = self.r[instr.rs()].wrapping_add(self.r[instr.rt()]);
+
+    self.execute_load_delay();
 
     self.set_reg(instr.rd(), result);
   }
@@ -599,11 +691,17 @@ impl CPU {
   fn subu(&mut self, instr: Instruction) {
     let result = self.r[instr.rs()].wrapping_sub(self.r[instr.rt()]);
 
+    self.execute_load_delay();
+
     self.set_reg(instr.rd(), result);
   }
 
   fn sub(&mut self, instr: Instruction) {
-    if let Some(result) = (self.r[instr.rs()] as i32).checked_sub(self.r[instr.rt()] as i32) {
+    let rs = self.r[instr.rs()] as i32;
+
+    self.execute_load_delay();
+
+    if let Some(result) = rs.checked_sub(self.r[instr.rt()] as i32) {
       self.set_reg(instr.rd(), result as u32);
     } else {
       self.exception(Cause::Overflow);
@@ -616,6 +714,8 @@ impl CPU {
 
     let result = a * b;
 
+    self.execute_load_delay();
+
     self.low = result as u32;
     self.hi = (result >> 32) as u32;
   }
@@ -626,6 +726,8 @@ impl CPU {
 
     let result = a * b;
 
+    self.execute_load_delay();
+
     self.low = result as u32;
     self.hi = (result >> 32) as u32;
   }
@@ -633,6 +735,8 @@ impl CPU {
   fn div(&mut self, instr: Instruction) {
     let numerator = self.r[instr.rs()] as i32;
     let denominator = self.r[instr.rt()] as i32;
+
+    self.execute_load_delay();
 
     if denominator == 0 {
       self.low = if numerator >= 0 { 0xffffffff } else { 1 };
@@ -649,6 +753,8 @@ impl CPU {
   fn divu(&mut self, instr: Instruction) {
     let numerator = self.r[instr.rs()];
     let denominator = self.r[instr.rt()];
+
+    self.execute_load_delay();
 
     if denominator == 0 {
       self.low = 0xffffffff;
@@ -675,6 +781,8 @@ impl CPU {
       _ => unreachable!("can't happen")
     };
 
+    self.execute_load_delay();
+
     self.bus.mem_write_32(address, result);
   }
 
@@ -694,6 +802,8 @@ impl CPU {
       _ => unreachable!("can't happen")
     };
 
+    self.execute_load_delay();
+
     self.bus.mem_write_32(address, result);
   }
 
@@ -702,6 +812,8 @@ impl CPU {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
       let value = self.r[instr.rt()];
+
+      self.execute_load_delay();
 
       if address & 0b11 == 0 {
         self.bus.mem_write_32(address, value);
@@ -722,89 +834,29 @@ impl CPU {
   }
 
   fn rfe(&mut self, instr: Instruction) {
+    self.execute_load_delay();
+
     if instr.cop0_lower_bits() != 0b010000 {
       panic!("illegal cop0 instruction received")
     }
     self.cop0.return_from_exception();
   }
 
-  fn parse_secondary(&self, op_code: u32) -> &'static str {
-    match op_code {
-      0x0 => "SLL",
-      0x2 => "SRL",
-      0x3 => "SRA",
-      0x4 => "SLLV",
-      0x6 => "SRLV",
-      0x7 => "SRAV",
-      0x8 => "JR",
-      0x9 => "JALR",
-      0xc => "SYSCALL",
-      0xd => "BREAK",
-      0x10 => "MFHI",
-      0x11 => "MTHI",
-      0x12 => "MFLO",
-      0x13 => "MTLO",
-      0x18 => "MULT",
-      0x19 => "MULTU",
-      0x1a => "DIV",
-      0x1b => "DIVU",
-      0x20 => "ADD",
-      0x21 => "ADDU",
-      0x22 => "SUB",
-      0x23 => "SUBU",
-      0x24 => "AND",
-      0x25 => "OR",
-      0x26 => "XOR",
-      0x27 => "NOR",
-      0x2a => "SLT",
-      0x2b => "SLTU",
-      _ => todo!("Invalid or unimplemented secondary op: {:03x}", op_code)
+  fn update_load(&mut self, reg: usize, val: u32) {
+    if let Some((pending_reg, _)) = self.load {
+      if reg != pending_reg {
+        self.execute_load_delay();
+      }
     }
+
+    self.load = Some((reg, val));
   }
 
-  fn parse_op_code(&self, op_code: u32) -> &'static str {
-    match op_code {
-      0x0 => "Secondary",
-      0x1 => "BcondZ",
-      0x2 => "J",
-      0x3 => "JAL",
-      0x4 => "BEQ",
-      0x5 => "BNE",
-      0x6 => "BLEZ",
-      0x7 => "BGTZ",
-      0x8 => "ADDI",
-      0x9 => "ADDIU",
-      0xa => "SLTI",
-      0xb => "SLTIU",
-      0xc => "ANDI",
-      0xd => "ORI",
-      0xe => "XORI",
-      0xf => "LUI",
-      0x10 => "COP0",
-      0x11 => "COP1",
-      0x12 => "COP2",
-      0x13 => "COP3",
-      0x20 => "LB",
-      0x21 => "LH",
-      0x22 => "LWL",
-      0x23 => "LW",
-      0x24 => "LBU",
-      0x25 => "LHU",
-      0x26 => "LWR",
-      0x28 => "SB",
-      0x29 => "SH",
-      0x2a => "SWL",
-      0x2b => "SWI",
-      0x2e => "SWR",
-      0x30 => "LWC0",
-      0x31 => "LWC1",
-      0x32 => "LWC2",
-      0x33 => "LWC3",
-      0x38 => "SWC0",
-      0x39 => "SWC1",
-      0x3a => "SWC2",
-      0x3b => "SWC3",
-      _ => todo!("invalid or unimplemented op code: {:03x}", op_code)
+  fn execute_load_delay(&mut self) {
+    if let Some((reg, value)) = self.load {
+      self.set_reg(reg, value);
     }
+
+    self.load = None;
   }
 }

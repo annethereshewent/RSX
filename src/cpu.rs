@@ -81,9 +81,7 @@ pub struct CPU {
   hi: u32,
   low: u32,
   bus: Bus,
-  delayed_register: usize,
-  delayed_load: Option<u32>,
-  out_registers: Vec<OutRegister>
+  load: Option<(usize, u32)>
 }
 
 impl CPU {
@@ -96,9 +94,7 @@ impl CPU {
       hi: 0,
       low: 0,
       bus: Bus::new(bios),
-      delayed_register: 0,
-      delayed_load: None,
-      out_registers: Vec::new(),
+      load: None,
       branch: false,
       delay_slot: false,
       cop0: COP0 {
@@ -135,13 +131,6 @@ impl CPU {
 
     let instr = self.bus.mem_read_32(self.pc);
 
-    if let Some(delayed_load) = self.delayed_load {
-      self.set_reg(self.delayed_register, delayed_load)
-    }
-
-    self.delayed_load = None;
-    self.delayed_register = 0;
-
     // println!("executing instruction {:032b} at address {:08x}", instr, self.current_pc);
 
     self.delay_slot = self.branch;
@@ -151,26 +140,11 @@ impl CPU {
     self.next_pc = self.next_pc.wrapping_add(4);
 
     self.execute(Instruction::new(instr));
-
-    while !self.out_registers.is_empty() {
-      let register = self.out_registers.remove(0);
-      self.r[register.reg] = register.val;
-    }
-  }
-
-  pub fn get_out_register_val(&self, reg: usize) -> Option<u32> {
-    for out_register in &self.out_registers {
-      if out_register.reg == reg {
-        return Some(out_register.val);
-      }
-    }
-
-    None
   }
 
   pub fn set_reg(&mut self, rt: usize, val: u32) {
     if rt != 0 {
-      self.out_registers.push(OutRegister::new(val, rt))
+      self.r[rt] = val;
     }
   }
 }

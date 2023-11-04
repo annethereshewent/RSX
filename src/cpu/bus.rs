@@ -62,10 +62,12 @@ impl Bus {
       0x1f80_1810..=0x1f80_1817 => {
         let offset = address - 0x1f80_1810;
 
-        println!("ignoring reads to GPU");
         if offset == 4 {
+          println!("attempting read from GPUSTAT");
           return 0x10000000;
         }
+
+        println!("ignoring reads to GPU");
 
         0
       }
