@@ -113,7 +113,8 @@ impl CPU {
   }
 
   fn illegal(&mut self, instr: Instruction) {
-    panic!("illegal instruction received: {:02x}", instr.op_code());
+    // panic!("illegal instruction received: {:02x}", instr.op_code());
+    self.exception(Cause::IllegalInstruction);
   }
 
   fn sh(&mut self, instr: Instruction) {

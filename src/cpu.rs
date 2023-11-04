@@ -11,6 +11,7 @@ pub enum Cause {
   StoreAddressError = 0x5,
   SysCall = 0x8,
   Break = 0x9,
+  IllegalInstruction = 0xa,
   CoprocessorError = 0xb,
   Overflow = 0xc
 
@@ -152,7 +153,7 @@ impl CPU {
     self.execute(Instruction::new(instr));
 
     while !self.out_registers.is_empty() {
-      let register = self.out_registers.pop().unwrap();
+      let register = self.out_registers.remove(0);
       self.r[register.reg] = register.val;
     }
   }
