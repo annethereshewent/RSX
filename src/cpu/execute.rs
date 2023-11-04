@@ -3,94 +3,79 @@ use super::{CPU, instruction::Instruction, Cause};
 
 const RA_REGISTER: usize = 31;
 
+const PRIMARY_HANDLERS: [fn(&mut CPU, Instruction); 64] = [
+  // 0x0
+  CPU::secondary, CPU::bcondz,  CPU::j,       CPU::jal,     CPU::beq,
+  CPU::bne,       CPU::blez,    CPU::bgtz,    CPU::addi,    CPU::addiu,
+  // 0xa
+  CPU::slti,      CPU::sltiu,   CPU::andi,    CPU::ori,     CPU::xori,
+  CPU::lui,       CPU::cop0,    CPU::cop1,    CPU::cop2,    CPU::cop3,
+  // 0x14
+  CPU::illegal,   CPU::illegal, CPU::illegal, CPU::illegal, CPU::illegal,
+  CPU::illegal,   CPU::illegal, CPU::illegal, CPU::illegal, CPU::illegal,
+  // 0x1e
+  CPU::illegal,   CPU::illegal, CPU::lb,      CPU::lh,      CPU::lwl,
+  CPU::lw,        CPU::lbu,     CPU::lhu,     CPU::lwr,     CPU::illegal,
+  // 0x28
+  CPU::sb,        CPU::sh,      CPU::swl,     CPU::swi,     CPU::illegal,
+  CPU::illegal,   CPU::swr,     CPU::illegal, CPU::lwc0,    CPU::lwc1,
+  // 0x32
+  CPU::lwc2,      CPU::lwc3,    CPU::illegal, CPU::illegal, CPU::illegal,
+  CPU::illegal,   CPU::swc0,    CPU::swc1,    CPU::swc2,    CPU::swc3,
+  // 0x3c
+  CPU::illegal,   CPU::illegal, CPU::illegal, CPU::illegal
+];
+
+const SECONDARY_HANDLERS: [fn(&mut CPU, Instruction); 64] = [
+  // 0x0
+  CPU::sll,     CPU::illegal, CPU::srl,     CPU::sra,      CPU::sllv,
+  CPU::illegal, CPU::srlv,    CPU::srav,    CPU::jr,       CPU::jalr,
+  // 0xa
+  CPU::illegal, CPU::illegal, CPU::syscall, CPU::op_break, CPU::illegal,
+  CPU::illegal, CPU::mfhi,    CPU::mthi,    CPU::mflo,     CPU::mtlo,
+  // 0x14
+  CPU::illegal, CPU::illegal, CPU::illegal, CPU::illegal,  CPU::mult,
+  CPU::multu,   CPU::div,     CPU::div,     CPU::illegal,  CPU::illegal,
+  // 0x1e
+  CPU::illegal, CPU::illegal, CPU::add,     CPU::addu,     CPU::sub,
+  CPU::subu,    CPU::and,     CPU::or,      CPU::xor,      CPU::nor,
+  // 0x28
+  CPU::illegal, CPU::illegal, CPU::slt,     CPU::sltu,     CPU::illegal,
+  CPU::illegal, CPU::illegal, CPU::illegal, CPU::illegal,  CPU::illegal,
+  // 0x32
+  CPU::illegal, CPU::illegal, CPU::illegal, CPU::illegal,  CPU::illegal,
+  CPU::illegal, CPU::illegal, CPU::illegal, CPU::illegal,  CPU::illegal,
+  // 0x3c
+  CPU::illegal, CPU::illegal, CPU::illegal, CPU::illegal
+];
+
 impl CPU {
   pub fn execute(&mut self, instr: Instruction) {
     let op_code = instr.op_code();
 
-    // println!("received op code {}", self.parse_op_code(op_code));
+    let handler_fn = PRIMARY_HANDLERS[op_code as usize];
 
-    match op_code {
-      0 => {
-        let op_code = instr.op_code_secondary();
+    handler_fn(self, instr);
+  }
 
-       // println!("received secondary op {}", self.parse_secondary(op_code));
-
-        match op_code {
-          0 => self.sll(instr),
-          0x2 => self.srl(instr),
-          0x3 => self.sra(instr),
-          0x4 => self.sllv(instr),
-          0x6 => self.srlv(instr),
-          0x7 => self.srav(instr),
-          0x8 => self.jr(instr),
-          0x9 => self.jalr(instr),
-          0xc => self.syscall(instr),
-          0xd => self.op_break(instr),
-          0x10 => self.mfhi(instr),
-          0x11 => self.mthi(instr),
-          0x12 => self.mflo(instr),
-          0x13 => self.mtlo(instr),
-          0x18 => self.mult(instr),
-          0x19 => self.multu(instr),
-          0x1a => self.div(instr),
-          0x1b => self.divu(instr),
-          0x20 => self.add(instr),
-          0x21 => self.addu(instr),
-          0x22 => self.sub(instr),
-          0x23 => self.subu(instr),
-          0x24 => self.and(instr),
-          0x26 => self.xor(instr),
-          0x25 => self.or(instr),
-          0x27 => self.nor(instr),
-          0x2a => self.slt(instr),
-          0x2b => self.sltu(instr),
-          _ => panic!("illegal secondary op code: {:02x}", op_code)
-        }
-
-      }
-      0x1 => {
-        match instr.bcond() {
-          0 => self.bltz(instr),
-          1 => self.bgez(instr),
-          _ => unreachable!("can't happen")
-        }
-      }
-      0x2 => self.j(instr),
-      0x3 => self.jal(instr),
-      0x4 => self.beq(instr),
-      0x5 => self.bne(instr),
-      0x6 => self.blez(instr),
-      0x7 => self.bgtz(instr),
-      0x8 => self.addi(instr),
-      0x9 => self.addiu(instr),
-      0xa => self.slti(instr),
-      0xb => self.sltiu(instr),
-      0xc => self.andi(instr),
-      0xd => self.ori(instr),
-      0xe => self.xori(instr),
-      0xf => self.lui(instr),
-      0x10 => self.execute_cop0(instr),
-      0x11 => self.exception(Cause::CoprocessorError),
-      0x12 => self.execute_cop2(instr),
-      0x13 => self.exception(Cause::CoprocessorError),
-      0x20 => self.lb(instr),
-      0x21 => self.lh(instr),
-      0x22 => self.lwl(instr),
-      0x23 => self.lw(instr),
-      0x24 => self.lbu(instr),
-      0x25 => self.lhu(instr),
-      0x26 => self.lwr(instr),
-      0x28 => self.sb(instr),
-      0x29 => self.sh(instr),
-      0x2a => self.swl(instr),
-      0x2b => self.swi(instr),
-      0x2e => self.swr(instr),
-      0x30..=0x31 | 0x33 => self.exception(Cause::CoprocessorError),
-      0x32 => self.lwc2(instr),
-      0x38..=0x39 | 0x3b => self.exception(Cause::CoprocessorError),
-      0x3a => self.swc2(instr),
-      _ => panic!("illegal op code: {:02x}", op_code)
+  fn bcondz(&mut self, instr: Instruction) {
+    match instr.bcond() {
+      0 => self.bltz(instr),
+      1 => self.bgez(instr),
+      _ => unreachable!("can't happen")
     }
+  }
+
+  fn secondary(&mut self, instr: Instruction) {
+    let op_code = instr.op_code_secondary();
+
+    let handler_fn = SECONDARY_HANDLERS[op_code as usize];
+
+    handler_fn(self, instr);
+  }
+
+  fn illegal(&mut self, instr: Instruction) {
+    panic!("illegal instruction received: {:02x}", instr.op_code());
   }
 
   fn sh(&mut self, instr: Instruction) {
@@ -181,7 +166,7 @@ impl CPU {
     }
   }
 
-  fn execute_cop0(&mut self, instr: Instruction) {
+  fn cop0(&mut self, instr: Instruction) {
     let op_code = instr.cop0_code();
 
     match op_code {
@@ -192,16 +177,48 @@ impl CPU {
     }
   }
 
-  fn execute_cop2(&mut self, _instr: Instruction) {
+  fn cop1(&mut self, _: Instruction) {
+    self.exception(Cause::CoprocessorError);
+  }
+
+  fn cop2(&mut self, _instr: Instruction) {
     todo!("unhandled instruction to cop2 processor");
+  }
+
+  fn cop3(&mut self, _: Instruction) {
+    self.exception(Cause::CoprocessorError);
+  }
+
+  fn lwc0(&mut self, _instr: Instruction) {
+    self.exception(Cause::CoprocessorError);
+  }
+
+  fn lwc1(&mut self, _instr: Instruction) {
+    self.exception(Cause::CoprocessorError);
   }
 
   fn lwc2(&mut self, _instr: Instruction) {
     todo!("load word to coprocessor 2 not implemented");
   }
 
+  fn lwc3(&mut self, _instr: Instruction) {
+    self.exception(Cause::CoprocessorError);
+  }
+
+  fn swc0(&mut self, _instr: Instruction) {
+    self.exception(Cause::CoprocessorError);
+  }
+
+  fn swc1(&mut self, _instr: Instruction) {
+    self.exception(Cause::CoprocessorError);
+  }
+
   fn swc2(&mut self, _instr: Instruction) {
     todo!("store word to coprocessor 2 not implemented");
+  }
+
+  fn swc3(&mut self, _instr: Instruction) {
+    self.exception(Cause::CoprocessorError);
   }
 
   fn bne(&mut self, instr: Instruction) {

@@ -42,14 +42,15 @@ impl COP0 {
     self.sr &=  !0x3f;
     self.sr |= (mode << 2) & 0x3f;
 
-    self.cause = (cause as u32) << 2;
+    self.cause &= !0x7c;
+    self.cause |= (cause as u32) << 2;
 
     exception_address
   }
 
   pub fn return_from_exception(&mut self) {
     let mode = self.sr & 0x3f;
-    self.sr &= !0x3f;
+    self.sr &= !0xf;
     self.sr |= mode >> 2;
   }
 }
@@ -115,6 +116,8 @@ impl CPU {
     if self.delay_slot {
       self.cop0.epc = self.cop0.epc.wrapping_sub(4);
       self.cop0.cause |= 1 << 31;
+    } else {
+      self.cop0.cause &= !(1 << 31);
     }
 
     self.pc = exception_address;
