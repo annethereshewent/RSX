@@ -10,6 +10,8 @@ pub enum Cause {
   LoadAddressError = 0x4,
   StoreAddressError = 0x5,
   SysCall = 0x8,
+  Break = 0x9,
+  CoprocessorError = 0xb,
   Overflow = 0xc
 
 }
@@ -150,6 +152,16 @@ impl CPU {
       let register = self.out_registers.pop().unwrap();
       self.r[register.reg] = register.val;
     }
+  }
+
+  pub fn get_out_register_val(&self, reg: usize) -> Option<u32> {
+    for out_register in &self.out_registers {
+      if out_register.reg == reg {
+        return Some(out_register.val);
+      }
+    }
+
+    None
   }
 
   pub fn set_reg(&mut self, rt: usize, val: u32) {
