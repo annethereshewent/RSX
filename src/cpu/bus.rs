@@ -59,8 +59,6 @@ impl Bus {
         println!("ignoring reads to interrupt control registers");
         0
       }
-      0x1f80_10f0 => self.dma.control,
-      0x1f80_10f4 => self.dma.interrupt.val,
       0x1f80_1080..=0x1f80_10ff => {
         let offset = address - 0x1f80_1080;
 
@@ -204,8 +202,6 @@ impl Bus {
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070..=0x1f80_1077 => println!("ignoring writes to interrupt control registers"),
-      // 0x1f80_10f0 => self.dma.control = value,
-      // 0x1f80_10f4 => self.dma.interrupt.write(value),
       0x1f80_1080..=0x1f80_10ff => {
         let offset = address - 0x1f80_1080;
 
@@ -267,7 +263,13 @@ impl Bus {
       let masked_address = base_address & 0x1ffffc;
 
       if channel.control.is_from_ram() {
-        todo!("not handled yet");
+        let word = self.mem_read_32(masked_address);
+
+        if channel.channel_id == 2 {
+          println!("received gpu data {:X}", word);
+        } else {
+          panic!("unhandled transfer from ram to channel {}", channel.channel_id);
+        }
       } else {
         let value = match channel.channel_id {
           6 => {
@@ -325,6 +327,8 @@ impl Bus {
 
       header = self.mem_read_32(base_address);
     }
+
+    println!("finished with linked list transfer");
 
     channel.finish()
   }

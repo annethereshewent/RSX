@@ -478,17 +478,18 @@ impl CPU {
   }
 
   fn j(&mut self, instr: Instruction) {
+    self.execute_load_delay();
+
     self.next_pc = (self.pc & 0xf000_0000) | (instr.j_imm() << 2);
 
     self.branch = true;
-
-    self.execute_load_delay();
   }
 
   fn jal(&mut self, instr: Instruction) {
-    self.set_reg(RA_REGISTER, self.next_pc);
-
+    let ra = self.next_pc;
     self.j(instr);
+
+    self.set_reg(RA_REGISTER, ra);
   }
 
   fn jalr(&mut self, instr: Instruction) {
