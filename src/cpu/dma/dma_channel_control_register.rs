@@ -18,7 +18,7 @@ impl DmaChannelControlRegister {
     self.val & 0b1 == 0
   }
 
-  pub fn address_increment(&self) -> bool {
+  pub fn is_address_increment(&self) -> bool {
     (self.val >> 1) & 0b1 == 0
   }
 
@@ -50,4 +50,22 @@ impl DmaChannelControlRegister {
   pub fn manual_trigger(&self) -> bool {
     (self.val >> 28) & 0b1 == 1
   }
+
+  pub fn set_enabled(&mut self, enabled: bool) {
+    if (enabled) {
+      self.val |= (1 << 24);
+    } else {
+      self.val &= !(1 << 24);
+    }
+  }
+
+  pub fn set_trigger(&mut self, enabled: bool) {
+    if (enabled) {
+      self.val |= (1 << 28);
+    } else {
+      self.val &= !(1 << 28);
+    }
+  }
+
+
 }

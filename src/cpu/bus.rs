@@ -1,4 +1,4 @@
-use super::dma::DMA;
+use super::dma::{DMA, dma_channel_control_register::SyncMode};
 
 const RAM_SIZE: usize = 2 * 1024 * 1024;
 
@@ -218,6 +218,10 @@ impl Bus {
               8 => channel.control.val = value,
               _ => panic!("unhandled dma read at offset {:X}", offset)
             }
+
+            if channel.is_active() {
+              self.do_dma(major as usize);
+            }
           },
           7 => {
             match minor {
@@ -235,5 +239,53 @@ impl Bus {
       0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
       _ => panic!("write to unsupported address: {:06x}", address)
     }
+  }
+
+  fn do_dma(&mut self, channel: usize) {
+    match self.dma.channels[channel].control.synchronization_mode() {
+      SyncMode::LinkedList => todo!("linked list mode not implemented yet"),
+      _ => self.do_dma_block(channel)
+    }
+  }
+
+  fn do_dma_block(&mut self, index: usize) {
+    let mut channel = self.dma.channels[index];
+
+    let mut word_count = channel.block_size();
+
+    let mut base_address = channel.base_address;
+
+    let is_increment = channel.control.is_address_increment();
+
+    while word_count > 0 {
+      let masked_address = base_address & 0x1ffffc;
+
+      if channel.control.is_from_ram() {
+        todo!("not handled yet");
+      } else {
+        let value = match index {
+          6 => {
+            if word_count == 1 {
+              0xffffff
+            } else {
+              base_address.wrapping_sub(4) & 0x1fffff
+            }
+          }
+          _ => todo!("channel not supported yet")
+        };
+
+        self.mem_write_32(masked_address, value);
+      }
+
+      if is_increment {
+        base_address = base_address.wrapping_add(4);
+      } else {
+        base_address = base_address.wrapping_sub(4);
+      }
+
+      word_count -= 1;
+    }
+
+    channel.finish();
   }
 }
