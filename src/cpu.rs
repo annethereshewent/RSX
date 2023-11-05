@@ -5,6 +5,7 @@ use self::bus::Bus;
 pub mod bus;
 pub mod execute;
 pub mod instruction;
+pub mod dma;
 
 pub enum Cause {
   LoadAddressError = 0x4,

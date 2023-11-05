@@ -1,15 +1,19 @@
+use super::dma::DMA;
+
 const RAM_SIZE: usize = 2 * 1024 * 1024;
 
 pub struct Bus {
-  pub bios: Vec<u8>,
-  ram: [u8; RAM_SIZE]
+  bios: Vec<u8>,
+  ram: [u8; RAM_SIZE],
+  dma: DMA
 }
 
 impl Bus {
   pub fn new(bios: Vec<u8>) -> Self {
     Self {
       bios,
-      ram: [0; RAM_SIZE]
+      ram: [0; RAM_SIZE],
+      dma: DMA::new()
     }
   }
 
@@ -55,9 +59,19 @@ impl Bus {
         println!("ignoring reads to interrupt control registers");
         0
       }
+      0x1f80_10f0 => self.dma.control,
+      0x1f80_10f4 => self.dma.interrupt.val,
       0x1f80_1080..=0x1f80_10ff => {
-        println!("ignoring reads to DMA");
-        0
+        let offset = address - 0x1f80_1080;
+
+        match offset {
+          0x70 => self.dma.control,
+          0x74 => self.dma.interrupt.val,
+          _ => {
+            println!("ignoring reads to DMA");
+            0
+          }
+        }
       }
       0x1f80_1810..=0x1f80_1817 => {
         let offset = address - 0x1f80_1810;
@@ -170,6 +184,8 @@ impl Bus {
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070..=0x1f80_1077 => println!("ignoring writes to interrupt control registers"),
+      0x1f80_10f0 => self.dma.control = value,
+      0x1f80_10f4 => self.dma.interrupt.write(value),
       0x1f80_1080..=0x1f80_10ff => println!("ignoring writes to DMA"),
       0x1f80_1100..=0x1f80_1130 => println!("ignoring writes to timer registers"),
       0x1f80_1810..=0x1f80_1817 => println!("ignoring writes to GPU registers"),
