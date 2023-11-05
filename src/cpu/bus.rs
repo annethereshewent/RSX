@@ -89,12 +89,16 @@ impl Bus {
           _ => panic!("unhandled DMA read at offset {:X}", offset)
         }
       }
+      0x1f80_1100..=0x1f80_1130 => {
+        println!("ignoring reads to timer registers");
+        0
+      }
       0x1f80_1810..=0x1f80_1817 => {
         let offset = address - 0x1f80_1810;
 
         if offset == 4 {
           println!("attempting read from GPUSTAT");
-          return 0x10000000;
+          return 0x1c000000;
         }
 
         println!("ignoring reads to GPU");
@@ -214,10 +218,14 @@ impl Bus {
 
             match minor {
               0 => channel.base_address = value & 0xfffffc,
-              4 => channel.block_control.val = value,
+              4 => {
+                channel.block_control.val = value;
+              },
               8 => channel.control.val = value,
               _ => panic!("unhandled dma read at offset {:X}", offset)
             }
+
+            self.dma.channels[major as usize] = channel;
 
             if channel.is_active() {
               self.do_dma(major as usize);
@@ -287,5 +295,7 @@ impl Bus {
     }
 
     channel.finish();
+
+    self.dma.channels[index] = channel;
   }
 }

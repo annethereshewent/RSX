@@ -783,7 +783,7 @@ impl CPU {
 
     self.execute_load_delay();
 
-    self.bus.mem_write_32(address, result);
+    self.bus.mem_write_32(aligned_address, result);
   }
 
   fn swr(&mut self, instr: Instruction) {
@@ -804,7 +804,7 @@ impl CPU {
 
     self.execute_load_delay();
 
-    self.bus.mem_write_32(address, result);
+    self.bus.mem_write_32(aligned_address, result);
   }
 
   fn swi(&mut self, instr: Instruction) {

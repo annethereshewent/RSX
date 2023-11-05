@@ -15,7 +15,7 @@ impl DmaChannelControlRegister {
   }
 
   pub fn is_from_ram(&self) -> bool {
-    self.val & 0b1 == 0
+    self.val & 0b1 == 1
   }
 
   pub fn is_address_increment(&self) -> bool {
@@ -52,16 +52,16 @@ impl DmaChannelControlRegister {
   }
 
   pub fn set_enabled(&mut self, enabled: bool) {
-    if (enabled) {
-      self.val |= (1 << 24);
+    if enabled {
+      self.val |= 1 << 24;
     } else {
       self.val &= !(1 << 24);
     }
   }
 
   pub fn set_trigger(&mut self, enabled: bool) {
-    if (enabled) {
-      self.val |= (1 << 28);
+    if enabled {
+      self.val |= 1 << 28;
     } else {
       self.val &= !(1 << 28);
     }

@@ -33,8 +33,12 @@ impl DmaChannel {
 
   pub fn block_size(&self) -> u32 {
     match self.control.synchronization_mode() {
-      SyncMode::Manual => self.block_control.block_size(),
-      SyncMode::Request => self.block_control.block_size() * self.block_control.block_count(),
+      SyncMode::Manual => {
+        self.block_control.block_size()
+      },
+      SyncMode::Request => {
+        self.block_control.block_size() * self.block_control.block_count()
+      },
       SyncMode::LinkedList => 0
     }
   }
