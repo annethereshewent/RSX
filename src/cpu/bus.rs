@@ -64,13 +64,29 @@ impl Bus {
       0x1f80_1080..=0x1f80_10ff => {
         let offset = address - 0x1f80_1080;
 
-        match offset {
-          0x70 => self.dma.control,
-          0x74 => self.dma.interrupt.val,
-          _ => {
-            println!("ignoring reads to DMA");
-            0
+        let major = (offset & 0x70) >> 4;
+        let minor = offset & 0xf;
+
+        match major {
+          0..=6 => {
+            let channel = self.dma.channels[major as usize];
+
+            match minor {
+              0 => channel.base_address,
+              4 => channel.block_control.val,
+              8 => channel.control.val,
+              _ => panic!("unhandled dma read at offset {:X}", offset)
+            }
+          },
+          7 => {
+            match minor {
+              0 => self.dma.control,
+              4 => self.dma.interrupt.val,
+              6 => self.dma.interrupt.val >> 16,
+              _ => panic!("unhandled DMA read at offset {:X}", offset)
+            }
           }
+          _ => panic!("unhandled DMA read at offset {:X}", offset)
         }
       }
       0x1f80_1810..=0x1f80_1817 => {
@@ -184,9 +200,35 @@ impl Bus {
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070..=0x1f80_1077 => println!("ignoring writes to interrupt control registers"),
-      0x1f80_10f0 => self.dma.control = value,
-      0x1f80_10f4 => self.dma.interrupt.write(value),
-      0x1f80_1080..=0x1f80_10ff => println!("ignoring writes to DMA"),
+      // 0x1f80_10f0 => self.dma.control = value,
+      // 0x1f80_10f4 => self.dma.interrupt.write(value),
+      0x1f80_1080..=0x1f80_10ff => {
+        let offset = address - 0x1f80_1080;
+
+        let major = (offset & 0x70) >> 4;
+        let minor = offset & 0xf;
+
+        match major {
+          0..=6 => {
+            let mut channel = self.dma.channels[major as usize];
+
+            match minor {
+              0 => channel.base_address = value & 0xfffffc,
+              4 => channel.block_control.val = value,
+              8 => channel.control.val = value,
+              _ => panic!("unhandled dma read at offset {:X}", offset)
+            }
+          },
+          7 => {
+            match minor {
+              0 => self.dma.control = value,
+              4 => self.dma.interrupt.write(value),
+              _ => panic!("unhandled DMA read at offset {:X}", offset)
+            }
+          }
+          _ => panic!("unhandled DMA read at offset {:X}", offset)
+        }
+      }
       0x1f80_1100..=0x1f80_1130 => println!("ignoring writes to timer registers"),
       0x1f80_1810..=0x1f80_1817 => println!("ignoring writes to GPU registers"),
       0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
