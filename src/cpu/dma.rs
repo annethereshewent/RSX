@@ -17,7 +17,15 @@ impl DMA {
       // default value taken from specs
       control: 0x07654321,
       interrupt: DmaInterrupt::new(),
-      channels: [DmaChannel::new(); 7]
+      channels: [
+        DmaChannel::new(0),
+        DmaChannel::new(1),
+        DmaChannel::new(2),
+        DmaChannel::new(3),
+        DmaChannel::new(4),
+        DmaChannel::new(5),
+        DmaChannel::new(6)
+      ]
     }
   }
 }

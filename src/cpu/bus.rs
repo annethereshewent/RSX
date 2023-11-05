@@ -1,4 +1,4 @@
-use super::dma::{DMA, dma_channel_control_register::SyncMode};
+use super::dma::{DMA, dma_channel_control_register::SyncMode, dma_channel::DmaChannel};
 
 const RAM_SIZE: usize = 2 * 1024 * 1024;
 
@@ -217,7 +217,7 @@ impl Bus {
             let mut channel = self.dma.channels[major as usize];
 
             match minor {
-              0 => channel.base_address = value & 0xfffffc,
+              0 => channel.base_address = value & 0xff_fffc,
               4 => {
                 channel.block_control.val = value;
               },
@@ -225,11 +225,11 @@ impl Bus {
               _ => panic!("unhandled dma read at offset {:X}", offset)
             }
 
-            self.dma.channels[major as usize] = channel;
-
             if channel.is_active() {
-              self.do_dma(major as usize);
+              self.do_dma(&mut channel);
             }
+
+            self.dma.channels[major as usize] = channel;
           },
           7 => {
             match minor {
@@ -249,16 +249,14 @@ impl Bus {
     }
   }
 
-  fn do_dma(&mut self, channel: usize) {
-    match self.dma.channels[channel].control.synchronization_mode() {
-      SyncMode::LinkedList => todo!("linked list mode not implemented yet"),
+  fn do_dma(&mut self, channel: &mut DmaChannel) {
+    match channel.control.synchronization_mode() {
+      SyncMode::LinkedList => self.do_dma_linked_list(channel),
       _ => self.do_dma_block(channel)
     }
   }
 
-  fn do_dma_block(&mut self, index: usize) {
-    let mut channel = self.dma.channels[index];
-
+  fn do_dma_block(&mut self, channel: &mut DmaChannel) {
     let mut word_count = channel.block_size();
 
     let mut base_address = channel.base_address;
@@ -271,7 +269,7 @@ impl Bus {
       if channel.control.is_from_ram() {
         todo!("not handled yet");
       } else {
-        let value = match index {
+        let value = match channel.channel_id {
           6 => {
             if word_count == 1 {
               0xffffff
@@ -295,7 +293,39 @@ impl Bus {
     }
 
     channel.finish();
+  }
 
-    self.dma.channels[index] = channel;
+  fn do_dma_linked_list(&mut self, channel: &mut DmaChannel) {
+    let mut base_address = channel.base_address & 0x1ffffc;
+
+    if !channel.control.is_from_ram() {
+      todo!("linked list DMA from RAM not yet implemented");
+    }
+
+    if channel.channel_id != 2 {
+      panic!("Only GPU channel supported in linked list mode");
+    }
+
+    let mut header = self.mem_read_32(base_address);
+
+    while (header & 0xffffff) != 0xffffff {
+      let mut word_count = header >> 24;
+
+      while word_count > 0 {
+        base_address = (base_address + 4) & 0x1ffffc;
+
+        let val = self.mem_read_32(base_address);
+
+        println!("received GPU command {:08x}", val);
+
+        word_count -= 1;
+      }
+
+      base_address = header & 0x1ffffc;
+
+      header = self.mem_read_32(base_address);
+    }
+
+    channel.finish()
   }
 }

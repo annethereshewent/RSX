@@ -1,19 +1,20 @@
 use super::{dma_channel_control_register::{DmaChannelControlRegister, SyncMode}, dma_block_control_register::DmaBlockControlRegister};
 
-
 #[derive(Clone, Copy)]
 pub struct DmaChannel {
   pub base_address: u32,
   pub control: DmaChannelControlRegister,
-  pub block_control: DmaBlockControlRegister
+  pub block_control: DmaBlockControlRegister,
+  pub channel_id: usize
 }
 
 impl DmaChannel {
-  pub fn new() -> Self {
+  pub fn new(channel_id: usize) -> Self {
     Self {
       base_address: 0,
       control: DmaChannelControlRegister::new(),
-      block_control: DmaBlockControlRegister::new()
+      block_control: DmaBlockControlRegister::new(),
+      channel_id
     }
   }
 

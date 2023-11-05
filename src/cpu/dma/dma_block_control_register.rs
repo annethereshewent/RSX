@@ -1,4 +1,5 @@
-#[derive(Clone, Copy)]pub struct DmaBlockControlRegister {
+#[derive(Clone, Copy)]
+pub struct DmaBlockControlRegister {
   pub val: u32
 }
 
