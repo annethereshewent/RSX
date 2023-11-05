@@ -57,20 +57,6 @@ impl COP0 {
   }
 }
 
-struct OutRegister {
-  pub val: u32,
-  pub reg: usize
-}
-
-impl OutRegister {
-  pub fn new(val: u32, reg: usize) -> Self {
-    Self {
-      val,
-      reg
-    }
-  }
-}
-
 pub struct CPU {
   pub pc: u32,
   pub next_pc: u32,

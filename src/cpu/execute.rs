@@ -112,7 +112,7 @@ impl CPU {
     handler_fn(self, instr);
   }
 
-  fn illegal(&mut self, instr: Instruction) {
+  fn illegal(&mut self, _instr: Instruction) {
     // panic!("illegal instruction received: {:02x}", instr.op_code());
     self.execute_load_delay();
     self.exception(Cause::IllegalInstruction);
