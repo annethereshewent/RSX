@@ -59,8 +59,11 @@ impl GPU {
     match op_code {
       0x00 => (), // NOP
       0xe1 => self.gp0_draw_mode(val),
+      0xe2 => self.gp0_texture_window(val),
       0xe3 => self.gp0_draw_area_top_left(val),
       0xe4 => self.gp0_draw_area_bottom_right(val),
+      0xe5 => self.gp0_drawing_offset(val),
+      0xe6 => self.gp0_mask_bit(val),
       _ => todo!("invalid or unsupported GP0 command: {:02x}", op_code)
     }
   }
@@ -79,6 +82,17 @@ impl GPU {
     }
   }
 
+  fn gp0_mask_bit(&mut self, val: u32) {
+    self.stat.set_mask_attributes(val);
+  }
+
+  fn gp0_texture_window(&mut self, val: u32) {
+    self.texture_window_x_mask = (val & 0x1f) as u8;
+    self.texture_window_y_mask = ((val >> 5) & 0x1f) as u8;
+    self.texture_window_x_offset = ((val >> 10) & 0x1f) as u8;
+    self.texture_window_y_offset = ((val >> 15) & 0x1f) as u8;
+  }
+
   fn gp0_draw_mode(&mut self, val: u32) {
     self.stat.update_draw_mode(val);
 
@@ -94,6 +108,14 @@ impl GPU {
   fn gp0_draw_area_bottom_right(&mut self, val: u32) {
     self.drawing_area_right = (val & 0x3ff) as u16;
     self.drawing_area_bottom = ((val >> 10) & 0x3ff) as u16;
+  }
+
+  fn gp0_drawing_offset(&mut self, val: u32) {
+    let x = (val & 0x7ff) as u16;
+    let y = ((val >> 11) & 0x7ff) as u16;
+
+    self.drawing_x_offset = ((x << 5) as i16) >> 5;
+    self.drawing_y_offset = ((y << 5) as i16) >> 5;
   }
 
   fn gp1_display_mode(&mut self, val: u32) {

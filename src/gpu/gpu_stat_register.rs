@@ -135,6 +135,11 @@ impl GpuStatRegister {
     }
   }
 
+  pub fn set_mask_attributes(&mut self, val: u32) {
+    self.force_mask_bit = val & 0b1 == 1;
+    self.preserved_masked_pixels = (val >> 1) & 0b1 == 1;
+  }
+
   pub fn reset(&mut self) {
     self.irq_enabled = false;
 
