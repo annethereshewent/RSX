@@ -26,6 +26,7 @@ pub enum ColorDepth {
 #[derive(Clone, Copy)]
 pub enum  DmaDirection {
   Off = 0,
+  Fifo = 1,
   CputoGP0 = 2,
   GpuReadToCpu = 3
 }
@@ -105,6 +106,57 @@ impl GpuStatRegister {
     self.texture_y_base2 = ((val >> 11) & 0b1) as u8;
   }
 
+  pub fn update_display_mode(&mut self, val: u32) {
+    self.hres1 = (val & 0b11) as u8;
+    self.hres2 = ((val >> 6) & 0b1) as u8;
+
+    self.vres = ((val >> 2) & 0b1) as u8;
+
+    self.display_color_depth = if ((val >> 4) & 0b1) == 1 {
+      ColorDepth::TwentyFourBit
+    } else {
+      ColorDepth::FifteenBit
+    };
+
+    self.vertical_interlace = (val >> 5) & 0b1 == 1;
+
+    if (val >> 7) & 0b1 == 1 {
+      panic!("unsupported display mode found: reverse flag setting");
+    }
+  }
+
+  pub fn update_dma_dir(&mut self, val: u32) {
+    self.dma_dir = match val & 0b11 {
+      0 => DmaDirection::Off,
+      1 => DmaDirection::Fifo,
+      2 => DmaDirection::CputoGP0,
+      3 => DmaDirection::GpuReadToCpu,
+      _ => unreachable!("can't happen")
+    }
+  }
+
+  pub fn reset(&mut self) {
+    self.irq_enabled = false;
+
+    self.texture_x_base = 0;
+    self.texture_y_base1 = 0;
+    self.semi_transparency = 0;
+    self.texture_colors = TextureColors::FourBit;
+    self.dither_enabled = false;
+    self.draw_to_display = false;
+    self.texture_y_base2 = 0;
+    self.force_mask_bit = false;
+    self.preserved_masked_pixels = false;
+    self.dma_dir = DmaDirection::Off;
+    self.display_enable = false;
+    self.hres1 = 0;
+    self.hres2 = 0;
+    self.vres = 0;
+    self.video_mode = VideoMode::Ntsc;
+    self.vertical_interlace = true;
+    self.display_color_depth = ColorDepth::FifteenBit;
+  }
+
   pub fn value(&self) -> u32 {
     let mut result = 0u32;
 
@@ -131,8 +183,9 @@ impl GpuStatRegister {
 
     let dma_request = match self.dma_dir {
       DmaDirection::Off => 0,
+      DmaDirection::Fifo => 1,
       DmaDirection::CputoGP0 => (result >> 28) & 0b1,
-      DmaDirection::GpuReadToCpu => 1
+      DmaDirection::GpuReadToCpu => (result >> 27) & 0b1
     };
 
     result |= dma_request << 25;

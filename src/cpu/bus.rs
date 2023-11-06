@@ -104,6 +104,10 @@ impl Bus {
         // }
 
         match offset {
+          0 => {
+            println!("returning 0 for GPUREAD register");
+            0
+          }
           4 => self.gpu.stat.value(),
           _ => todo!("GPU read register not implemented yet: {offset}")
         }
@@ -311,7 +315,7 @@ impl Bus {
   }
 
   fn do_dma_linked_list(&mut self, channel: &mut DmaChannel) {
-    let mut base_address = channel.base_address & 0x1ffffc;
+    let mut base_address = channel.base_address & 0x1f_fffc;
 
     if !channel.control.is_from_ram() {
       todo!("linked list DMA from RAM not yet implemented");
@@ -321,9 +325,9 @@ impl Bus {
       panic!("Only GPU channel supported in linked list mode");
     }
 
-    let mut header = self.mem_read_32(base_address);
+    loop {
+      let header = self.mem_read_32(base_address);
 
-    while (header & 0xffffff) != 0xffffff {
       let mut word_count = header >> 24;
 
       while word_count > 0 {
@@ -331,14 +335,16 @@ impl Bus {
 
         let val = self.mem_read_32(base_address);
 
-        println!("received GPU command {:08x}", val);
+        self.gpu.gp0(val);
 
         word_count -= 1;
       }
 
       base_address = header & 0x1ffffc;
 
-      header = self.mem_read_32(base_address);
+      if (header & 0xffffff) == 0xffffff {
+        break;
+      }
     }
 
     println!("finished with linked list transfer");
