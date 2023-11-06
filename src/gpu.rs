@@ -2,6 +2,19 @@ use self::gpu_stat_register::GpuStatRegister;
 
 pub mod gpu_stat_register;
 
+/* per https://github.com/KieronJ/rpsx/blob/master/src/psx/gpu.rs */
+const CMD_SIZE: [u8; 256] = [
+  1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  4, 4, 4, 4, 7, 7, 7, 7, 5, 5, 5, 5, 9, 9, 9, 9, 6, 6, 6, 6, 9, 9, 9, 9, 8, 8, 8, 8, 12, 12, 12,
+  12, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+  4, 4, 3, 1, 3, 1, 4, 4, 4, 4, 2, 1, 2, 1, 3, 3, 3, 3, 2, 1, 2, 1, 3, 3, 3, 3, 2, 1, 2, 1, 3, 3,
+  3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+  4, 4, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+  3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  1, 1,
+];
+
 pub struct GPU {
   pub stat: GpuStatRegister,
   texture_rectangle_x_flip: bool,
@@ -23,7 +36,10 @@ pub struct GPU {
   display_line_start: u16,
   display_line_end: u16,
   display_vram_x_start: u16,
-  display_vram_y_start: u16
+  display_vram_y_start: u16,
+  command_buffer: [u32; 12],
+  command_index: usize,
+  command_words_remaining: u8
 }
 
 impl GPU {
@@ -49,21 +65,44 @@ impl GPU {
       display_line_end: 0,
       texture_window_x_offset: 0,
       display_vram_x_start: 0,
-      display_vram_y_start: 0
+      display_vram_y_start: 0,
+      command_buffer: [0; 12],
+      command_index: 0,
+      command_words_remaining: 0
     }
   }
 
   pub fn gp0(&mut self, val: u32) {
-    let op_code = val >> 24;
+    self.command_buffer[self.command_index] = val;
+    self.command_index += 1;
+
+    if self.command_words_remaining == 0 {
+      let op_code = val >> 24;
+      self.command_words_remaining = CMD_SIZE[op_code as usize];
+    }
+
+    if self.command_words_remaining == 1 {
+      // execute the command
+      self.execute_gp0();
+      self.command_index = 0;
+    }
+
+    self.command_words_remaining -= 1;
+  }
+
+  fn execute_gp0(&mut self) {
+    let command = self.command_buffer[0];
+
+    let op_code = command >> 24;
 
     match op_code {
       0x00 => (), // NOP
-      0xe1 => self.gp0_draw_mode(val),
-      0xe2 => self.gp0_texture_window(val),
-      0xe3 => self.gp0_draw_area_top_left(val),
-      0xe4 => self.gp0_draw_area_bottom_right(val),
-      0xe5 => self.gp0_drawing_offset(val),
-      0xe6 => self.gp0_mask_bit(val),
+      0xe1 => self.gp0_draw_mode(),
+      0xe2 => self.gp0_texture_window(),
+      0xe3 => self.gp0_draw_area_top_left(),
+      0xe4 => self.gp0_draw_area_bottom_right(),
+      0xe5 => self.gp0_drawing_offset(),
+      0xe6 => self.gp0_mask_bit(),
       _ => todo!("invalid or unsupported GP0 command: {:02x}", op_code)
     }
   }
@@ -82,35 +121,47 @@ impl GPU {
     }
   }
 
-  fn gp0_mask_bit(&mut self, val: u32) {
+  fn gp0_mask_bit(&mut self) {
+    let val = self.command_buffer[0];
+
     self.stat.set_mask_attributes(val);
   }
 
-  fn gp0_texture_window(&mut self, val: u32) {
+  fn gp0_texture_window(&mut self) {
+    let val = self.command_buffer[0];
+
     self.texture_window_x_mask = (val & 0x1f) as u8;
     self.texture_window_y_mask = ((val >> 5) & 0x1f) as u8;
     self.texture_window_x_offset = ((val >> 10) & 0x1f) as u8;
     self.texture_window_y_offset = ((val >> 15) & 0x1f) as u8;
   }
 
-  fn gp0_draw_mode(&mut self, val: u32) {
+  fn gp0_draw_mode(&mut self) {
+    let val = self.command_buffer[0];
+
     self.stat.update_draw_mode(val);
 
     self.texture_rectangle_x_flip = ((val >> 12) & 0b1) == 1;
     self.texture_rectangle_y_flip = ((val >> 13) & 0b1) == 1;
   }
 
-  fn gp0_draw_area_top_left(&mut self, val: u32) {
+  fn gp0_draw_area_top_left(&mut self) {
+    let val = self.command_buffer[0];
+
     self.drawing_area_left = (val & 0x3ff) as u16;
     self.drawing_area_top = ((val >> 10) & 0x3ff) as u16;
   }
 
-  fn gp0_draw_area_bottom_right(&mut self, val: u32) {
+  fn gp0_draw_area_bottom_right(&mut self) {
+    let val = self.command_buffer[0];
+
     self.drawing_area_right = (val & 0x3ff) as u16;
     self.drawing_area_bottom = ((val >> 10) & 0x3ff) as u16;
   }
 
-  fn gp0_drawing_offset(&mut self, val: u32) {
+  fn gp0_drawing_offset(&mut self) {
+    let val = self.command_buffer[0];
+
     let x = (val & 0x7ff) as u16;
     let y = ((val >> 11) & 0x7ff) as u16;
 
