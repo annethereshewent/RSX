@@ -177,7 +177,7 @@ impl GpuStatRegister {
     result |= (self.texture_y_base2 as u32) << 15;
     result |= (self.hres2 as u32) << 16;
     result |= (self.hres1 as u32) << 17;
-    result |= (self.vres as u32) << 19;
+    // result |= (self.vres as u32) << 19;
     result |= (self.video_mode as u32) << 20;
     result |= (self.display_color_depth as u32) << 21;
     result |= (self.vertical_interlace as u32) << 22;

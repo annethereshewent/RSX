@@ -289,7 +289,7 @@ impl Bus {
         let word = self.mem_read_32(masked_address);
 
         if channel.channel_id == 2 {
-          println!("received gpu data {:X}", word);
+          self.gpu.gp0(word);
         } else {
           panic!("unhandled transfer from ram to channel {}", channel.channel_id);
         }
@@ -352,8 +352,6 @@ impl Bus {
         break;
       }
     }
-
-    println!("finished with linked list transfer");
 
     channel.finish()
   }

@@ -3,7 +3,7 @@ use self::gpu_stat_register::GpuStatRegister;
 pub mod gpu_stat_register;
 
 /* per https://github.com/KieronJ/rpsx/blob/master/src/psx/gpu.rs */
-const CMD_SIZE: [u8; 256] = [
+const CMD_SIZE: [u32; 256] = [
   1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
   4, 4, 4, 4, 7, 7, 7, 7, 5, 5, 5, 5, 9, 9, 9, 9, 6, 6, 6, 6, 9, 9, 9, 9, 8, 8, 8, 8, 12, 12, 12,
   12, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
@@ -14,6 +14,11 @@ const CMD_SIZE: [u8; 256] = [
   3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
   1, 1,
 ];
+
+enum GP0Mode {
+  Command,
+  ImageTransfer
+}
 
 pub struct GPU {
   pub stat: GpuStatRegister,
@@ -39,7 +44,9 @@ pub struct GPU {
   display_vram_y_start: u16,
   command_buffer: [u32; 12],
   command_index: usize,
-  command_words_remaining: u8
+  words_remaining: u32,
+  halfwords_remaining: u32,
+  gp0_mode: GP0Mode
 }
 
 impl GPU {
@@ -68,26 +75,49 @@ impl GPU {
       display_vram_y_start: 0,
       command_buffer: [0; 12],
       command_index: 0,
-      command_words_remaining: 0
+      words_remaining: 0,
+      halfwords_remaining: 0,
+      gp0_mode: GP0Mode::Command
     }
   }
 
+  fn transfer_to_vram(&mut self, val: u16) {
+    // TODO
+  }
+
   pub fn gp0(&mut self, val: u32) {
+    if matches!(self.gp0_mode, GP0Mode::ImageTransfer) {
+      self.transfer_to_vram(val as u16);
+
+      self.halfwords_remaining -= 1;
+
+      if self.halfwords_remaining > 0 {
+        self.transfer_to_vram((val >> 16) as u16);
+        self.halfwords_remaining -= 1;
+      }
+
+      if self.halfwords_remaining == 0 {
+        self.gp0_mode = GP0Mode::Command;
+      }
+
+      return;
+    }
+
     self.command_buffer[self.command_index] = val;
     self.command_index += 1;
 
-    if self.command_words_remaining == 0 {
+    if self.words_remaining == 0 {
       let op_code = val >> 24;
-      self.command_words_remaining = CMD_SIZE[op_code as usize];
+      self.words_remaining = CMD_SIZE[op_code as usize];
     }
 
-    if self.command_words_remaining == 1 {
+    if self.words_remaining == 1 {
       // execute the command
       self.execute_gp0();
       self.command_index = 0;
     }
 
-    self.command_words_remaining -= 1;
+    self.words_remaining -= 1;
   }
 
   fn execute_gp0(&mut self) {
@@ -96,7 +126,14 @@ impl GPU {
     let op_code = command >> 24;
 
     match op_code {
-      0x00 => (), // NOP
+      0x00 => (), // NOP,
+      0x01 => (), // clear cache, not implemented
+      0x28 => self.gp0_monochrome_quadrilateral(),
+      0x2c => self.textured_quad_with_blending(),
+      0x30 => self.gp0_shaded_triangle(),
+      0x38 => self.gp0_shaded_quadrilateral(),
+      0xa0 => self.gp0_image_transfer_to_vram(),
+      0xc0 => self.gp0_image_transfer_to_cpu(),
       0xe1 => self.gp0_draw_mode(),
       0xe2 => self.gp0_texture_window(),
       0xe3 => self.gp0_draw_area_top_left(),
@@ -112,6 +149,9 @@ impl GPU {
 
     match op_code {
       0x00 => self.gp1_reset(val),
+      0x01 => self.gp1_clear_command_buffer(),
+      0x02 => self.gp1_acknowledge_interrupt(),
+      0x03 => self.gp1_display_enable(val),
       0x04 => self.gp1_dma_dir(val),
       0x05 => self.gp1_display_vram_start(val),
       0x06 => self.gp1_display_horizontal_range(val),
@@ -121,10 +161,62 @@ impl GPU {
     }
   }
 
+  fn gp1_clear_command_buffer(&mut self) {
+    self.command_index = 0;
+    self.words_remaining = 0;
+    self.gp0_mode = GP0Mode::Command;
+  }
+
+  fn gp1_acknowledge_interrupt(&mut self) {
+    self.stat.irq_enabled = false;
+  }
+
+  fn gp0_image_transfer_to_cpu(&mut self) {
+    let dimensions = self.command_buffer[2];
+
+    let width = dimensions as u16;
+    let height = (dimensions >> 16) as u16;
+
+    // TODO: do something with this data
+  }
+
+  fn gp0_shaded_quadrilateral(&mut self) {
+    // TODO
+  }
+
+  fn gp0_shaded_triangle(&mut self) {
+    // TODO
+  }
+
+  fn textured_quad_with_blending(&mut self) {
+
+  }
+
+  fn gp0_image_transfer_to_vram(&mut self) {
+    let _val = self.command_buffer[0];
+    // TODO: add coordinates from command buffer index 1
+    let dimensions = self.command_buffer[2];
+
+    let w = dimensions & 0xffff;
+    let h = dimensions >> 16;
+
+    let image_size = w * h;
+
+    // since images come in 16 bit pixels, but words come in 32 bits
+    self.halfwords_remaining = image_size;
+
+    // TODO: actually transfer image data to vram
+    self.gp0_mode = GP0Mode::ImageTransfer;
+  }
+
   fn gp0_mask_bit(&mut self) {
     let val = self.command_buffer[0];
 
     self.stat.set_mask_attributes(val);
+  }
+
+  fn gp0_monochrome_quadrilateral(&mut self) {
+    // TODO
   }
 
   fn gp0_texture_window(&mut self) {
@@ -173,6 +265,10 @@ impl GPU {
     self.stat.update_display_mode(val);
   }
 
+  fn gp1_display_enable(&mut self, val: u32) {
+    self.stat.display_enable = val & 0b1 == 0;
+  }
+
   fn gp1_display_vram_start(&mut self, val: u32) {
     self.display_vram_x_start = ((val & 0x3fe)) as u16;
     self.display_vram_y_start = ((val >> 10) & 0x1ff) as u16;
@@ -193,6 +289,7 @@ impl GPU {
   }
 
   fn gp1_reset(&mut self, _: u32) {
+    self.gp1_clear_command_buffer();
     self.stat.reset();
 
     self.texture_window_x_mask = 0;
