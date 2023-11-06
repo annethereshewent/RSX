@@ -189,7 +189,7 @@ impl GPU {
   }
 
   fn textured_quad_with_blending(&mut self) {
-
+    // TODO
   }
 
   fn gp0_image_transfer_to_vram(&mut self) {
@@ -202,7 +202,6 @@ impl GPU {
 
     let image_size = w * h;
 
-    // since images come in 16 bit pixels, but words come in 32 bits
     self.halfwords_remaining = image_size;
 
     // TODO: actually transfer image data to vram
