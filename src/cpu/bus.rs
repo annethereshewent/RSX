@@ -1,3 +1,5 @@
+use crate::gpu::GPU;
+
 use super::dma::{DMA, dma_channel_control_register::SyncMode, dma_channel::DmaChannel};
 
 const RAM_SIZE: usize = 2 * 1024 * 1024;
@@ -5,7 +7,8 @@ const RAM_SIZE: usize = 2 * 1024 * 1024;
 pub struct Bus {
   bios: Vec<u8>,
   ram: [u8; RAM_SIZE],
-  dma: DMA
+  dma: DMA,
+  gpu: GPU
 }
 
 impl Bus {
@@ -13,7 +16,8 @@ impl Bus {
     Self {
       bios,
       ram: [0; RAM_SIZE],
-      dma: DMA::new()
+      dma: DMA::new(),
+      gpu: GPU::new()
     }
   }
 
@@ -94,14 +98,15 @@ impl Bus {
       0x1f80_1810..=0x1f80_1817 => {
         let offset = address - 0x1f80_1810;
 
-        if offset == 4 {
-          println!("attempting read from GPUSTAT");
-          return 0x1c000000;
+        // if offset == 4 {
+        //   println!("attempting read from GPUSTAT");
+        //   return 0x1c000000;
+        // }
+
+        match offset {
+          4 => self.gpu.stat.value(),
+          _ => todo!("GPU read register not implemented yet: {offset}")
         }
-
-        println!("ignoring reads to GPU");
-
-        0
       }
       _ => panic!("not implemented: {:08x}", address)
     }
@@ -238,7 +243,15 @@ impl Bus {
         }
       }
       0x1f80_1100..=0x1f80_1130 => println!("ignoring writes to timer registers"),
-      0x1f80_1810..=0x1f80_1817 => println!("ignoring writes to GPU registers"),
+      0x1f80_1810..=0x1f80_1817 => {
+        let offset = address - 0x1f80_1810;
+
+        match offset {
+          0 => self.gpu.gp0(value),
+          4 => self.gpu.gp1(value),
+          _ => panic!("GPU write register not implemented yet: {offset}")
+        }
+      }
       0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
       0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
       _ => panic!("write to unsupported address: {:06x}", address)
