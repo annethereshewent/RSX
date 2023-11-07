@@ -180,12 +180,36 @@ impl GPU {
     // TODO: do something with this data
   }
 
+  pub fn parse_color(val: u32) -> (u8,u8,u8) {
+    let r = val as u8;
+    let g = (val >> 8) as u8;
+    let b = (val >> 16) as u8;
+
+    (r, g, b)
+  }
+
+  pub fn parse_position(val: u32) -> (i16, i16) {
+    (val as i16, (val >> 16) as i16)
+  }
+
   fn gp0_shaded_quadrilateral(&mut self) {
     // TODO
   }
 
   fn gp0_shaded_triangle(&mut self) {
-    // TODO
+    let colors = [
+      GPU::parse_color(self.command_buffer[0]),
+      GPU::parse_color(self.command_buffer[2]),
+      GPU::parse_color(self.command_buffer[4])
+    ];
+
+    let positions = [
+      GPU::parse_position(self.command_buffer[0]),
+      GPU::parse_position(self.command_buffer[2]),
+      GPU::parse_position(self.command_buffer[4])
+    ];
+
+
   }
 
   fn textured_quad_with_blending(&mut self) {

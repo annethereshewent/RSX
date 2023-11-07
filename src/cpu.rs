@@ -67,7 +67,7 @@ pub struct CPU {
   delay_slot: bool,
   hi: u32,
   low: u32,
-  bus: Bus,
+  pub bus: Bus,
   load: Option<(usize, u32)>
 }
 

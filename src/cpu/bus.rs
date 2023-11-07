@@ -8,7 +8,7 @@ pub struct Bus {
   bios: Vec<u8>,
   ram: [u8; RAM_SIZE],
   dma: DMA,
-  gpu: GPU
+  pub gpu: GPU
 }
 
 impl Bus {
