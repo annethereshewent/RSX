@@ -23,7 +23,7 @@ impl DmaChannelControlRegister {
   }
 
   pub fn chopping_enabled(&self) -> bool {
-    (self.val >> 2) & 0b1 == 1
+    (self.val >> 8) & 0b1 == 1
   }
 
   pub fn synchronization_mode(&self) -> SyncMode {
