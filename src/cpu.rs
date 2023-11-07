@@ -1,4 +1,4 @@
-use crate::cpu::instruction::Instruction;
+use crate::{cpu::instruction::Instruction, gpu::{CYCLES_PER_SCANLINE, NUM_SCANLINES_PER_FRAME, GPU_FREQUENCY}};
 
 use self::bus::Bus;
 
@@ -7,6 +7,11 @@ pub mod execute;
 pub mod instruction;
 pub mod dma;
 pub mod scheduler;
+
+// 33.868MHZ
+pub const CPU_FREQUENCY: f64 = 33_868_800.0;
+
+pub const CYCLES_PER_FRAME: i32 = ((CYCLES_PER_SCANLINE * NUM_SCANLINES_PER_FRAME) as f64 * (CPU_FREQUENCY / GPU_FREQUENCY)) as i32;
 
 pub enum Cause {
   LoadAddressError = 0x4,
@@ -76,6 +81,7 @@ pub struct CPU {
 
 impl CPU {
   pub fn new(bios: Vec<u8>) -> Self {
+    println!("the cycles per frame is {CYCLES_PER_FRAME}");
     Self {
       pc: 0xbfc0_0000,
       next_pc: 0xbfc0_0004,

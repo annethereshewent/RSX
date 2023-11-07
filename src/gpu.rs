@@ -1,3 +1,5 @@
+use crate::cpu::{CPU_FREQUENCY, scheduler::Scheduler};
+
 use self::gpu_stat_register::GpuStatRegister;
 
 pub mod gpu_stat_register;
@@ -14,6 +16,13 @@ const CMD_SIZE: [u32; 256] = [
   3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
   1, 1,
 ];
+
+pub const CYCLES_PER_SCANLINE: usize = 3413;
+pub const NUM_SCANLINES_PER_FRAME: usize = 263;
+
+pub const GPU_FREQUENCY: f64 = 53_693_181.818;
+
+pub const CYCLES_IN_HSYNC: i32 = 200;
 
 enum GP0Mode {
   Command,
@@ -46,7 +55,9 @@ pub struct GPU {
   command_index: usize,
   words_remaining: u32,
   halfwords_remaining: u32,
-  gp0_mode: GP0Mode
+  gp0_mode: GP0Mode,
+  cycles_per_line: i32,
+  in_hsync: bool
 }
 
 impl GPU {
@@ -77,8 +88,34 @@ impl GPU {
       command_index: 0,
       words_remaining: 0,
       halfwords_remaining: 0,
-      gp0_mode: GP0Mode::Command
+      gp0_mode: GP0Mode::Command,
+      cycles_per_line: 3212,
+      in_hsync: false
     }
+  }
+
+  pub fn step(&mut self, scheduler: &mut Scheduler) {
+    let elapsed = scheduler.get_elapsed_cycles();
+
+    let mut elapsed_gpu_cycles =((elapsed as f64) * (GPU_FREQUENCY / CPU_FREQUENCY)).round() as i32;
+
+    while elapsed_gpu_cycles >= self.cycles_per_line {
+      elapsed_gpu_cycles -= self.cycles_per_line;
+
+      self.in_hsync = !self.in_hsync;
+
+      if self.in_hsync {
+        self.cycles_per_line = CYCLES_IN_HSYNC;
+      } else {
+        // we've reached the end of line.
+      }
+    }
+
+    self.cycles_per_line -= elapsed_gpu_cycles;
+
+    let mut delta = ((self.cycles_per_line) as f64 * (CPU_FREQUENCY / GPU_FREQUENCY)).round() as i32;
+
+    scheduler.schedule_next_event(delta);
   }
 
   fn transfer_to_vram(&mut self, val: u16) {
@@ -214,6 +251,10 @@ impl GPU {
 
   fn textured_quad_with_blending(&mut self) {
     // TODO
+  }
+
+  pub fn test(&mut self, scheduler: &mut Scheduler) {
+
   }
 
   fn gp0_image_transfer_to_vram(&mut self) {

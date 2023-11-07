@@ -2,7 +2,7 @@ use std::fs;
 
 pub mod sdl_frontend;
 
-use rustation::cpu::CPU;
+use rustation::cpu::{CPU, CYCLES_PER_FRAME};
 use sdl_frontend::SdlFrontend;
 
 extern crate rustation;
@@ -22,10 +22,18 @@ pub fn main() {
   let mut frontend = SdlFrontend::new();
 
   loop {
-    for _ in 0..1_000_000 {
-      cpu.step();
+    while cpu.bus.scheduler.cycles < CYCLES_PER_FRAME {
+      while !cpu.bus.scheduler.has_pending_events() {
+        cpu.step();
+      }
+
+      while cpu.bus.scheduler.has_pending_events() {
+        // do stuff related to events
+        cpu.bus.gpu.step(&mut cpu.bus.scheduler);
+      }
     }
 
     frontend.handle_events();
+    cpu.bus.scheduler.synchronize_counters();
   }
 }
