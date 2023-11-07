@@ -1,4 +1,4 @@
-use crate::cpu::{CPU_FREQUENCY, scheduler::Scheduler};
+use crate::cpu::{CPU_FREQUENCY, scheduler::{Scheduler, Schedulable}};
 
 use self::gpu_stat_register::GpuStatRegister;
 
@@ -95,7 +95,7 @@ impl GPU {
   }
 
   pub fn step(&mut self, scheduler: &mut Scheduler) {
-    let elapsed = scheduler.get_elapsed_cycles();
+    let elapsed = scheduler.get_elapsed_cycles(Schedulable::Gpu);
 
     let mut elapsed_gpu_cycles =((elapsed as f64) * (GPU_FREQUENCY / CPU_FREQUENCY)).round() as i32;
 
@@ -116,7 +116,7 @@ impl GPU {
 
     let delta = ((self.cycles_per_line) as f64 * (CPU_FREQUENCY / GPU_FREQUENCY)).round() as i32;
 
-    scheduler.schedule_next_event(delta);
+    scheduler.schedule_next_event(delta, Schedulable::Gpu);
   }
 
   fn transfer_to_vram(&mut self, val: u16) {

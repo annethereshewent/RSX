@@ -8,7 +8,7 @@ const RAM_SIZE: usize = 2 * 1024 * 1024;
 pub struct Bus {
   bios: Vec<u8>,
   ram: [u8; RAM_SIZE],
-  dma: DMA,
+  pub dma: DMA,
   pub scheduler: Scheduler,
   pub gpu: GPU
 }

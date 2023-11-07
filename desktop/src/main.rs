@@ -2,7 +2,7 @@ use std::fs;
 
 pub mod sdl_frontend;
 
-use rustation::cpu::{CPU, CYCLES_PER_FRAME};
+use rustation::cpu::{CPU, CYCLES_PER_FRAME, scheduler::Schedulable};
 use sdl_frontend::SdlFrontend;
 
 extern crate rustation;
@@ -28,8 +28,11 @@ pub fn main() {
       }
 
       while cpu.bus.scheduler.has_pending_events() {
-        // do stuff related to events
-        cpu.bus.gpu.step(&mut cpu.bus.scheduler);
+        if cpu.bus.scheduler.upcoming_event >= cpu.bus.scheduler.upcoming_events[Schedulable::Gpu as usize] {
+          cpu.bus.gpu.step(&mut cpu.bus.scheduler);
+        } if cpu.bus.scheduler.upcoming_event >= cpu.bus.scheduler.upcoming_events[Schedulable::Dma as usize] {
+          cpu.bus.dma.step(&mut cpu.bus.scheduler);
+        }
       }
     }
 
