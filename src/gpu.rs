@@ -108,18 +108,23 @@ impl GPU {
         self.cycles_per_line = CYCLES_IN_HSYNC;
       } else {
         // we've reached the end of line.
+        self.render_line();
       }
     }
 
     self.cycles_per_line -= elapsed_gpu_cycles;
 
-    let mut delta = ((self.cycles_per_line) as f64 * (CPU_FREQUENCY / GPU_FREQUENCY)).round() as i32;
+    let delta = ((self.cycles_per_line) as f64 * (CPU_FREQUENCY / GPU_FREQUENCY)).round() as i32;
 
     scheduler.schedule_next_event(delta);
   }
 
   fn transfer_to_vram(&mut self, val: u16) {
     // TODO
+  }
+
+  pub fn render_line(&mut self) {
+
   }
 
   pub fn gp0(&mut self, val: u32) {
