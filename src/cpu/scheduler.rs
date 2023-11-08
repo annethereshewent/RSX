@@ -40,6 +40,10 @@ impl Scheduler {
   pub fn sync_and_get_elapsed_cycles(&mut self, schedulable: Schedulable) -> i32 {
     let elapsed = self.cycles - self.device_sync[schedulable as usize];
 
+    if matches!(schedulable, Schedulable::Dma) {
+      println!("the last sync for DMA was {}", self.device_sync[schedulable as usize]);
+    }
+
     self.device_sync[schedulable as usize] += elapsed;
 
     elapsed as i32

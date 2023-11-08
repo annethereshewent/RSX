@@ -9,7 +9,6 @@ pub struct DmaChannel {
   pub word_count: u32,
   pub blocks_remaining: u32,
   pub active_address: u32,
-  pub gap_started: bool,
   pub gap_ticks: i32
 }
 
@@ -23,7 +22,6 @@ impl DmaChannel {
       word_count: 0,
       blocks_remaining: 0,
       active_address: 0,
-      gap_started: false,
       gap_ticks: 0
     }
   }

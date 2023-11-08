@@ -59,7 +59,8 @@ pub struct GPU {
   gp0_mode: GP0Mode,
   cycles: i32,
   num_scanlines: u32,
-  current_scanline: u32
+  current_scanline: u32,
+  pub frame_complete: bool
 }
 
 impl GPU {
@@ -93,7 +94,8 @@ impl GPU {
       gp0_mode: GP0Mode::Command,
       cycles: 0,
       num_scanlines: 263,
-      current_scanline: 0
+      current_scanline: 0,
+      frame_complete: false
     }
   }
 
@@ -120,6 +122,7 @@ impl GPU {
       self.current_scanline += 1;
 
       if self.current_scanline == (self.num_scanlines - 20) {
+        self.frame_complete = true;
         // entering VBlank
       }
 

@@ -11,7 +11,6 @@ pub struct DMA {
   pub control: u32,
   pub interrupt: DmaInterrupt,
   pub channels: [DmaChannel; 7],
-  counter: i32,
   active_count: i32
 }
 
@@ -30,7 +29,6 @@ impl DMA {
         DmaChannel::new(5),
         DmaChannel::new(6)
       ],
-      counter: 0,
       active_count: 0
     }
   }
@@ -93,7 +91,6 @@ impl DMA {
 
       if channel.blocks_remaining > 0 {
         channel.word_count += channel.block_size();
-        channel.gap_started = channel.control.chopping_enabled();
         channel.gap_ticks += 1;
 
       } else {
@@ -146,6 +143,8 @@ impl DMA {
     if channel.word_count == 0 {
       self.active_count += channel.block_size() as i32;
       channel.finish();
+
+      // TODO interrupts
     }
   }
 
@@ -182,13 +181,10 @@ impl DMA {
     self.active_count += word_count as i32;
     channel.active_address = header & 0x1ffffc;
 
-    let chopping_enabled = channel.control.chopping_enabled();
-
     if (header & 0xffffff) == 0xffffff {
       channel.finish();
       // TODO: set interrupt here
     } else {
-      channel.gap_started = chopping_enabled;
       channel.gap_ticks += 1;
     }
   }
@@ -209,25 +205,12 @@ impl DMA {
 
   pub fn chopping_enabled(&self) -> bool {
     for channel in self.channels {
-      if channel.control.chopping_enabled() {
+      if channel.is_active() && channel.control.chopping_enabled() {
         return true;
       }
     }
 
     return false;
-  }
-
-  pub fn gap_started(&mut self) -> bool {
-    for channel in &mut self.channels {
-      let gap_started = channel.gap_started;
-
-      if gap_started {
-        channel.gap_started = false;
-        return true
-      }
-    }
-
-    false
   }
 
   pub fn in_gap(&mut self) -> bool {

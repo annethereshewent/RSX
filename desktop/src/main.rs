@@ -2,7 +2,7 @@ use std::fs;
 
 pub mod sdl_frontend;
 
-use rustation::cpu::{CPU, CYCLES_PER_FRAME, scheduler::Schedulable};
+use rustation::cpu::CPU;
 use sdl_frontend::SdlFrontend;
 
 extern crate rustation;
@@ -22,11 +22,9 @@ pub fn main() {
   let mut frontend = SdlFrontend::new();
 
   let mut inner_cycles = 0;
-  let mut outer_cycles = 0;
 
   loop {
-    outer_cycles = 0;
-    while outer_cycles < CYCLES_PER_FRAME {
+    while !cpu.bus.gpu.frame_complete {
       inner_cycles = 0;
       while inner_cycles < 128 {
         cpu.step();
@@ -34,10 +32,11 @@ pub fn main() {
         let elapsed = cpu.bus.scheduler.elapsed();
 
         inner_cycles += elapsed;
-        outer_cycles += elapsed as i64;
       }
       cpu.bus.tick_all();
     }
+
+    cpu.bus.gpu.frame_complete = false;
 
     frontend.handle_events();
   }
