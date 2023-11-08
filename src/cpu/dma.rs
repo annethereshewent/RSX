@@ -70,7 +70,6 @@ impl DMA {
       let word = bus.mem_read_32(masked_address, false);
 
       if channel.channel_id == 2 {
-        println!("issuing gp0 command");
         bus.gpu.gp0(word);
       } else {
         panic!("unhandled transfer from ram to channel {}", channel.channel_id);
@@ -116,7 +115,6 @@ impl DMA {
       let word = bus.mem_read_32(masked_address, false);
 
       if channel.channel_id == 2 {
-        println!("issuing gp0 command");
         bus.gpu.gp0(word);
       } else {
         panic!("unhandled transfer from ram to channel {}", channel.channel_id);

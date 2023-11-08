@@ -131,7 +131,6 @@ impl CPU {
         }
       } else {
         let count = self.dma.tick(&mut self.bus);
-
         self.bus.scheduler.tick(count);
         return;
       }
@@ -177,9 +176,7 @@ impl CPU {
     let address = Bus::translate_address(address);
 
     match address {
-      0x1f80_1080..=0x1f80_10ff => {
-        self.dma.write(address, value);
-      }
+      0x1f80_1080..=0x1f80_10ff => self.dma.write(address, value),
       _ => self.bus.mem_write_32(address, value)
     }
   }
