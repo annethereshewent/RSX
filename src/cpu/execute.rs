@@ -785,7 +785,7 @@ impl CPU {
 
     self.execute_load_delay();
 
-    self.bus.mem_write_32(aligned_address, result);
+    self.store_32(aligned_address, result);
   }
 
   fn swr(&mut self, instr: Instruction) {
@@ -806,7 +806,7 @@ impl CPU {
 
     self.execute_load_delay();
 
-    self.bus.mem_write_32(aligned_address, result);
+    self.store_32(aligned_address, result);
   }
 
   fn swi(&mut self, instr: Instruction) {
@@ -818,7 +818,7 @@ impl CPU {
       self.execute_load_delay();
 
       if address & 0b11 == 0 {
-        self.bus.mem_write_32(address, value);
+        self.store_32(address, value);
       } else {
         self.exception(Cause::StoreAddressError);
       }

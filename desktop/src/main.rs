@@ -22,7 +22,7 @@ pub fn main() {
   let mut frontend = SdlFrontend::new();
 
   let mut inner_cycles = 0;
-  let mut outer_cycles: i64 = 0;
+  let mut outer_cycles = 0;
 
   loop {
     outer_cycles = 0;

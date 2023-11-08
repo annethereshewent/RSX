@@ -1,6 +1,6 @@
 use crate::{cpu::instruction::Instruction, gpu::{CYCLES_PER_SCANLINE, NUM_SCANLINES_PER_FRAME, GPU_FREQUENCY}};
 
-use self::bus::Bus;
+use self::{bus::Bus, scheduler::Schedulable, dma::{DMA, dma_channel_control_register::SyncMode}};
 
 pub mod bus;
 pub mod execute;
@@ -76,7 +76,8 @@ pub struct CPU {
   pub bus: Bus,
   load: Option<(usize, u32, u16)>,
   free_cycles: [u16; 32],
-  free_cycles_reg: usize
+  free_cycles_reg: usize,
+  dma: DMA
 }
 
 impl CPU {
@@ -99,7 +100,8 @@ impl CPU {
         epc: 0
       },
       free_cycles: [0; 32],
-      free_cycles_reg: 0
+      free_cycles_reg: 0,
+      dma: DMA::new()
     }
   }
 
@@ -120,6 +122,21 @@ impl CPU {
   }
 
   pub fn step(&mut self) {
+    if self.dma.is_active() {
+      if self.dma.in_gap() {
+        self.dma.tick_gap(&mut self.bus.scheduler);
+
+        if !self.dma.chopping_enabled() {
+          return;
+        }
+      } else {
+        let count = self.dma.tick(&mut self.bus);
+
+        self.bus.scheduler.tick(count);
+        return;
+      }
+    }
+
     self.current_pc = self.pc;
 
     if self.current_pc & 0b11 != 0 {
@@ -127,7 +144,7 @@ impl CPU {
       return;
     }
 
-    let instr = self.bus.mem_read_32(self.pc);
+    let instr = self.fetch_instruction();
 
     // println!("executing instruction {:032b} at address {:08x}", instr, self.current_pc);
 
@@ -148,11 +165,35 @@ impl CPU {
     }
   }
 
+  pub fn fetch_instruction(&mut self) -> u32 {
+    self.bus.scheduler.tick(4);
+
+    // TODO: add caching code later
+
+    self.bus.mem_read_32(self.pc, false)
+  }
+
+  pub fn store_32(&mut self, address: u32, value: u32) {
+    let address = Bus::translate_address(address);
+
+    match address {
+      0x1f80_1080..=0x1f80_10ff => {
+        self.dma.write(address, value);
+      }
+      _ => self.bus.mem_write_32(address, value)
+    }
+  }
+
   // TODO: refactor this into just one method
   pub fn load_32(&mut self, address: u32) -> (u32, u16) {
     let previous_cycles = self.synchronize_and_get_current_cycles();
 
-    let result = self.bus.mem_read_32(address);
+    let address = Bus::translate_address(address);
+
+    let result = match address {
+      0x1f80_1080..=0x1f80_10ff => self.dma.read(address),
+      _ => self.bus.mem_read_32(address, true)
+    };
 
     let duration = (self.bus.scheduler.cycles - previous_cycles) as u16;
 
@@ -194,6 +235,11 @@ impl CPU {
     (result, duration)
   }
 
+  /**
+   * TODO: This currently doesn't do anything, but
+   * in the future I may refactor the code
+   * to use it properly.
+   */
   fn synchronize_load(&mut self) {
     self.free_cycles[self.free_cycles_reg] = 0;
   }

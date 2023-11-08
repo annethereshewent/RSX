@@ -8,7 +8,6 @@ const RAM_SIZE: usize = 2 * 1024 * 1024;
 pub struct Bus {
   bios: Vec<u8>,
   ram: [u8; RAM_SIZE],
-  pub dma: DMA,
   pub scheduler: Scheduler,
   pub gpu: GPU
 }
@@ -18,13 +17,12 @@ impl Bus {
     Self {
       bios,
       ram: [0; RAM_SIZE],
-      dma: DMA::new(),
       gpu: GPU::new(),
       scheduler: Scheduler::new()
     }
   }
 
-  fn translate_address(address: u32) -> u32 {
+  pub fn translate_address(address: u32) -> u32 {
     match address >> 29 {
       0b000..=0b011 => address,
       0b100 => address & 0x7fff_ffff,
@@ -48,19 +46,22 @@ impl Bus {
     }
   }
 
-  pub fn mem_read_32(&mut self, address: u32) -> u32 {
+  pub fn mem_read_32(&mut self, address: u32, advance_cycles: bool) -> u32 {
     if (address & 0b11) != 0 {
       panic!("unaligned address received: {:032b}", address);
     }
 
     let address = Bus::translate_address(address);
 
-
-    // TODO: add dma timing penalty here
+    // TODO: possibly add dma timing penalty here
 
     match address {
       0x0000_0000..=0x001f_ffff => {
-        self.scheduler.tick(3);
+        // this is to accomodate for DMA reads and when fetching instructions. we don't want to tick the timer for those
+        if advance_cycles {
+          self.scheduler.tick(3);
+        }
+
         let offset = address as usize;
         (self.ram[offset] as u32) | ((self.ram[offset + 1] as u32) << 8) | ((self.ram[offset + 2] as u32) << 16) | ((self.ram[offset + 3] as u32) << 24)
 
@@ -74,35 +75,6 @@ impl Bus {
         self.scheduler.tick(1);
         println!("ignoring reads to interrupt control registers");
         0
-      }
-      0x1f80_1080..=0x1f80_10ff => {
-        self.scheduler.tick(1);
-        let offset = address - 0x1f80_1080;
-
-        let major = (offset & 0x70) >> 4;
-        let minor = offset & 0xf;
-
-        match major {
-          0..=6 => {
-            let channel = self.dma.channels[major as usize];
-
-            match minor {
-              0 => channel.base_address,
-              4 => channel.block_control.val,
-              8 => channel.control.val,
-              _ => panic!("unhandled dma read at offset {:X}", offset)
-            }
-          },
-          7 => {
-            match minor {
-              0 => self.dma.control,
-              4 => self.dma.interrupt.val,
-              6 => self.dma.interrupt.val >> 16,
-              _ => panic!("unhandled DMA read at offset {:X}", offset)
-            }
-          }
-          _ => panic!("unhandled DMA read at offset {:X}", offset)
-        }
       }
       0x1f80_1100..=0x1f80_1130 => {
         self.scheduler.tick(1);
@@ -243,41 +215,6 @@ impl Bus {
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070..=0x1f80_1077 => println!("ignoring writes to interrupt control registers"),
-      0x1f80_1080..=0x1f80_10ff => {
-        let offset = address - 0x1f80_1080;
-
-        let major = (offset & 0x70) >> 4;
-        let minor = offset & 0xf;
-
-        match major {
-          0..=6 => {
-            let mut channel = self.dma.channels[major as usize];
-
-            match minor {
-              0 => channel.base_address = value & 0xff_fffc,
-              4 => {
-                channel.block_control.val = value;
-              },
-              8 => channel.control.val = value,
-              _ => panic!("unhandled dma read at offset {:X}", offset)
-            }
-
-            if channel.is_active() {
-              self.do_dma(&mut channel);
-            }
-
-            self.dma.channels[major as usize] = channel;
-          },
-          7 => {
-            match minor {
-              0 => self.dma.control = value,
-              4 => self.dma.interrupt.write(value),
-              _ => panic!("unhandled DMA read at offset {:X}", offset)
-            }
-          }
-          _ => panic!("unhandled DMA read at offset {:X}", offset)
-        }
-      }
       0x1f80_1100..=0x1f80_1130 => println!("ignoring writes to timer registers"),
       0x1f80_1810..=0x1f80_1817 => {
         let offset = address - 0x1f80_1810;
@@ -298,93 +235,5 @@ impl Bus {
 
   pub fn tick_all(&mut self) {
     self.gpu.tick(&mut self.scheduler);
-  }
-
-  fn do_dma(&mut self, channel: &mut DmaChannel) {
-    match channel.control.synchronization_mode() {
-      SyncMode::LinkedList => self.do_dma_linked_list(channel),
-      _ => self.do_dma_block(channel)
-    }
-  }
-
-  fn do_dma_block(&mut self, channel: &mut DmaChannel) {
-    let mut word_count = channel.block_size();
-
-    let mut base_address = channel.base_address;
-
-    let is_increment = channel.control.is_address_increment();
-
-    while word_count > 0 {
-      let masked_address = base_address & 0x1ffffc;
-
-      if channel.control.is_from_ram() {
-        let word = self.mem_read_32(masked_address);
-
-        if channel.channel_id == 2 {
-          self.gpu.gp0(word);
-        } else {
-          panic!("unhandled transfer from ram to channel {}", channel.channel_id);
-        }
-      } else {
-        let value = match channel.channel_id {
-          6 => {
-            if word_count == 1 {
-              0xffffff
-            } else {
-              base_address.wrapping_sub(4) & 0x1fffff
-            }
-          }
-          _ => todo!("channel not supported yet")
-        };
-
-        self.mem_write_32(masked_address, value);
-      }
-
-      if is_increment {
-        base_address = base_address.wrapping_add(4);
-      } else {
-        base_address = base_address.wrapping_sub(4);
-      }
-
-      word_count -= 1;
-    }
-
-    channel.finish();
-  }
-
-  fn do_dma_linked_list(&mut self, channel: &mut DmaChannel) {
-    let mut base_address = channel.base_address & 0x1f_fffc;
-
-    if !channel.control.is_from_ram() {
-      todo!("linked list DMA from RAM not yet implemented");
-    }
-
-    if channel.channel_id != 2 {
-      panic!("Only GPU channel supported in linked list mode");
-    }
-
-    loop {
-      let header = self.mem_read_32(base_address);
-
-      let mut word_count = header >> 24;
-
-      while word_count > 0 {
-        base_address = (base_address + 4) & 0x1ffffc;
-
-        let val = self.mem_read_32(base_address);
-
-        self.gpu.gp0(val);
-
-        word_count -= 1;
-      }
-
-      base_address = header & 0x1ffffc;
-
-      if (header & 0xffffff) == 0xffffff {
-        break;
-      }
-    }
-
-    channel.finish()
   }
 }
