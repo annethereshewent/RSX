@@ -1,6 +1,6 @@
 use crate::cpu::{CPU_FREQUENCY, scheduler::{Scheduler, Schedulable}};
 
-use self::gpu_stat_register::GpuStatRegister;
+use self::gpu_stat_register::{GpuStatRegister, VideoMode};
 
 pub mod gpu_stat_register;
 
@@ -21,6 +21,7 @@ pub const CYCLES_PER_SCANLINE: usize = 3413;
 pub const NUM_SCANLINES_PER_FRAME: usize = 263;
 
 pub const GPU_FREQUENCY: f64 = 53_693_181.818;
+pub const GPU_CYCLES_TO_CPU_CYCLES: f64 = GPU_FREQUENCY / CPU_FREQUENCY;
 
 pub const CYCLES_IN_HSYNC: i32 = 200;
 
@@ -56,8 +57,9 @@ pub struct GPU {
   words_remaining: u32,
   halfwords_remaining: u32,
   gp0_mode: GP0Mode,
-  cycles_per_line: i32,
-  in_hsync: bool
+  cycles: i32,
+  num_scanlines: u32,
+  current_scanline: u32
 }
 
 impl GPU {
@@ -89,42 +91,68 @@ impl GPU {
       words_remaining: 0,
       halfwords_remaining: 0,
       gp0_mode: GP0Mode::Command,
-      cycles_per_line: 3212,
-      in_hsync: false
+      cycles: 0,
+      num_scanlines: 263,
+      current_scanline: 0
     }
   }
 
-  pub fn step(&mut self, scheduler: &mut Scheduler) {
-    let elapsed = scheduler.get_elapsed_cycles(Schedulable::Gpu);
+  pub fn tick(&mut self, scheduler: &mut Scheduler) {
+    let elapsed = scheduler.sync_and_get_elapsed_cycles(Schedulable::Gpu);
 
-    let mut elapsed_gpu_cycles =((elapsed as f64) * (GPU_FREQUENCY / CPU_FREQUENCY)).round() as i32;
+    let elapsed_gpu_cycles = ((elapsed as f64) * GPU_CYCLES_TO_CPU_CYCLES).round() as i32;
 
-    while elapsed_gpu_cycles >= self.cycles_per_line {
-      elapsed_gpu_cycles -= self.cycles_per_line;
+    self.cycles += elapsed_gpu_cycles;
 
-      self.in_hsync = !self.in_hsync;
 
-      if self.in_hsync {
-        self.cycles_per_line = CYCLES_IN_HSYNC;
-      } else {
-        // we've reached the end of line.
-        self.render_line();
+    let horizontal_cycles = match self.stat.video_mode {
+      VideoMode::Ntsc => 3413,
+      VideoMode::Pal => 3406
+    };
+
+    if self.cycles >= horizontal_cycles {
+      self.cycles -= horizontal_cycles;
+
+      if self.stat.vertical_resolution == 240 && self.stat.vertical_interlace {
+        self.stat.even_odd = !self.stat.even_odd;
+      }
+
+      self.current_scanline += 1;
+
+      if self.current_scanline == (self.num_scanlines - 20) {
+        // entering VBlank
+      }
+
+      if self.current_scanline == self.num_scanlines {
+        // exiting vblank
+        self.num_scanlines = if self.num_scanlines == 263 {
+          262
+        } else {
+          263
+        };
+
+        if self.stat.vertical_resolution == 480 && self.stat.vertical_interlace {
+          self.stat.even_odd = !self.stat.even_odd;
+        }
+
+        self.current_scanline = 0;
+
       }
     }
-
-    self.cycles_per_line -= elapsed_gpu_cycles;
-
-    let delta = ((self.cycles_per_line) as f64 * (CPU_FREQUENCY / GPU_FREQUENCY)).round() as i32;
-
-    scheduler.schedule_next_event(delta, Schedulable::Gpu);
   }
 
   fn transfer_to_vram(&mut self, val: u16) {
     // TODO
   }
 
-  pub fn render_line(&mut self) {
+  pub fn stat_value(&self) -> u32 {
+    let interlace_line = if self.current_scanline >= (self.num_scanlines - 20) {
+      false
+    } else {
+      self.stat.even_odd
+    };
 
+    self.stat.value(interlace_line)
   }
 
   pub fn gp0(&mut self, val: u32) {

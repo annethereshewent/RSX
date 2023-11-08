@@ -11,7 +11,7 @@ pub mod scheduler;
 // 33.868MHZ
 pub const CPU_FREQUENCY: f64 = 33_868_800.0;
 
-pub const CYCLES_PER_FRAME: i32 = ((CYCLES_PER_SCANLINE * NUM_SCANLINES_PER_FRAME) as f64 * (CPU_FREQUENCY / GPU_FREQUENCY)) as i32;
+pub const CYCLES_PER_FRAME: i64 = ((CYCLES_PER_SCANLINE * NUM_SCANLINES_PER_FRAME) as f64 * (CPU_FREQUENCY / GPU_FREQUENCY)) as i64;
 
 pub enum Cause {
   LoadAddressError = 0x4,
@@ -169,7 +169,7 @@ impl CPU {
     (result, duration)
   }
 
-  pub fn synchronize_and_get_current_cycles(&mut self) -> i32 {
+  pub fn synchronize_and_get_current_cycles(&mut self) -> i64 {
     self.synchronize_load();
 
     if self.load.is_none() {

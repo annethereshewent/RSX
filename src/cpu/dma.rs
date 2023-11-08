@@ -7,8 +7,6 @@ pub mod dma_channel;
 pub mod dma_channel_control_register;
 pub mod dma_block_control_register;
 
-pub const DMA_CYCLES: i32 = 128;
-
 pub struct DMA {
   pub control: u32,
   pub interrupt: DmaInterrupt,
@@ -35,16 +33,7 @@ impl DMA {
     }
   }
 
-  pub fn step(&mut self, scheduler: &mut Scheduler) {
-    let elapsed = scheduler.get_elapsed_cycles(Schedulable::Dma);
-
-    self.period_counter += elapsed;
-    self.period_counter %= DMA_CYCLES;
-
-    let next_sync = DMA_CYCLES - self.period_counter;
-
-    // TODO: actually add dma code here
-
-    scheduler.schedule_next_event(next_sync, Schedulable::Dma);
+  pub fn tick(&mut self, scheduler: &mut Scheduler) {
+    let elapsed = scheduler.sync_and_get_elapsed_cycles(Schedulable::Dma);
   }
 }

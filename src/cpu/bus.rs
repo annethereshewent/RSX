@@ -118,12 +118,14 @@ impl Bus {
         //   return 0x1c000000;
         // }
 
+        self.gpu.tick(&mut self.scheduler);
+
         match offset {
           0 => {
             println!("returning 0 for GPUREAD register");
             0
           }
-          4 => self.gpu.stat.value(),
+          4 => self.gpu.stat_value(),
           _ => todo!("GPU read register not implemented yet: {offset}")
         }
       }
@@ -280,6 +282,8 @@ impl Bus {
       0x1f80_1810..=0x1f80_1817 => {
         let offset = address - 0x1f80_1810;
 
+        self.gpu.tick(&mut self.scheduler);
+
         match offset {
           0 => self.gpu.gp0(value),
           4 => self.gpu.gp1(value),
@@ -290,6 +294,10 @@ impl Bus {
       0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
       _ => panic!("write to unsupported address: {:06x}", address)
     }
+  }
+
+  pub fn tick_all(&mut self) {
+    self.gpu.tick(&mut self.scheduler);
   }
 
   fn do_dma(&mut self, channel: &mut DmaChannel) {

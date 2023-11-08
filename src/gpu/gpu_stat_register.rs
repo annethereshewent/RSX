@@ -47,6 +47,7 @@ pub struct GpuStatRegister {
   pub hres1: u8,
   pub hres2: u8,
   pub vres: u8,
+  pub vertical_resolution: u16,
   pub video_mode: VideoMode,
   pub display_color_depth: ColorDepth,
   pub vertical_interlace: bool,
@@ -85,7 +86,8 @@ impl GpuStatRegister {
       ready_for_command: true,
       ready_rcv_dma_block: true,
       ready_vram_to_cpu: true,
-      even_odd: false
+      even_odd: false,
+      vertical_resolution: 0
     }
   }
 
@@ -101,6 +103,12 @@ impl GpuStatRegister {
       n => panic!("unhandled texture depth received: {n}")
     };
 
+    self.video_mode = if ((val >> 3)) & 0b1 == 0 {
+      VideoMode::Ntsc
+    } else {
+      VideoMode::Pal
+    };
+
     self.dither_enabled = ((val >> 9) & 0b1) == 1;
     self.draw_to_display = ((val >> 10) & 0b1) == 1;
     self.texture_y_base2 = ((val >> 11) & 0b1) as u8;
@@ -112,6 +120,8 @@ impl GpuStatRegister {
 
     self.vres = ((val >> 2) & 0b1) as u8;
 
+    self.vertical_resolution = 240;
+
     self.display_color_depth = if ((val >> 4) & 0b1) == 1 {
       ColorDepth::TwentyFourBit
     } else {
@@ -119,6 +129,10 @@ impl GpuStatRegister {
     };
 
     self.vertical_interlace = (val >> 5) & 0b1 == 1;
+
+    if self.vertical_interlace && self.vres == 1 {
+      self.vertical_resolution = 480;
+    }
 
     if (val >> 7) & 0b1 == 1 {
       panic!("unsupported display mode found: reverse flag setting");
@@ -157,12 +171,13 @@ impl GpuStatRegister {
     self.hres1 = 0;
     self.hres2 = 0;
     self.vres = 0;
+    self.vertical_resolution = 240;
     self.video_mode = VideoMode::Ntsc;
     self.vertical_interlace = true;
     self.display_color_depth = ColorDepth::FifteenBit;
   }
 
-  pub fn value(&self) -> u32 {
+  pub fn value(&self, interlace_line: bool) -> u32 {
     let mut result = 0u32;
 
     result |= self.texture_x_base as u32;
@@ -177,7 +192,7 @@ impl GpuStatRegister {
     result |= (self.texture_y_base2 as u32) << 15;
     result |= (self.hres2 as u32) << 16;
     result |= (self.hres1 as u32) << 17;
-    // result |= (self.vres as u32) << 19;
+    result |= (self.vres as u32) << 19;
     result |= (self.video_mode as u32) << 20;
     result |= (self.display_color_depth as u32) << 21;
     result |= (self.vertical_interlace as u32) << 22;
@@ -185,6 +200,7 @@ impl GpuStatRegister {
     result |= (self.irq_enabled as u32) << 24;
     result |= (0b111) << 26;
     result |= (self.dma_dir as u32) << 29;
+    result |= (interlace_line as u32) << 31;
 
     let dma_request = match self.dma_dir {
       DmaDirection::Off => 0,

@@ -21,22 +21,24 @@ pub fn main() {
   let mut cpu = CPU::new(fs::read("../SCPH1001.BIN").unwrap());
   let mut frontend = SdlFrontend::new();
 
-  loop {
-    while cpu.bus.scheduler.cycles < CYCLES_PER_FRAME {
-      while !cpu.bus.scheduler.has_pending_events() {
-        cpu.step();
-      }
+  let mut inner_cycles = 0;
+  let mut outer_cycles: i64 = 0;
 
-      while cpu.bus.scheduler.has_pending_events() {
-        if cpu.bus.scheduler.upcoming_event >= cpu.bus.scheduler.upcoming_events[Schedulable::Gpu as usize] {
-          cpu.bus.gpu.step(&mut cpu.bus.scheduler);
-        } if cpu.bus.scheduler.upcoming_event >= cpu.bus.scheduler.upcoming_events[Schedulable::Dma as usize] {
-          cpu.bus.dma.step(&mut cpu.bus.scheduler);
-        }
+  loop {
+    outer_cycles = 0;
+    while outer_cycles < CYCLES_PER_FRAME {
+      inner_cycles = 0;
+      while inner_cycles < 128 {
+        cpu.step();
+
+        let elapsed = cpu.bus.scheduler.elapsed();
+
+        inner_cycles += elapsed;
+        outer_cycles += elapsed as i64;
       }
+      cpu.bus.tick_all();
     }
 
     frontend.handle_events();
-    cpu.bus.scheduler.synchronize_counters();
   }
 }
