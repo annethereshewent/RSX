@@ -10,6 +10,7 @@ pub mod instruction;
 pub mod dma;
 pub mod counter;
 pub mod interrupt;
+pub mod timers;
 
 // 33.868MHZ
 pub const CPU_FREQUENCY: f64 = 33_868_800.0;
@@ -21,6 +22,8 @@ pub enum Cause {
   Interrupt = 0x0,
   LoadAddressError = 0x4,
   StoreAddressError = 0x5,
+  IBusError = 0x6,
+  DBusError = 0x7,
   SysCall = 0x8,
   Break = 0x9,
   IllegalInstruction = 0xa,

@@ -29,8 +29,8 @@ impl SdlFrontend {
   pub fn handle_events(&mut self) {
     for event in self.event_pump.poll_iter() {
       match event {
-        Event::KeyDown { keycode: Some(k), .. } => println!("you pressed {:?}", k),
-        Event::KeyUp { keycode: Some(k), .. } => println!("you pressed {:?}", k),
+        Event::KeyDown { keycode: Some(k), .. } => (),
+        Event::KeyUp { keycode: Some(k), .. } => (),
         Event::Quit { .. } => std::process::exit(0),
         _ => {},
     };
