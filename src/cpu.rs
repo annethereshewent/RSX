@@ -35,7 +35,8 @@ pub enum Cause {
 pub struct COP0 {
   pub sr: u32,
   pub cause: u32,
-  pub epc: u32
+  pub epc: u32,
+  pub jumpdest: u32
 }
 
 impl COP0 {
@@ -102,7 +103,8 @@ pub struct CPU {
   free_cycles: [u16; 32],
   free_cycles_reg: usize,
   dma: DMA,
-  interrupts: Rc<Cell<InterruptRegisters>>
+  interrupts: Rc<Cell<InterruptRegisters>>,
+  current_instruction: u32
 }
 
 impl CPU {
@@ -123,12 +125,14 @@ impl CPU {
       cop0: COP0 {
         sr: 0,
         cause: 0,
-        epc: 0
+        epc: 0,
+        jumpdest: 0
       },
       free_cycles: [0; 32],
       free_cycles_reg: 0,
       dma: DMA::new(interrupts.clone()),
-      interrupts
+      interrupts,
+      current_instruction: 0
     }
   }
 
@@ -140,9 +144,18 @@ impl CPU {
       _ => self.current_pc
     };
 
+    let coprocessor_exception = if matches!(cause, Cause::Break) {
+      0
+    } else {
+      (self.current_instruction >> 26) & 0b11
+    };
+
+    self.cop0.cause |= coprocessor_exception << 28;
+
     if self.delay_slot {
       self.cop0.epc = self.cop0.epc.wrapping_sub(4);
       self.cop0.cause |= 1 << 31;
+      self.cop0.jumpdest = self.pc;
     } else {
       self.cop0.cause &= !(1 << 31);
     }
@@ -172,6 +185,7 @@ impl CPU {
 
     self.current_pc = self.pc;
 
+    self.check_irqs();
     if self.current_pc & 0b11 != 0 {
       self.exception(Cause::LoadAddressError);
       return;
@@ -180,6 +194,7 @@ impl CPU {
     self.check_irqs();
 
     let instr = self.fetch_instruction();
+    self.current_instruction = instr;
 
     // println!("executing instruction {:032b} at address {:08x}", instr, self.current_pc);
 

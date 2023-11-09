@@ -2,7 +2,7 @@ use std::{rc::Rc, cell::Cell};
 
 use crate::gpu::GPU;
 
-use super::{dma::{DMA, dma_channel_control_register::SyncMode, dma_channel::DmaChannel}, counter::Counter, interrupt::interrupt_registers::InterruptRegisters};
+use super::{counter::Counter, interrupt::interrupt_registers::InterruptRegisters, timers::timers::Timers, dma::DMA};
 
 const RAM_SIZE: usize = 2 * 1024 * 1024;
 
@@ -12,7 +12,8 @@ pub struct Bus {
   ram: [u8; RAM_SIZE],
   pub counter: Counter,
   pub gpu: GPU,
-  interrupts: Rc<Cell<InterruptRegisters>>
+  pub interrupts: Rc<Cell<InterruptRegisters>>,
+  timers: Timers,
 }
 
 impl Bus {
@@ -22,7 +23,8 @@ impl Bus {
       ram: [0; RAM_SIZE],
       gpu: GPU::new(interrupts.clone()),
       counter: Counter::new(),
-      interrupts
+      interrupts,
+      timers: Timers::new(),
     }
   }
 
@@ -75,11 +77,6 @@ impl Bus {
         let offset = (address - 0x1fc0_0000) as usize;
         (self.bios[offset] as u32) | ((self.bios[offset + 1] as u32) << 8) | ((self.bios[offset + 2] as u32) << 16) | ((self.bios[offset + 3] as u32) << 24)
       }
-      // 0x1f80_1070..=0x1f80_1077 => {
-      //   self.counter.tick(1);
-      //   println!("ignoring reads to interrupt control registers");
-      //   0
-      // }
       0x1f80_1070 => {
         self.counter.tick(1);
         self.interrupts.get().status.read()
@@ -88,10 +85,9 @@ impl Bus {
         self.counter.tick(1);
         self.interrupts.get().mask.read()
       }
-      0x1f80_1100..=0x1f80_1130 => {
+      0x1f80_1100..=0x1f80_1126 => {
         self.counter.tick(1);
-        println!("ignoring reads to timer registers");
-        0
+        self.timers.read(address) as u32
       }
       0x1f80_1810..=0x1f80_1817 => {
         self.counter.tick(1);
@@ -136,6 +132,10 @@ impl Bus {
         (self.ram[offset] as u16) | ((self.ram[offset + 1] as u16) << 8)
       }
       // 0x1f00_0000..=0x1f08_0000 => 0xffffffff,
+      0x1f80_1100..=0x1f80_1126 => {
+        self.counter.tick(1);
+        self.timers.read(address)
+      }
       0x1fc0_0000..=0x1fc7_ffff => {
         let offset = (address - 0x1fc0_0000) as usize;
         (self.bios[offset] as u16) | ((self.bios[offset + 1] as u16) << 8)
@@ -174,7 +174,9 @@ impl Bus {
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070..=0x1f80_1074 => panic!("unimplemented writes to interrupt registers"),
-      0x1f80_1100..=0x1f80_1130 => println!("ignoring writes to timer registers"),
+      0x1f80_1100..=0x1f80_112b => {
+        self.timers.write(address, value as u16);
+      }
       0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
       0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
       _ => panic!("write to unsupported address: {:08x}", address)
@@ -200,7 +202,6 @@ impl Bus {
       }
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
-      // 0x1f80_1070..=0x1f80_1077 => println!("ignoring writes to interrupt control registers"),
       0x1f80_1070 => {
         let mut interrupts = self.interrupts.get();
 
@@ -215,7 +216,9 @@ impl Bus {
 
         self.interrupts.set(interrupts);
       }
-      0x1f80_1100..=0x1f80_1130 => println!("ignoring writes to timer registers"),
+      0x1f80_1100..=0x1f80_112b => {
+        self.timers.write(address, value);
+      }
       0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
       0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
       _ => panic!("write to unsupported address: {:08x}", address)
@@ -257,7 +260,9 @@ impl Bus {
 
         self.interrupts.set(interrupts);
       }
-      0x1f80_1100..=0x1f80_1130 => println!("ignoring writes to timer registers"),
+      0x1f80_1100..=0x1f80_1126 => {
+        self.timers.write(address, value as u16);
+      }
       0x1f80_1810..=0x1f80_1817 => {
         let offset = address - 0x1f80_1810;
 
