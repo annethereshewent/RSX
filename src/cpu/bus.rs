@@ -1,6 +1,8 @@
+use std::{rc::Rc, cell::Cell};
+
 use crate::gpu::GPU;
 
-use super::{dma::{DMA, dma_channel_control_register::SyncMode, dma_channel::DmaChannel}, scheduler::Scheduler};
+use super::{dma::{DMA, dma_channel_control_register::SyncMode, dma_channel::DmaChannel}, counter::Counter, interrupt::interrupt_registers::InterruptRegisters};
 
 const RAM_SIZE: usize = 2 * 1024 * 1024;
 
@@ -8,17 +10,19 @@ const RAM_SIZE: usize = 2 * 1024 * 1024;
 pub struct Bus {
   bios: Vec<u8>,
   ram: [u8; RAM_SIZE],
-  pub scheduler: Scheduler,
-  pub gpu: GPU
+  pub counter: Counter,
+  pub gpu: GPU,
+  interrupts: Rc<Cell<InterruptRegisters>>
 }
 
 impl Bus {
-  pub fn new(bios: Vec<u8>) -> Self {
+  pub fn new(bios: Vec<u8>, interrupts: Rc<Cell<InterruptRegisters>>) -> Self {
     Self {
       bios,
       ram: [0; RAM_SIZE],
-      gpu: GPU::new(),
-      scheduler: Scheduler::new()
+      gpu: GPU::new(interrupts.clone()),
+      counter: Counter::new(),
+      interrupts
     }
   }
 
@@ -39,7 +43,7 @@ impl Bus {
       0x1f00_0000..=0x1f08_0000 => 0xff,
       0x1fc0_0000..=0x1fc7_ffff => self.bios[(address - 0x1fc0_0000) as usize],
       0x0000_0000..=0x001f_ffff => {
-        self.scheduler.tick(3);
+        self.counter.tick(3);
         self.ram[address as usize]
       }
       _ => panic!("not implemented: {:08x}", address)
@@ -59,7 +63,7 @@ impl Bus {
       0x0000_0000..=0x001f_ffff => {
         // this is to accomodate for DMA reads and when fetching instructions. we don't want to tick the timer for those
         if advance_cycles {
-          self.scheduler.tick(3);
+          self.counter.tick(3);
         }
 
         let offset = address as usize;
@@ -71,18 +75,26 @@ impl Bus {
         let offset = (address - 0x1fc0_0000) as usize;
         (self.bios[offset] as u32) | ((self.bios[offset + 1] as u32) << 8) | ((self.bios[offset + 2] as u32) << 16) | ((self.bios[offset + 3] as u32) << 24)
       }
-      0x1f80_1070..=0x1f80_1077 => {
-        self.scheduler.tick(1);
-        println!("ignoring reads to interrupt control registers");
-        0
+      // 0x1f80_1070..=0x1f80_1077 => {
+      //   self.counter.tick(1);
+      //   println!("ignoring reads to interrupt control registers");
+      //   0
+      // }
+      0x1f80_1070 => {
+        self.counter.tick(1);
+        self.interrupts.get().status.read()
+      }
+      0x1f80_1074 => {
+        self.counter.tick(1);
+        self.interrupts.get().mask.read()
       }
       0x1f80_1100..=0x1f80_1130 => {
-        self.scheduler.tick(1);
+        self.counter.tick(1);
         println!("ignoring reads to timer registers");
         0
       }
       0x1f80_1810..=0x1f80_1817 => {
-        self.scheduler.tick(1);
+        self.counter.tick(1);
         let offset = address - 0x1f80_1810;
 
         // if offset == 4 {
@@ -90,7 +102,7 @@ impl Bus {
         //   return 0x1c000000;
         // }
 
-        self.gpu.tick(&mut self.scheduler);
+        self.gpu.tick(&mut self.counter);
 
         match offset {
           0 => {
@@ -102,7 +114,7 @@ impl Bus {
         }
       }
       0x1f80_1c00..=0x1f80_1e80 => {
-        self.scheduler.tick(36);
+        self.counter.tick(36);
         // println!("ignoring reads to SPU registers");
         0
       }
@@ -119,7 +131,7 @@ impl Bus {
 
     match address {
       0x0000_0000..=0x001f_ffff => {
-        self.scheduler.tick(3);
+        self.counter.tick(3);
         let offset = address as usize;
         (self.ram[offset] as u16) | ((self.ram[offset + 1] as u16) << 8)
       }
@@ -130,18 +142,21 @@ impl Bus {
       }
 
       0x1f80_1c00..=0x1f80_1e80 => {
-        self.scheduler.tick(16);
+        self.counter.tick(16);
         // println!("ignoring reads to SPU registers");
         0
       }
-      0x1f80_1070..=0x1f80_1077 => {
-        self.scheduler.tick(1);
-        println!("ignoring reads to interrupt control registers");
-        0
+      0x1f80_1070 => {
+        self.counter.tick(1);
+        self.interrupts.get().status.read() as u16
+      }
+      0x1f80_1074 => {
+        self.counter.tick(1);
+        self.interrupts.get().mask.read() as u16
       }
       0x1f80_1080..=0x1f80_10ff => {
-        self.scheduler.tick(1);
-        println!("ignoring reads to DMA");
+        self.counter.tick(1);
+        panic!("unimplemented reads to DMA");
         0
       }
       _ => panic!("not implemented: {:08x}", address)
@@ -158,7 +173,7 @@ impl Bus {
       }
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
-      0x1f80_1070..=0x1f80_1077 => println!("ignoring writes to interrupt control registers"),
+      0x1f80_1070..=0x1f80_1074 => panic!("unimplemented writes to interrupt registers"),
       0x1f80_1100..=0x1f80_1130 => println!("ignoring writes to timer registers"),
       0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
       0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
@@ -185,7 +200,21 @@ impl Bus {
       }
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
-      0x1f80_1070..=0x1f80_1077 => println!("ignoring writes to interrupt control registers"),
+      // 0x1f80_1070..=0x1f80_1077 => println!("ignoring writes to interrupt control registers"),
+      0x1f80_1070 => {
+        let mut interrupts = self.interrupts.get();
+
+        interrupts.acknowledge_irq(value as u32);
+
+        self.interrupts.set(interrupts);
+      }
+      0x1f80_1074 => {
+        let mut interrupts = self.interrupts.get();
+
+        interrupts.mask.write(value as u32);
+
+        self.interrupts.set(interrupts);
+      }
       0x1f80_1100..=0x1f80_1130 => println!("ignoring writes to timer registers"),
       0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
       0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
@@ -214,12 +243,25 @@ impl Bus {
       }
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
-      0x1f80_1070..=0x1f80_1077 => println!("ignoring writes to interrupt control registers"),
+      0x1f80_1070 => {
+        let mut interrupts = self.interrupts.get();
+
+        interrupts.acknowledge_irq(value);
+
+        self.interrupts.set(interrupts);
+      }
+      0x1f80_1074 => {
+        let mut interrupts = self.interrupts.get();
+
+        interrupts.mask.write(value);
+
+        self.interrupts.set(interrupts);
+      }
       0x1f80_1100..=0x1f80_1130 => println!("ignoring writes to timer registers"),
       0x1f80_1810..=0x1f80_1817 => {
         let offset = address - 0x1f80_1810;
 
-        self.gpu.tick(&mut self.scheduler);
+        self.gpu.tick(&mut self.counter);
 
         match offset {
           0 => self.gpu.gp0(value),
@@ -234,6 +276,6 @@ impl Bus {
   }
 
   pub fn tick_all(&mut self) {
-    self.gpu.tick(&mut self.scheduler);
+    self.gpu.tick(&mut self.counter);
   }
 }

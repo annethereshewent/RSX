@@ -29,7 +29,7 @@ pub fn main() {
       while inner_cycles < 128 {
         cpu.step();
 
-        let elapsed = cpu.bus.scheduler.elapsed();
+        let elapsed = cpu.bus.counter.elapsed();
 
         inner_cycles += elapsed;
       }

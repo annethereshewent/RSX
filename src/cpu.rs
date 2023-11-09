@@ -1,19 +1,24 @@
+use std::{rc::Rc, cell::Cell};
+
 use crate::{cpu::instruction::Instruction, gpu::{CYCLES_PER_SCANLINE, NUM_SCANLINES_PER_FRAME, GPU_FREQUENCY}};
 
-use self::{bus::Bus, scheduler::Schedulable, dma::{DMA, dma_channel_control_register::SyncMode}};
+use self::{bus::Bus, dma::DMA, interrupt::interrupt_registers::InterruptRegisters};
 
 pub mod bus;
 pub mod execute;
 pub mod instruction;
 pub mod dma;
-pub mod scheduler;
+pub mod counter;
+pub mod interrupt;
 
 // 33.868MHZ
 pub const CPU_FREQUENCY: f64 = 33_868_800.0;
 
 pub const CYCLES_PER_FRAME: i64 = ((CYCLES_PER_SCANLINE * NUM_SCANLINES_PER_FRAME) as f64 * (CPU_FREQUENCY / GPU_FREQUENCY)) as i64;
 
+#[derive(Clone, Copy)]
 pub enum Cause {
+  Interrupt = 0x0,
   LoadAddressError = 0x4,
   StoreAddressError = 0x5,
   SysCall = 0x8,
@@ -39,6 +44,14 @@ impl COP0 {
     self.sr & 0x10000 == 0
   }
 
+  pub fn interrupts_ready(&self) -> bool {
+    self.sr & 0b1 == 1 && self.interrupt_mask() != 0
+  }
+
+  pub fn interrupt_mask(&self) -> u8 {
+    ((self.sr >> 8) as u8) & ((self.cause >> 8) as u8)
+  }
+
   pub fn enter_exception(&mut self, cause: Cause) -> u32 {
     let exception_address: u32 = if self.bev() {
       0xbfc0_0180
@@ -61,6 +74,14 @@ impl COP0 {
     self.sr &= !0xf;
     self.sr |= mode >> 2;
   }
+
+  pub fn set_interrupt(&mut self, set_active: bool) {
+    if set_active {
+      self.cause |= 1 << 10;
+    } else {
+      self.cause &= !(1 << 10);
+    }
+  }
 }
 
 pub struct CPU {
@@ -77,12 +98,14 @@ pub struct CPU {
   load: Option<(usize, u32, u16)>,
   free_cycles: [u16; 32],
   free_cycles_reg: usize,
-  dma: DMA
+  dma: DMA,
+  interrupts: Rc<Cell<InterruptRegisters>>
 }
 
 impl CPU {
   pub fn new(bios: Vec<u8>) -> Self {
-    println!("the cycles per frame is {CYCLES_PER_FRAME}");
+    let interrupts = Rc::new(Cell::new(InterruptRegisters::new()));
+
     Self {
       pc: 0xbfc0_0000,
       next_pc: 0xbfc0_0004,
@@ -90,7 +113,7 @@ impl CPU {
       r: [0; 32],
       hi: 0,
       low: 0,
-      bus: Bus::new(bios),
+      bus: Bus::new(bios, interrupts.clone()),
       load: None,
       branch: false,
       delay_slot: false,
@@ -101,14 +124,18 @@ impl CPU {
       },
       free_cycles: [0; 32],
       free_cycles_reg: 0,
-      dma: DMA::new()
+      dma: DMA::new(interrupts.clone()),
+      interrupts
     }
   }
 
   pub fn exception(&mut self, cause: Cause) {
     let exception_address = self.cop0.enter_exception(cause);
 
-    self.cop0.epc = self.current_pc;
+    self.cop0.epc = match cause {
+      Cause::Interrupt => self.pc,
+      _ => self.current_pc
+    };
 
     if self.delay_slot {
       self.cop0.epc = self.cop0.epc.wrapping_sub(4);
@@ -121,17 +148,21 @@ impl CPU {
     self.next_pc = self.pc.wrapping_add(4);
   }
 
+  pub fn check_irqs(&mut self) {
+    self.cop0.set_interrupt(self.interrupts.get().pending());
+  }
+
   pub fn step(&mut self) {
     if self.dma.is_active() {
       if self.dma.in_gap() {
-        self.dma.tick_gap(&mut self.bus.scheduler);
+        self.dma.tick_gap(&mut self.bus.counter);
 
         if !self.dma.chopping_enabled() {
           return;
         }
       } else {
         let count = self.dma.tick(&mut self.bus);
-        self.bus.scheduler.tick(count);
+        self.bus.counter.tick(count);
         return;
       }
     }
@@ -143,9 +174,20 @@ impl CPU {
       return;
     }
 
+    self.check_irqs();
+
     let instr = self.fetch_instruction();
 
     // println!("executing instruction {:032b} at address {:08x}", instr, self.current_pc);
+
+    // check if we need to handle an interrupt by checking cop0 status register and interrupt mask bits in cause and sr
+    if self.cop0.interrupts_ready() {
+      self.exception(Cause::Interrupt);
+
+      self.execute_load_delay();
+
+      return;
+    }
 
     self.delay_slot = self.branch;
     self.branch = false;
@@ -165,7 +207,7 @@ impl CPU {
   }
 
   pub fn fetch_instruction(&mut self) -> u32 {
-    self.bus.scheduler.tick(4);
+    self.bus.counter.tick(4);
 
     // TODO: add caching code later
 
@@ -192,7 +234,7 @@ impl CPU {
       _ => self.bus.mem_read_32(address, true)
     };
 
-    let duration = (self.bus.scheduler.cycles - previous_cycles) as u16;
+    let duration = (self.bus.counter.cycles - previous_cycles) as u16;
 
     (result, duration)
   }
@@ -202,7 +244,7 @@ impl CPU {
 
     let result = self.bus.mem_read_16(address);
 
-    let duration = (self.bus.scheduler.cycles - previous_cycles) as u16;
+    let duration = (self.bus.counter.cycles - previous_cycles) as u16;
 
     (result, duration)
   }
@@ -211,13 +253,13 @@ impl CPU {
     self.synchronize_load();
 
     if self.load.is_none() {
-      self.bus.scheduler.tick(2);
+      self.bus.counter.tick(2);
     }
 
-    let previous_cycles = self.bus.scheduler.cycles;
+    let previous_cycles = self.bus.counter.cycles;
 
     // this is the delay to complete the load. TODO: check if command is LWC, as that changes the cycles
-    self.bus.scheduler.tick(2);
+    self.bus.counter.tick(2);
 
     previous_cycles
   }
@@ -227,7 +269,7 @@ impl CPU {
 
     let result = self.bus.mem_read_8(address);
 
-    let duration = (self.bus.scheduler.cycles - previous_cycles) as u16;
+    let duration = (self.bus.counter.cycles - previous_cycles) as u16;
 
     (result, duration)
   }
@@ -242,6 +284,6 @@ impl CPU {
   }
 
   pub fn tick_instruction(&mut self) {
-    self.bus.scheduler.tick(1);
+    self.bus.counter.tick(1);
   }
 }

@@ -1,6 +1,8 @@
+use std::{rc::Rc, cell::Cell};
+
 use self::{dma_interrupt::DmaInterrupt, dma_channel::DmaChannel, dma_channel_control_register::SyncMode};
 
-use super::{scheduler::{Scheduler, Schedulable}, bus::Bus};
+use super::{counter::{Counter, Device}, bus::Bus, interrupt::interrupt_registers::InterruptRegisters};
 
 pub mod dma_interrupt;
 pub mod dma_channel;
@@ -11,11 +13,12 @@ pub struct DMA {
   pub control: u32,
   pub interrupt: DmaInterrupt,
   pub channels: [DmaChannel; 7],
-  active_count: i32
+  active_count: i32,
+  interrupts: Rc<Cell<InterruptRegisters>>
 }
 
 impl DMA {
-  pub fn new() -> Self {
+  pub fn new(interrupts: Rc<Cell<InterruptRegisters>>) -> Self {
     Self {
       // default value taken from specs
       control: 0x07654321,
@@ -29,7 +32,8 @@ impl DMA {
         DmaChannel::new(5),
         DmaChannel::new(6)
       ],
-      active_count: 0
+      active_count: 0,
+      interrupts
     }
   }
 
@@ -193,8 +197,8 @@ impl DMA {
     (self.control & (1 << ((channel_id << 2) + 3))) != 0
   }
 
-  pub fn tick_gap(&mut self, scheduler: &mut Scheduler) {
-    let elapsed = scheduler.sync_and_get_elapsed_cycles(Schedulable::Dma);
+  pub fn tick_gap(&mut self, counter: &mut Counter) {
+    let elapsed = counter.sync_and_get_elapsed_cycles(Device::Dma);
 
     for channel in &mut self.channels {
       if channel.gap_ticks > 0 {
@@ -311,10 +315,10 @@ impl DMA {
         match minor {
           0 => self.control = value,
           4 => self.interrupt.write(value),
-          _ => panic!("unhandled DMA read at offset {:X}", offset)
+          _ => panic!("unhandled DMA write at offset {:X}", offset)
         }
       }
-      _ => panic!("unhandled DMA read at offset {:X}", offset)
+      _ => panic!("unhandled DMA write at offset {:X}", offset)
     }
   }
 }

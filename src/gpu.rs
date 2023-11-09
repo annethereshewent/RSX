@@ -1,4 +1,6 @@
-use crate::cpu::{CPU_FREQUENCY, scheduler::{Scheduler, Schedulable}};
+use std::{rc::Rc, cell::Cell};
+
+use crate::cpu::{CPU_FREQUENCY, counter::{Counter, Device}, interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}};
 
 use self::gpu_stat_register::{GpuStatRegister, VideoMode};
 
@@ -60,11 +62,12 @@ pub struct GPU {
   cycles: i32,
   num_scanlines: u32,
   current_scanline: u32,
-  pub frame_complete: bool
+  pub frame_complete: bool,
+  interrupts: Rc<Cell<InterruptRegisters>>
 }
 
 impl GPU {
-  pub fn new() -> Self {
+  pub fn new(interrupts: Rc<Cell<InterruptRegisters>>) -> Self {
     Self {
       stat: GpuStatRegister::new(),
       texture_rectangle_x_flip: false,
@@ -95,12 +98,13 @@ impl GPU {
       cycles: 0,
       num_scanlines: 263,
       current_scanline: 0,
-      frame_complete: false
+      frame_complete: false,
+      interrupts
     }
   }
 
-  pub fn tick(&mut self, scheduler: &mut Scheduler) {
-    let elapsed = scheduler.sync_and_get_elapsed_cycles(Schedulable::Gpu);
+  pub fn tick(&mut self, counter: &mut Counter) {
+    let elapsed = counter.sync_and_get_elapsed_cycles(Device::Gpu);
 
     let elapsed_gpu_cycles = ((elapsed as f64) * GPU_CYCLES_TO_CPU_CYCLES).round() as i32;
 
@@ -124,6 +128,11 @@ impl GPU {
       if self.current_scanline == (self.num_scanlines - 20) {
         self.frame_complete = true;
         // entering VBlank
+        let mut interrupts = self.interrupts.get();
+
+        interrupts.status.set_interrupt(Interrupt::Vblank);
+
+        self.interrupts.set(interrupts);
       }
 
       if self.current_scanline == self.num_scanlines {
@@ -141,6 +150,14 @@ impl GPU {
         self.current_scanline = 0;
 
       }
+    }
+
+    if self.stat.irq_enabled {
+      let mut interrupts = self.interrupts.get();
+
+        interrupts.status.set_interrupt(Interrupt::Gpu);
+
+        self.interrupts.set(interrupts);
     }
   }
 
@@ -289,7 +306,7 @@ impl GPU {
     // TODO
   }
 
-  pub fn test(&mut self, scheduler: &mut Scheduler) {
+  pub fn test(&mut self, counter: &mut Counter) {
 
   }
 

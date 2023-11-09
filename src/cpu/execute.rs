@@ -854,7 +854,7 @@ impl CPU {
     self.load = Some((reg, val, duration));
   }
 
-  fn execute_load_delay(&mut self) {
+  pub fn execute_load_delay(&mut self) {
     if let Some((reg, value, _)) = self.load {
       self.set_reg(reg, value);
     }
