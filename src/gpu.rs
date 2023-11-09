@@ -103,13 +103,10 @@ impl GPU {
     }
   }
 
-  pub fn tick(&mut self, counter: &mut Counter) {
-    let elapsed = counter.sync_and_get_elapsed_cycles(Device::Gpu);
-
-    let elapsed_gpu_cycles = ((elapsed as f64) * GPU_CYCLES_TO_CPU_CYCLES).round() as i32;
+  pub fn tick(&mut self, cycles: i64) {
+    let elapsed_gpu_cycles = ((cycles as f64) * GPU_CYCLES_TO_CPU_CYCLES).round() as i32;
 
     self.cycles += elapsed_gpu_cycles;
-
 
     let horizontal_cycles = match self.stat.video_mode {
       VideoMode::Ntsc => 3413,
@@ -146,18 +143,16 @@ impl GPU {
         if self.stat.vertical_resolution == 480 && self.stat.vertical_interlace {
           self.stat.even_odd = !self.stat.even_odd;
         }
-
         self.current_scanline = 0;
-
       }
     }
 
     if self.stat.irq_enabled {
       let mut interrupts = self.interrupts.get();
 
-        interrupts.status.set_interrupt(Interrupt::Gpu);
+      interrupts.status.set_interrupt(Interrupt::Gpu);
 
-        self.interrupts.set(interrupts);
+      self.interrupts.set(interrupts);
     }
   }
 
@@ -304,10 +299,6 @@ impl GPU {
 
   fn textured_quad_with_blending(&mut self) {
     // TODO
-  }
-
-  pub fn test(&mut self, counter: &mut Counter) {
-
   }
 
   fn gp0_image_transfer_to_vram(&mut self) {

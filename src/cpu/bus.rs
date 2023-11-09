@@ -14,10 +14,12 @@ pub struct Bus {
   pub gpu: GPU,
   pub interrupts: Rc<Cell<InterruptRegisters>>,
   timers: Timers,
+  dma: Rc<Cell<DMA>>,
+  pub cycles: i64
 }
 
 impl Bus {
-  pub fn new(bios: Vec<u8>, interrupts: Rc<Cell<InterruptRegisters>>) -> Self {
+  pub fn new(bios: Vec<u8>, interrupts: Rc<Cell<InterruptRegisters>>, dma: Rc<Cell<DMA>>) -> Self {
     Self {
       bios,
       ram: [0; RAM_SIZE],
@@ -25,6 +27,8 @@ impl Bus {
       counter: Counter::new(),
       interrupts,
       timers: Timers::new(),
+      dma,
+      cycles: 0
     }
   }
 
@@ -45,7 +49,7 @@ impl Bus {
       0x1f00_0000..=0x1f08_0000 => 0xff,
       0x1fc0_0000..=0x1fc7_ffff => self.bios[(address - 0x1fc0_0000) as usize],
       0x0000_0000..=0x001f_ffff => {
-        self.counter.tick(3);
+
         self.ram[address as usize]
       }
       _ => panic!("not implemented: {:08x}", address)
@@ -65,7 +69,7 @@ impl Bus {
       0x0000_0000..=0x001f_ffff => {
         // this is to accomodate for DMA reads and when fetching instructions. we don't want to tick the timer for those
         if advance_cycles {
-          self.counter.tick(3);
+
         }
 
         let offset = address as usize;
@@ -78,27 +82,20 @@ impl Bus {
         (self.bios[offset] as u32) | ((self.bios[offset + 1] as u32) << 8) | ((self.bios[offset + 2] as u32) << 16) | ((self.bios[offset + 3] as u32) << 24)
       }
       0x1f80_1070 => {
-        self.counter.tick(1);
+
         self.interrupts.get().status.read()
       }
       0x1f80_1074 => {
-        self.counter.tick(1);
+
         self.interrupts.get().mask.read()
       }
       0x1f80_1100..=0x1f80_1126 => {
-        self.counter.tick(1);
+
         self.timers.read(address) as u32
       }
       0x1f80_1810..=0x1f80_1817 => {
-        self.counter.tick(1);
+
         let offset = address - 0x1f80_1810;
-
-        // if offset == 4 {
-        //   println!("attempting read from GPUSTAT");
-        //   return 0x1c000000;
-        // }
-
-        self.gpu.tick(&mut self.counter);
 
         match offset {
           0 => {
@@ -110,7 +107,7 @@ impl Bus {
         }
       }
       0x1f80_1c00..=0x1f80_1e80 => {
-        self.counter.tick(36);
+
         // println!("ignoring reads to SPU registers");
         0
       }
@@ -127,7 +124,7 @@ impl Bus {
 
     match address {
       0x0000_0000..=0x001f_ffff => {
-        self.counter.tick(3);
+
         let offset = address as usize;
         (self.ram[offset] as u16) | ((self.ram[offset + 1] as u16) << 8)
       }
@@ -142,20 +139,20 @@ impl Bus {
       }
 
       0x1f80_1c00..=0x1f80_1e80 => {
-        self.counter.tick(16);
+
         // println!("ignoring reads to SPU registers");
         0
       }
       0x1f80_1070 => {
-        self.counter.tick(1);
+
         self.interrupts.get().status.read() as u16
       }
       0x1f80_1074 => {
-        self.counter.tick(1);
+
         self.interrupts.get().mask.read() as u16
       }
       0x1f80_1080..=0x1f80_10ff => {
-        self.counter.tick(1);
+
         panic!("unimplemented reads to DMA");
         0
       }
@@ -266,8 +263,6 @@ impl Bus {
       0x1f80_1810..=0x1f80_1817 => {
         let offset = address - 0x1f80_1810;
 
-        self.gpu.tick(&mut self.counter);
-
         match offset {
           0 => self.gpu.gp0(value),
           4 => self.gpu.gp1(value),
@@ -280,7 +275,18 @@ impl Bus {
     }
   }
 
-  pub fn tick_all(&mut self) {
-    self.gpu.tick(&mut self.counter);
+  pub fn tick(&mut self, cycles: i64) {
+    self.cycles += cycles;
+
+    self.gpu.tick(cycles);
+    self.timers.tick(cycles);
+
+    let mut dma = self.dma.get();
+    dma.tick_counter(cycles);
+    self.dma.set(dma);
+  }
+
+  pub fn reset_cycles(&mut self) {
+    self.cycles = 0;
   }
 }

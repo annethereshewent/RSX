@@ -1,3 +1,4 @@
+#[derive(Copy, Clone)]
 pub struct DmaInterrupt {
   pub val: u32
 }

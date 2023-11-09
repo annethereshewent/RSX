@@ -102,14 +102,16 @@ pub struct CPU {
   load: Option<(usize, u32, u16)>,
   free_cycles: [u16; 32],
   free_cycles_reg: usize,
-  dma: DMA,
+  dma: Rc<Cell<DMA>>,
   interrupts: Rc<Cell<InterruptRegisters>>,
-  current_instruction: u32
+  current_instruction: u32,
+  breakpoint_hit: bool
 }
 
 impl CPU {
   pub fn new(bios: Vec<u8>) -> Self {
     let interrupts = Rc::new(Cell::new(InterruptRegisters::new()));
+    let dma = Rc::new(Cell::new(DMA::new()));
 
     Self {
       pc: 0xbfc0_0000,
@@ -118,7 +120,7 @@ impl CPU {
       r: [0; 32],
       hi: 0,
       low: 0,
-      bus: Bus::new(bios, interrupts.clone()),
+      bus: Bus::new(bios, interrupts.clone(), dma.clone()),
       load: None,
       branch: false,
       delay_slot: false,
@@ -130,9 +132,10 @@ impl CPU {
       },
       free_cycles: [0; 32],
       free_cycles_reg: 0,
-      dma: DMA::new(interrupts.clone()),
+      dma,
       interrupts,
-      current_instruction: 0
+      current_instruction: 0,
+      breakpoint_hit: false
     }
   }
 
@@ -169,16 +172,22 @@ impl CPU {
   }
 
   pub fn step(&mut self) {
-    if self.dma.is_active() {
-      if self.dma.in_gap() {
-        self.dma.tick_gap(&mut self.bus.counter);
+    let mut dma = self.dma.get();
 
-        if !self.dma.chopping_enabled() {
+    if dma.is_active() {
+      if dma.in_gap() {
+        dma.tick_gap();
+        self.dma.set(dma);
+
+        if dma.chopping_enabled() {
           return;
         }
       } else {
-        let count = self.dma.tick(&mut self.bus);
-        self.bus.counter.tick(count);
+        let count = dma.tick(&mut self.bus);
+        self.dma.set(dma);
+
+        self.bus.tick(count as i64);
+
         return;
       }
     }
@@ -186,17 +195,17 @@ impl CPU {
     self.current_pc = self.pc;
 
     self.check_irqs();
-    if self.current_pc & 0b11 != 0 {
-      self.exception(Cause::LoadAddressError);
-      return;
-    }
-
-    self.check_irqs();
 
     let instr = self.fetch_instruction();
     self.current_instruction = instr;
 
-    // println!("executing instruction {:032b} at address {:08x}", instr, self.current_pc);
+    if self.current_pc & 0b11 != 0 {
+      self.exception(Cause::LoadAddressError);
+
+      self.execute_load_delay();
+
+      return;
+    }
 
     // check if we need to handle an interrupt by checking cop0 status register and interrupt mask bits in cause and sr
     if self.cop0.interrupts_ready() {
@@ -216,6 +225,8 @@ impl CPU {
     self.tick_instruction();
 
     self.execute(Instruction::new(instr));
+
+    self.bus.reset_cycles();
   }
 
   pub fn set_reg(&mut self, rt: usize, val: u32) {
@@ -225,8 +236,7 @@ impl CPU {
   }
 
   pub fn fetch_instruction(&mut self) -> u32 {
-    self.bus.counter.tick(4);
-
+    self.bus.tick(5);
     // TODO: add caching code later
 
     self.bus.mem_read_32(self.pc, false)
@@ -235,10 +245,33 @@ impl CPU {
   pub fn store_32(&mut self, address: u32, value: u32) {
     let address = Bus::translate_address(address);
 
+    self.bus.tick(5);
+
     match address {
-      0x1f80_1080..=0x1f80_10ff => self.dma.write(address, value),
+      0x1f80_1080..=0x1f80_10ff => {
+        let mut dma = self.dma.get();
+        dma.write(address, value);
+
+        self.dma.set(dma);
+      },
       _ => self.bus.mem_write_32(address, value)
     }
+  }
+
+  pub fn store_16(&mut self, address: u32, value: u16) {
+    let address = Bus::translate_address(address);
+
+    self.bus.tick(5);
+
+    self.bus.mem_write_16(address, value)
+  }
+
+  pub fn store_8(&mut self, address: u32, value: u8) {
+    let address = Bus::translate_address(address);
+
+    self.bus.tick(5);
+
+    self.bus.mem_write_8(address, value)
   }
 
   // TODO: refactor this into just one method
@@ -247,12 +280,14 @@ impl CPU {
 
     let address = Bus::translate_address(address);
 
+    self.bus.tick(5);
+
     let result = match address {
-      0x1f80_1080..=0x1f80_10ff => self.dma.read(address),
+      0x1f80_1080..=0x1f80_10ff => self.dma.get().read(address),
       _ => self.bus.mem_read_32(address, true)
     };
 
-    let duration = (self.bus.counter.cycles - previous_cycles) as u16;
+    let duration = (self.bus.cycles - previous_cycles) as u16;
 
     (result, duration)
   }
@@ -260,9 +295,11 @@ impl CPU {
   pub fn load_16(&mut self, address: u32) -> (u16, u16) {
     let previous_cycles = self.synchronize_and_get_current_cycles();
 
+    self.bus.tick(5);
+
     let result = self.bus.mem_read_16(address);
 
-    let duration = (self.bus.counter.cycles - previous_cycles) as u16;
+    let duration = (self.bus.cycles - previous_cycles) as u16;
 
     (result, duration)
   }
@@ -271,13 +308,13 @@ impl CPU {
     self.synchronize_load();
 
     if self.load.is_none() {
-      self.bus.counter.tick(2);
+
     }
 
-    let previous_cycles = self.bus.counter.cycles;
+    let previous_cycles = self.bus.cycles;
 
     // this is the delay to complete the load. TODO: check if command is LWC, as that changes the cycles
-    self.bus.counter.tick(2);
+
 
     previous_cycles
   }
@@ -285,9 +322,11 @@ impl CPU {
   pub fn load_8(&mut self, address: u32) -> (u8, u16) {
     let previous_cycles = self.synchronize_and_get_current_cycles();
 
+    self.bus.tick(5);
+
     let result = self.bus.mem_read_8(address);
 
-    let duration = (self.bus.counter.cycles - previous_cycles) as u16;
+    let duration = (self.bus.cycles - previous_cycles) as u16;
 
     (result, duration)
   }
@@ -302,6 +341,6 @@ impl CPU {
   }
 
   pub fn tick_instruction(&mut self) {
-    self.bus.counter.tick(1);
+    self.bus.tick(1);
   }
 }

@@ -21,19 +21,9 @@ pub fn main() {
   let mut cpu = CPU::new(fs::read("../SCPH1001.BIN").unwrap());
   let mut frontend = SdlFrontend::new();
 
-  let mut inner_cycles = 0;
-
   loop {
     while !cpu.bus.gpu.frame_complete {
-      inner_cycles = 0;
-      while inner_cycles < 128 {
-        cpu.step();
-
-        let elapsed = cpu.bus.counter.elapsed();
-
-        inner_cycles += elapsed;
-      }
-      cpu.bus.tick_all();
+      cpu.step();
     }
 
     cpu.bus.gpu.frame_complete = false;

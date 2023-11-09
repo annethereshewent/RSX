@@ -1,5 +1,7 @@
 use std::{rc::Rc, cell::Cell};
 
+use crate::cpu::interrupt::interrupt_register::Interrupt;
+
 use self::{dma_interrupt::DmaInterrupt, dma_channel::DmaChannel, dma_channel_control_register::SyncMode};
 
 use super::{counter::{Counter, Device}, bus::Bus, interrupt::interrupt_registers::InterruptRegisters};
@@ -9,16 +11,17 @@ pub mod dma_channel;
 pub mod dma_channel_control_register;
 pub mod dma_block_control_register;
 
+#[derive(Copy, Clone)]
 pub struct DMA {
   pub control: u32,
   pub interrupt: DmaInterrupt,
   pub channels: [DmaChannel; 7],
   active_count: i32,
-  interrupts: Rc<Cell<InterruptRegisters>>
+  cycles: i64
 }
 
 impl DMA {
-  pub fn new(interrupts: Rc<Cell<InterruptRegisters>>) -> Self {
+  pub fn new() -> Self {
     Self {
       // default value taken from specs
       control: 0x07654321,
@@ -33,8 +36,12 @@ impl DMA {
         DmaChannel::new(6)
       ],
       active_count: 0,
-      interrupts
+      cycles: 0
     }
+  }
+
+  pub fn tick_counter(&mut self, cycles: i64) {
+    self.cycles += cycles;
   }
 
   pub fn tick(&mut self, bus: &mut Bus) -> i32 {
@@ -146,6 +153,7 @@ impl DMA {
 
     if channel.word_count == 0 {
       self.active_count += channel.block_size() as i32;
+
       channel.finish();
 
       // TODO interrupts
@@ -197,12 +205,11 @@ impl DMA {
     (self.control & (1 << ((channel_id << 2) + 3))) != 0
   }
 
-  pub fn tick_gap(&mut self, counter: &mut Counter) {
-    let elapsed = counter.sync_and_get_elapsed_cycles(Device::Dma);
-
+  pub fn tick_gap(&mut self) {
     for channel in &mut self.channels {
       if channel.gap_ticks > 0 {
-        channel.gap_ticks -= elapsed;
+        channel.gap_ticks -= self.cycles as i32;
+        self.cycles = 0;
       }
     }
   }
@@ -217,8 +224,8 @@ impl DMA {
     return false;
   }
 
-  pub fn in_gap(&mut self) -> bool {
-    for channel in &mut self.channels {
+  pub fn in_gap(&self) -> bool {
+    for channel in self.channels {
       if channel.gap_ticks > 0 {
         return true;
       }
@@ -237,7 +244,7 @@ impl DMA {
     false
   }
 
-  pub fn read(&mut self, address: u32) -> u32 {
+  pub fn read(&self, address: u32) -> u32 {
     let offset = address - 0x1f80_1080;
 
     let major = (offset & 0x70) >> 4;
