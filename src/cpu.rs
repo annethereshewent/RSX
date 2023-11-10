@@ -199,6 +199,9 @@ impl CPU {
     let instr = self.fetch_instruction();
     self.current_instruction = instr;
 
+    self.delay_slot = self.branch;
+    self.branch = false;
+
     if self.current_pc & 0b11 != 0 {
       self.exception(Cause::LoadAddressError);
 
@@ -216,8 +219,7 @@ impl CPU {
       return;
     }
 
-    self.delay_slot = self.branch;
-    self.branch = false;
+    // println!("executing instruction {:032b} at address {:08x}", instr, self.current_pc);
 
     self.pc = self.next_pc;
     self.next_pc = self.next_pc.wrapping_add(4);
@@ -239,7 +241,7 @@ impl CPU {
     self.bus.tick(5);
     // TODO: add caching code later
 
-    self.bus.mem_read_32(self.pc, false)
+    self.bus.mem_read_32(self.pc)
   }
 
   pub fn store_32(&mut self, address: u32, value: u32) {
@@ -284,7 +286,7 @@ impl CPU {
 
     let result = match address {
       0x1f80_1080..=0x1f80_10ff => self.dma.get().read(address),
-      _ => self.bus.mem_read_32(address, true)
+      _ => self.bus.mem_read_32(address)
     };
 
     let duration = (self.bus.cycles - previous_cycles) as u16;

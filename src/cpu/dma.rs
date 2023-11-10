@@ -76,7 +76,7 @@ impl DMA {
 
 
     if channel.control.is_from_ram() {
-      let word = bus.mem_read_32(masked_address, false);
+      let word = bus.mem_read_32(masked_address);
 
       if channel.channel_id == 2 {
         bus.gpu.gp0(word);
@@ -120,7 +120,7 @@ impl DMA {
     let masked_address = channel.active_address & 0x1ffffc;
 
     if channel.control.is_from_ram() {
-      let word = bus.mem_read_32(masked_address, false);
+      let word = bus.mem_read_32(masked_address);
 
       if channel.channel_id == 2 {
         bus.gpu.gp0(word);
@@ -176,14 +176,14 @@ impl DMA {
       return;
     }
 
-    let header = bus.mem_read_32(channel.active_address, false);
+    let header = bus.mem_read_32(channel.active_address);
 
     let mut word_count = header >> 24;
 
     while word_count > 0 {
       channel.active_address = (channel.active_address + 4) & 0x1ffffc;
 
-      let val = bus.mem_read_32(channel.active_address, false);
+      let val = bus.mem_read_32(channel.active_address);
 
       bus.gpu.gp0(val);
 
@@ -309,11 +309,6 @@ impl DMA {
           }
 
           self.active_count = 0;
-
-          if channel.word_count == 0 {
-            channel.finish();
-            // TODO: interrupts
-          }
         }
 
         self.channels[major as usize] = channel;

@@ -56,22 +56,15 @@ impl Bus {
     }
   }
 
-  pub fn mem_read_32(&mut self, address: u32, advance_cycles: bool) -> u32 {
+  pub fn mem_read_32(&mut self, address: u32) -> u32 {
     if (address & 0b11) != 0 {
       panic!("unaligned address received: {:032b}", address);
     }
 
     let address = Bus::translate_address(address);
 
-    // TODO: possibly add dma timing penalty here
-
     match address {
       0x0000_0000..=0x001f_ffff => {
-        // this is to accomodate for DMA reads and when fetching instructions. we don't want to tick the timer for those
-        if advance_cycles {
-
-        }
-
         let offset = address as usize;
         (self.ram[offset] as u32) | ((self.ram[offset + 1] as u32) << 8) | ((self.ram[offset + 2] as u32) << 16) | ((self.ram[offset + 3] as u32) << 24)
 

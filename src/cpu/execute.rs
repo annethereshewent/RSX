@@ -85,9 +85,9 @@ impl CPU {
   pub fn execute(&mut self, instr: Instruction) {
     let op_code = instr.op_code();
 
-    if op_code != 0 && self.breakpoint_hit {
-      println!("op: {}", PRIMARY_OPS[op_code as usize]);
-    }
+    // if op_code != 0 && self.breakpoint_hit {
+    //   println!("op: {}", PRIMARY_OPS[op_code as usize]);
+    // }
 
     let handler_fn = PRIMARY_HANDLERS[op_code as usize];
 
@@ -105,9 +105,9 @@ impl CPU {
   fn secondary(&mut self, instr: Instruction) {
     let op_code = instr.op_code_secondary();
 
-    if self.breakpoint_hit {
-      println!("op: {}", SECONDARY_OPS[op_code as usize]);
-    }
+    // if self.breakpoint_hit {
+    //   println!("op: {}", SECONDARY_OPS[op_code as usize]);
+    // }
 
     let handler_fn = SECONDARY_HANDLERS[op_code as usize];
 
