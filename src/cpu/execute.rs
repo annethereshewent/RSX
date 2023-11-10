@@ -156,9 +156,9 @@ impl CPU {
     if self.cop0.is_cache_disabled() {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
-      let (value, duration) = self.load_8(address);
+      let value = self.load_8(address);
 
-      self.update_load(instr.rt(), value as i8 as i32 as u32, duration);
+      self.update_load(instr.rt(), value as i8 as i32 as u32);
     } else {
       // println!("cache not implemented yet for loads");
     }
@@ -168,9 +168,9 @@ impl CPU {
     if self.cop0.is_cache_disabled() {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
-      let (value, duration) = self.load_8(address);
+      let value = self.load_8(address);
 
-      self.update_load(instr.rt(), value as u32, duration);
+      self.update_load(instr.rt(), value as u32);
     } else {
       // println!("cache not implemented yet for loads");
     }
@@ -181,9 +181,9 @@ impl CPU {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
       if address & 0b1 == 0 {
-        let (value, duration) = self.load_16(address);
+        let value = self.load_16(address);
 
-        self.update_load(instr.rt(), value as u32, duration);
+        self.update_load(instr.rt(), value as u32);
       } else {
         self.execute_load_delay();
         self.exception(Cause::LoadAddressError);
@@ -198,9 +198,9 @@ impl CPU {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
       if address & 0b1 == 0 {
-        let (value, duration) = self.load_16(address);
+        let value = self.load_16(address);
 
-        self.update_load(instr.rt(), value as i16 as u32, duration);
+        self.update_load(instr.rt(), value as i16 as u32);
       } else {
         self.execute_load_delay();
         self.exception(Cause::LoadAddressError);
@@ -392,7 +392,7 @@ impl CPU {
       _ => panic!("unhandled read from cop0 register: {}", instr.rd())
     };
 
-    self.update_load(delayed_register, delayed_load, 0);
+    self.update_load(delayed_register, delayed_load);
   }
 
   fn mtc0(&mut self, instr: Instruction) {
@@ -419,8 +419,8 @@ impl CPU {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
       if address & 0b11 == 0 {
-        let (val, duration) = self.load_32(address);
-        self.update_load(instr.rt(), val, duration);
+        let val = self.load_32(address);
+        self.update_load(instr.rt(), val);
       } else {
         self.execute_load_delay();
         self.exception(Cause::LoadAddressError);
@@ -435,14 +435,14 @@ impl CPU {
 
     let mut result = self.r[instr.rt()];
 
-    if let Some((reg, val, _)) = self.load {
+    if let Some((reg, val)) = self.load {
       if reg == instr.rt() {
         result = val;
       }
     }
 
     let aligned_address = address & !0x3;
-    let (aligned_word, duration) = self.load_32(aligned_address);
+    let aligned_word = self.load_32(aligned_address);
 
     result = match address & 0x3 {
       0 => (result & 0xffffff) | (aligned_word << 24),
@@ -452,7 +452,7 @@ impl CPU {
       _ => unreachable!("can't happen")
     };
 
-    self.update_load(instr.rt(), result, duration);
+    self.update_load(instr.rt(), result);
   }
 
   fn lwr(&mut self, instr: Instruction) {
@@ -460,14 +460,14 @@ impl CPU {
 
     let mut result = self.r[instr.rt()];
 
-    if let Some((reg, val, _)) = self.load {
+    if let Some((reg, val)) = self.load {
       if reg == instr.rt() {
         result = val;
       }
     }
 
     let aligned_address = address & !0x3;
-    let (aligned_word, duration) = self.load_32(aligned_address);
+    let aligned_word = self.load_32(aligned_address);
 
     result = match address & 0x3 {
       0 => aligned_word,
@@ -477,7 +477,7 @@ impl CPU {
       _ => unreachable!("can't happen")
     };
 
-    self.update_load(instr.rt(), result, duration);
+    self.update_load(instr.rt(), result);
   }
 
   fn j(&mut self, instr: Instruction) {
@@ -775,7 +775,7 @@ impl CPU {
     let aligned_address = address & !0x3;
 
     let val = self.r[instr.rt()];
-    let (mem_value, _) = self.load_32(aligned_address);
+    let mem_value = self.load_32(aligned_address);
 
     let result = match address & 0x3 {
       0 => (mem_value & 0xffffff00) | (val >> 24),
@@ -796,7 +796,7 @@ impl CPU {
     let aligned_address = address & !0x3;
 
     let val = self.r[instr.rt()];
-    let (mem_value, _) = self.load_32(aligned_address);
+    let mem_value = self.load_32(aligned_address);
 
     let result = match address & 0x3 {
       0 => val,
@@ -846,18 +846,18 @@ impl CPU {
     self.cop0.return_from_exception();
   }
 
-  fn update_load(&mut self, reg: usize, val: u32, duration: u16) {
-    if let Some((pending_reg, _, _)) = self.load {
+  fn update_load(&mut self, reg: usize, val: u32) {
+    if let Some((pending_reg, _)) = self.load {
       if reg != pending_reg {
         self.execute_load_delay();
       }
     }
 
-    self.load = Some((reg, val, duration));
+    self.load = Some((reg, val));
   }
 
   pub fn execute_load_delay(&mut self) {
-    if let Some((reg, value, _)) = self.load {
+    if let Some((reg, value)) = self.load {
       self.set_reg(reg, value);
     }
 

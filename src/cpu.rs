@@ -99,7 +99,7 @@ pub struct CPU {
   hi: u32,
   low: u32,
   pub bus: Bus,
-  load: Option<(usize, u32, u16)>,
+  load: Option<(usize, u32)>,
   free_cycles: [u16; 32],
   free_cycles_reg: usize,
   dma: Rc<Cell<DMA>>,
@@ -261,25 +261,19 @@ impl CPU {
   }
 
   pub fn store_16(&mut self, address: u32, value: u16) {
-    let address = Bus::translate_address(address);
-
     self.bus.tick(5);
 
     self.bus.mem_write_16(address, value)
   }
 
   pub fn store_8(&mut self, address: u32, value: u8) {
-    let address = Bus::translate_address(address);
-
     self.bus.tick(5);
 
     self.bus.mem_write_8(address, value)
   }
 
   // TODO: refactor this into just one method
-  pub fn load_32(&mut self, address: u32) -> (u32, u16) {
-    let previous_cycles = self.synchronize_and_get_current_cycles();
-
+  pub fn load_32(&mut self, address: u32) -> u32 {
     let address = Bus::translate_address(address);
 
     self.bus.tick(5);
@@ -289,57 +283,23 @@ impl CPU {
       _ => self.bus.mem_read_32(address)
     };
 
-    let duration = (self.bus.cycles - previous_cycles) as u16;
-
-    (result, duration)
+    result
   }
 
-  pub fn load_16(&mut self, address: u32) -> (u16, u16) {
-    let previous_cycles = self.synchronize_and_get_current_cycles();
-
+  pub fn load_16(&mut self, address: u32) -> u16 {
     self.bus.tick(5);
 
     let result = self.bus.mem_read_16(address);
 
-    let duration = (self.bus.cycles - previous_cycles) as u16;
-
-    (result, duration)
+    result
   }
 
-  pub fn synchronize_and_get_current_cycles(&mut self) -> i64 {
-    self.synchronize_load();
-
-    if self.load.is_none() {
-
-    }
-
-    let previous_cycles = self.bus.cycles;
-
-    // this is the delay to complete the load. TODO: check if command is LWC, as that changes the cycles
-
-
-    previous_cycles
-  }
-
-  pub fn load_8(&mut self, address: u32) -> (u8, u16) {
-    let previous_cycles = self.synchronize_and_get_current_cycles();
-
+  pub fn load_8(&mut self, address: u32) -> u8 {
     self.bus.tick(5);
 
     let result = self.bus.mem_read_8(address);
 
-    let duration = (self.bus.cycles - previous_cycles) as u16;
-
-    (result, duration)
-  }
-
-  /**
-   * TODO: This currently doesn't do anything, but
-   * in the future I may refactor the code
-   * to use it properly.
-   */
-  fn synchronize_load(&mut self) {
-    self.free_cycles[self.free_cycles_reg] = 0;
+    result
   }
 
   pub fn tick_instruction(&mut self) {
