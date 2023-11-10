@@ -5,9 +5,9 @@ pub enum Device {
 }
 
 pub struct Counter {
-  pub cycles: i64,
-  pub device_sync: [i64; 2],
-  pub previous: i64
+  pub cycles: i32,
+  pub device_sync: [i32; 2],
+  pub previous: i32
 }
 
 impl Counter {
@@ -20,11 +20,11 @@ impl Counter {
   }
 
   pub fn tick(&mut self, cycles: i32) {
-    self.cycles += cycles as i64;
+    self.cycles += cycles;
   }
 
   pub fn elapsed(&mut self) -> i32 {
-    let elapsed = (self.cycles - self.previous) as i32;
+    let elapsed = self.cycles - self.previous;
 
     self.previous = self.cycles;
 

@@ -28,7 +28,7 @@ impl Timers {
     }
   }
 
-  pub fn tick(&mut self, cycles: i64) {
+  pub fn tick(&mut self, cycles: i32) {
 
   }
 

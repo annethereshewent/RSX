@@ -17,7 +17,7 @@ pub struct DMA {
   pub interrupt: DmaInterrupt,
   pub channels: [DmaChannel; 7],
   active_count: i32,
-  cycles: i64
+  cycles: i32
 }
 
 impl DMA {
@@ -40,7 +40,7 @@ impl DMA {
     }
   }
 
-  pub fn tick_counter(&mut self, cycles: i64) {
+  pub fn tick_counter(&mut self, cycles: i32) {
     self.cycles += cycles;
   }
 

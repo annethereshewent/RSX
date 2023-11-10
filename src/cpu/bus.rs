@@ -15,7 +15,7 @@ pub struct Bus {
   pub interrupts: Rc<Cell<InterruptRegisters>>,
   timers: Timers,
   dma: Rc<Cell<DMA>>,
-  pub cycles: i64
+  pub cycles: i32
 }
 
 impl Bus {
@@ -75,13 +75,12 @@ impl Bus {
         (self.bios[offset] as u32) | ((self.bios[offset + 1] as u32) << 8) | ((self.bios[offset + 2] as u32) << 16) | ((self.bios[offset + 3] as u32) << 24)
       }
       0x1f80_1070 => {
-
         self.interrupts.get().status.read()
       }
       0x1f80_1074 => {
-
         self.interrupts.get().mask.read()
       }
+      0x1f80_1080..=0x1f80_10ff => self.dma.get().read(address),
       0x1f80_1100..=0x1f80_1126 => {
 
         self.timers.read(address) as u32
@@ -250,6 +249,12 @@ impl Bus {
 
         self.interrupts.set(interrupts);
       }
+      0x1f80_1080..=0x1f80_10ff => {
+        let mut dma = self.dma.get();
+        dma.write(address, value);
+
+        self.dma.set(dma);
+      }
       0x1f80_1100..=0x1f80_1126 => {
         self.timers.write(address, value as u16);
       }
@@ -268,7 +273,7 @@ impl Bus {
     }
   }
 
-  pub fn tick(&mut self, cycles: i64) {
+  pub fn tick(&mut self, cycles: i32) {
     self.cycles += cycles;
 
     self.gpu.tick(cycles);

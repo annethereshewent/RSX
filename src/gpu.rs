@@ -103,7 +103,7 @@ impl GPU {
     }
   }
 
-  pub fn tick(&mut self, cycles: i64) {
+  pub fn tick(&mut self, cycles: i32) {
     let elapsed_gpu_cycles = ((cycles as f64) * GPU_CYCLES_TO_CPU_CYCLES).round() as i32;
 
     self.cycles += elapsed_gpu_cycles;

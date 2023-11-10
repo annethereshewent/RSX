@@ -100,12 +100,9 @@ pub struct CPU {
   low: u32,
   pub bus: Bus,
   load: Option<(usize, u32)>,
-  free_cycles: [u16; 32],
-  free_cycles_reg: usize,
   dma: Rc<Cell<DMA>>,
   interrupts: Rc<Cell<InterruptRegisters>>,
-  current_instruction: u32,
-  breakpoint_hit: bool
+  current_instruction: u32
 }
 
 impl CPU {
@@ -130,12 +127,9 @@ impl CPU {
         epc: 0,
         jumpdest: 0
       },
-      free_cycles: [0; 32],
-      free_cycles_reg: 0,
       dma,
       interrupts,
       current_instruction: 0,
-      breakpoint_hit: false
     }
   }
 
@@ -186,7 +180,7 @@ impl CPU {
         let count = dma.tick(&mut self.bus);
         self.dma.set(dma);
 
-        self.bus.tick(count as i64);
+        self.bus.tick(count);
 
         return;
       }
@@ -245,19 +239,9 @@ impl CPU {
   }
 
   pub fn store_32(&mut self, address: u32, value: u32) {
-    let address = Bus::translate_address(address);
-
     self.bus.tick(5);
 
-    match address {
-      0x1f80_1080..=0x1f80_10ff => {
-        let mut dma = self.dma.get();
-        dma.write(address, value);
-
-        self.dma.set(dma);
-      },
-      _ => self.bus.mem_write_32(address, value)
-    }
+    self.bus.mem_write_32(address, value);
   }
 
   pub fn store_16(&mut self, address: u32, value: u16) {
@@ -274,32 +258,21 @@ impl CPU {
 
   // TODO: refactor this into just one method
   pub fn load_32(&mut self, address: u32) -> u32 {
-    let address = Bus::translate_address(address);
-
     self.bus.tick(5);
 
-    let result = match address {
-      0x1f80_1080..=0x1f80_10ff => self.dma.get().read(address),
-      _ => self.bus.mem_read_32(address)
-    };
-
-    result
+    self.bus.mem_read_32(address)
   }
 
   pub fn load_16(&mut self, address: u32) -> u16 {
     self.bus.tick(5);
 
-    let result = self.bus.mem_read_16(address);
-
-    result
+    self.bus.mem_read_16(address)
   }
 
   pub fn load_8(&mut self, address: u32) -> u8 {
     self.bus.tick(5);
 
-    let result = self.bus.mem_read_8(address);
-
-    result
+    self.bus.mem_read_8(address)
   }
 
   pub fn tick_instruction(&mut self) {
