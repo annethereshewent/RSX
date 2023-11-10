@@ -15,7 +15,8 @@ pub struct Bus {
   pub interrupts: Rc<Cell<InterruptRegisters>>,
   timers: Timers,
   dma: Rc<Cell<DMA>>,
-  pub cycles: i32
+  pub cycles: i32,
+  pub cache_control: u32
 }
 
 impl Bus {
@@ -28,7 +29,8 @@ impl Bus {
       interrupts,
       timers: Timers::new(),
       dma,
-      cycles: 0
+      cycles: 0,
+      cache_control: 0
     }
   }
 
@@ -167,7 +169,7 @@ impl Bus {
         self.timers.write(address, value as u16);
       }
       0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
-      0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
+      0xfffe_0130 => self.cache_control = value as u32,
       _ => panic!("write to unsupported address: {:08x}", address)
     }
   }
@@ -209,7 +211,7 @@ impl Bus {
         self.timers.write(address, value);
       }
       0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
-      0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
+      0xfffe_0130 => self.cache_control = value as u32,
       _ => panic!("write to unsupported address: {:08x}", address)
     }
   }
@@ -233,8 +235,8 @@ impl Bus {
       0x1f80_1c00..=0x1f80_1e80 => {
         // println!("ignoring writes to SPU registers");
       }
-      0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
-      0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
+      0x1f80_1000..=0x1f80_1023 => (), // println!("ignoring store to MEMCTRL address {:08x}", address),
+      0x1f80_1060 => (), // println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070 => {
         let mut interrupts = self.interrupts.get();
 
@@ -268,7 +270,7 @@ impl Bus {
         }
       }
       0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
-      0xfffe_0130 => println!("ignoring write to CACHE_CONTROL register at address 0xfffe_0130"),
+      0xfffe_0130 => self.cache_control = value,
       _ => panic!("write to unsupported address: {:06x}", address)
     }
   }

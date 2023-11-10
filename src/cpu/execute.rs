@@ -280,51 +280,59 @@ impl CPU {
   fn bne(&mut self, instr: Instruction) {
     let offset = instr.immediate_signed();
 
-    self.branch_if(offset, self.r[instr.rs()] != self.r[instr.rt()]);
+    self.branch_if(offset, self.r[instr.rs()] != self.r[instr.rt()], true);
   }
 
   fn bltz(&mut self, instr: Instruction) {
     let offset = instr.immediate_signed();
+
+    self.execute_load_delay();
+
     if instr.should_link() {
       self.set_reg(RA_REGISTER, self.next_pc);
     }
 
-    self.branch_if(offset, (self.r[instr.rs()] as i32) < 0);
+    self.branch_if(offset, (self.r[instr.rs()] as i32) < 0, false);
   }
 
   fn bgez(&mut self, instr: Instruction) {
     let offset = instr.immediate_signed();
+
+    self.execute_load_delay();
+
     if instr.should_link() {
       self.set_reg(RA_REGISTER, self.next_pc);
     }
 
-    self.branch_if(offset, (self.r[instr.rs()] as i32) >= 0);
+    self.branch_if(offset, (self.r[instr.rs()] as i32) >= 0, false);
   }
 
   fn bgtz(&mut self, instr: Instruction) {
     let offset = instr.immediate_signed();
 
-    self.branch_if(offset, (self.r[instr.rs()] as i32) > 0);
+    self.branch_if(offset, (self.r[instr.rs()] as i32) > 0, true);
   }
 
   fn blez(&mut self, instr: Instruction) {
     let offset = instr.immediate_signed();
 
-    self.branch_if(offset, (self.r[instr.rs()] as i32) <= 0);
+    self.branch_if(offset, (self.r[instr.rs()] as i32) <= 0, true);
   }
 
   fn beq(&mut self, instr: Instruction) {
     let offset = instr.immediate_signed();
 
-    self.branch_if(offset, self.r[instr.rs()] == self.r[instr.rt()]);
+    self.branch_if(offset, self.r[instr.rs()] == self.r[instr.rt()], true);
   }
 
-  fn branch_if(&mut self, offset: u32, condition: bool) {
+  fn branch_if(&mut self, offset: u32, condition: bool, should_execute_load_delay: bool) {
     if condition {
       self.branch(offset);
     }
 
-    self.execute_load_delay();
+    if should_execute_load_delay {
+      self.execute_load_delay();
+    }
   }
 
   fn branch(&mut self, offset: u32) {
@@ -830,10 +838,14 @@ impl CPU {
   }
 
   fn syscall(&mut self, _instr: Instruction) {
+    self.execute_load_delay();
+
     self.exception(Cause::SysCall);
   }
 
   fn op_break(&mut self, _instr: Instruction) {
+    self.execute_load_delay();
+
     self.exception(Cause::Break);
   }
 
