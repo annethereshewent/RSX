@@ -116,6 +116,7 @@ impl GPU {
 
     if self.previous_time != 0 {
       let diff = current_time - self.previous_time;
+      // println!("fps = {}", 1000 / diff);
       if diff < FPS_INTERVAL {
         sleep(Duration::from_millis((FPS_INTERVAL - diff) as u64));
       }
@@ -129,6 +130,7 @@ impl GPU {
 
   pub fn tick(&mut self, cycles: i32, timers: &mut Timers) {
     let elapsed_gpu_cycles = ((cycles as f64) * GPU_CYCLES_TO_CPU_CYCLES).round() as i32;
+
     let dotclock = self.get_dotclock();
 
     let previous_hblank = self.in_hblank();

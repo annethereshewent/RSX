@@ -162,4 +162,21 @@ impl Timer {
 
     irq_triggered
   }
+
+  pub fn update_state(&mut self, in_xblank: bool) {
+    if self.mode.sync_enable() {
+      let mode = self.mode.sync_mode(self.timer_id);
+
+      match mode {
+        SyncMode::PauseDuringXBlank => self.is_running = !in_xblank,
+        SyncMode::XBlankOnly => self.is_running = in_xblank,
+        SyncMode::ResetAtXBlank => self.is_running = true,
+        _ => ()
+      }
+    }
+  }
+
+  pub fn update_timer2_state(&mut self) {
+    self.is_running = self.check_timer2_sync_mode();
+  }
 }

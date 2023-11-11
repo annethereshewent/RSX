@@ -7,7 +7,9 @@ use super::timer::Timer;
 pub struct Timers {
   t: [Timer; 3],
   interrupts: Rc<Cell<InterruptRegisters>>,
-  div8: i32
+  div8: i32,
+  in_hblank: bool,
+  in_vblank: bool
 }
 
 impl Timers {
@@ -19,7 +21,9 @@ impl Timers {
         Timer::new(2)
       ],
       interrupts,
-      div8: 0
+      div8: 0,
+      in_hblank: false,
+      in_vblank: false
     }
   }
 
@@ -75,6 +79,8 @@ impl Timers {
   }
 
   pub fn set_hblank(&mut self, value: bool) {
+    self.in_hblank = value;
+
     let mut timer = self.t[0];
     let trigger_irq = timer.check_sync_mode(value);
 
@@ -95,6 +101,8 @@ impl Timers {
   }
 
   pub fn set_vblank(&mut self, value: bool) {
+    self.in_vblank = value;
+
     let mut timer = self.t[1];
     let trigger_irq = timer.check_sync_mode(value);
 
@@ -148,6 +156,14 @@ impl Timers {
         timer.mode.write(value as u16);
         timer.irq_inhibit = false;
         timer.xblank_occurred = false;
+
+        // finally update state based on sync mode
+        match timer.timer_id {
+          0 => timer.update_state(self.in_hblank),
+          1 => timer.update_state(self.in_vblank),
+          2 => timer.update_timer2_state(),
+          _ => unreachable!("can't happen")
+        }
       }
       8 => timer.target_value = value,
       _ => panic!("unsupported offset given to timer io: {offset}")
