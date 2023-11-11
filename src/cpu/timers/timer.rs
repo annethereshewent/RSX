@@ -87,7 +87,6 @@ impl Timer {
             self.xblank_occurred = true;
           }
         }
-        _ => unreachable!("shouldn't happen")
       }
     }
 

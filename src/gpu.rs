@@ -1,6 +1,6 @@
 use std::{rc::Rc, cell::Cell, time::{UNIX_EPOCH, SystemTime, Duration}, thread::sleep};
 
-use crate::cpu::{CPU_FREQUENCY, counter::{Counter, Device}, interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}, timers::timers::Timers};
+use crate::cpu::{CPU_FREQUENCY, interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}, timers::timers::Timers};
 
 use self::gpu_stat_register::{GpuStatRegister, VideoMode};
 
@@ -201,7 +201,7 @@ impl GPU {
     }
   }
 
-  fn transfer_to_vram(&mut self, val: u16) {
+  fn transfer_to_vram(&mut self, _val: u16) {
     // TODO
   }
 
