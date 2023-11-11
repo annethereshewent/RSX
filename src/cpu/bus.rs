@@ -25,9 +25,9 @@ impl Bus {
       bios,
       ram: [0; RAM_SIZE],
       gpu: GPU::new(interrupts.clone()),
+      timers: Timers::new(interrupts.clone()),
       counter: Counter::new(),
       interrupts,
-      timers: Timers::new(),
       dma,
       cycles: 0,
       cache_control: 0
@@ -144,11 +144,6 @@ impl Bus {
       0x1f80_1074 => {
 
         self.interrupts.get().mask.read() as u16
-      }
-      0x1f80_1080..=0x1f80_10ff => {
-
-        panic!("unimplemented reads to DMA");
-        0
       }
       _ => panic!("not implemented: {:08x}", address)
     }
@@ -278,8 +273,8 @@ impl Bus {
   pub fn tick(&mut self, cycles: i32) {
     self.cycles += cycles;
 
-    self.gpu.tick(cycles);
     self.timers.tick(cycles);
+    self.gpu.tick(cycles, &mut self.timers);
 
     let mut dma = self.dma.get();
     dma.tick_counter(cycles);

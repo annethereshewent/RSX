@@ -1,6 +1,6 @@
 use std::{rc::Rc, cell::Cell};
 
-use crate::cpu::{CPU_FREQUENCY, counter::{Counter, Device}, interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}};
+use crate::cpu::{CPU_FREQUENCY, counter::{Counter, Device}, interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}, timers::timers::Timers};
 
 use self::gpu_stat_register::{GpuStatRegister, VideoMode};
 
@@ -103,7 +103,7 @@ impl GPU {
     }
   }
 
-  pub fn tick(&mut self, cycles: i32) {
+  pub fn tick(&mut self, cycles: i32, timers: &mut Timers) {
     let elapsed_gpu_cycles = ((cycles as f64) * GPU_CYCLES_TO_CPU_CYCLES).round() as i32;
 
     self.cycles += elapsed_gpu_cycles;

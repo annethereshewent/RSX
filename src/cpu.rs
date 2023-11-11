@@ -173,7 +173,7 @@ impl CPU {
         dma.tick_gap();
         self.dma.set(dma);
 
-        if dma.chopping_enabled() {
+        if !dma.chopping_enabled() {
           return;
         }
       } else {
