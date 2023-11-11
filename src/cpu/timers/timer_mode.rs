@@ -53,11 +53,7 @@ impl TimerMode {
   pub fn is_free_run(&self) -> bool {
     let mode = (self.val >> 1) & 0b11;
 
-    if mode == 0 || mode == 3 {
-      return false;
-    }
-
-    true
+    ![0,3].contains(&mode)
   }
 
   pub fn sync_mode(&self, timer_id: usize) -> SyncMode {

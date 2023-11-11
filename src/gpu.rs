@@ -1,4 +1,4 @@
-use std::{rc::Rc, cell::Cell};
+use std::{rc::Rc, cell::Cell, time::{UNIX_EPOCH, SystemTime, Duration}, thread::sleep};
 
 use crate::cpu::{CPU_FREQUENCY, counter::{Counter, Device}, interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}, timers::timers::Timers};
 
@@ -6,8 +6,7 @@ use self::gpu_stat_register::{GpuStatRegister, VideoMode};
 
 pub mod gpu_stat_register;
 
-/* per https://github.com/KieronJ/rpsx/blob/master/src/psx/gpu.rs */
-const CMD_SIZE: [u32; 256] = [
+const COMMAND_LENGTH: [u32; 256] = [
   1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
   4, 4, 4, 4, 7, 7, 7, 7, 5, 5, 5, 5, 9, 9, 9, 9, 6, 6, 6, 6, 9, 9, 9, 9, 8, 8, 8, 8, 12, 12, 12,
   12, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
@@ -26,6 +25,8 @@ pub const GPU_FREQUENCY: f64 = 53_693_181.818;
 pub const GPU_CYCLES_TO_CPU_CYCLES: f64 = GPU_FREQUENCY / CPU_FREQUENCY;
 
 pub const CYCLES_IN_HSYNC: i32 = 200;
+
+pub const FPS_INTERVAL: u128 = 1000 / 60;
 
 enum GP0Mode {
   Command,
@@ -64,7 +65,8 @@ pub struct GPU {
   num_scanlines: u32,
   current_scanline: u32,
   pub frame_complete: bool,
-  interrupts: Rc<Cell<InterruptRegisters>>
+  interrupts: Rc<Cell<InterruptRegisters>>,
+  previous_time: u128
 }
 
 impl GPU {
@@ -101,13 +103,35 @@ impl GPU {
       current_scanline: 0,
       frame_complete: false,
       interrupts,
-      dotclock_cycles: 0
+      dotclock_cycles: 0,
+      previous_time: 0
     }
+  }
+
+  pub fn cap_fps(&mut self) {
+    let current_time = SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .expect("an error occurred")
+      .as_millis();
+
+    if self.previous_time != 0 {
+      let diff = current_time - self.previous_time;
+      if diff < FPS_INTERVAL {
+        sleep(Duration::from_millis((FPS_INTERVAL - diff) as u64));
+      }
+    }
+
+    self.previous_time = SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .expect("an error occurred")
+      .as_millis();
   }
 
   pub fn tick(&mut self, cycles: i32, timers: &mut Timers) {
     let elapsed_gpu_cycles = ((cycles as f64) * GPU_CYCLES_TO_CPU_CYCLES).round() as i32;
     let dotclock = self.get_dotclock();
+
+    let previous_hblank = self.in_hblank();
 
     self.cycles += elapsed_gpu_cycles;
     self.dotclock_cycles += elapsed_gpu_cycles;
@@ -115,8 +139,6 @@ impl GPU {
     timers.tick_dotclock(elapsed_gpu_cycles / dotclock);
 
     self.dotclock_cycles %= dotclock;
-
-    let previous_hblank = self.in_hblank();
 
     let horizontal_cycles = match self.stat.video_mode {
       VideoMode::Ntsc => 3413,
@@ -134,6 +156,7 @@ impl GPU {
 
       if self.current_scanline == (self.num_scanlines - 20) {
         self.frame_complete = true;
+        self.cap_fps();
         // entering VBlank
         let mut interrupts = self.interrupts.get();
 
@@ -145,7 +168,6 @@ impl GPU {
 
       if self.current_scanline == self.num_scanlines {
         // exiting vblank
-        timers.set_vblank(true);
         self.num_scanlines = if self.num_scanlines == 263 {
           262
         } else {
@@ -156,6 +178,7 @@ impl GPU {
           self.stat.even_odd = !self.stat.even_odd;
         }
         self.current_scanline = 0;
+        timers.set_vblank(false);
       }
     }
 
@@ -231,7 +254,7 @@ impl GPU {
 
     if self.words_remaining == 0 {
       let op_code = val >> 24;
-      self.words_remaining = CMD_SIZE[op_code as usize];
+      self.words_remaining = COMMAND_LENGTH[op_code as usize];
     }
 
     if self.words_remaining == 1 {

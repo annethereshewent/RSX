@@ -2,8 +2,8 @@ use super::timer_mode::{TimerMode, SyncMode};
 
 #[derive(Clone, Copy)]
 pub struct Timer {
-  pub value: u16,
-  pub target_value: u16,
+  pub value: u32,
+  pub target_value: u32,
   pub mode: TimerMode,
   pub timer_id: usize,
   pub irq_inhibit: bool,
@@ -95,14 +95,12 @@ impl Timer {
   }
 
   fn check_timer2_sync_mode(&self) -> bool {
-    if self.mode.sync_enable() && !self.mode.is_free_run() {
-      return false
-    }
-
-    true
+    !self.mode.sync_enable() || self.mode.is_free_run()
   }
 
   pub fn check_overflow_irq(&mut self) -> bool {
+    self.value &= 0xffff;
+
     self.mode.set_overflow_reached(true);
     if self.mode.irq_on_overflow() && !self.irq_inhibit {
       if self.mode.one_shot_mode() {
@@ -147,7 +145,10 @@ impl Timer {
     }
     let previous_val = self.value;
 
-    self.value = self.value.wrapping_add(cycles as u16);
+    // it'd be tempting to use u16 here and have wrapping_add take care of the overflow automatically, but
+    // there could be a case where the target value is really close to the overflow, and if the value overflows
+    // before the target check below, then there could be bugs as a result
+    self.value += cycles as u32;
 
     let mut irq_triggered = false;
 
@@ -155,7 +156,8 @@ impl Timer {
       irq_triggered = self.check_target_irq();
     }
 
-    if previous_val > self.value || self.value == 0xffff {
+
+    if self.value > 0xffff {
       irq_triggered = self.check_overflow_irq();
     }
 

@@ -125,7 +125,7 @@ impl Bus {
       // 0x1f00_0000..=0x1f08_0000 => 0xffffffff,
       0x1f80_1100..=0x1f80_1126 => {
         self.counter.tick(1);
-        self.timers.read(address)
+        self.timers.read(address) as u16
       }
       0x1fc0_0000..=0x1fc7_ffff => {
         let offset = (address - 0x1fc0_0000) as usize;
@@ -161,7 +161,7 @@ impl Bus {
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070..=0x1f80_1074 => panic!("unimplemented writes to interrupt registers"),
       0x1f80_1100..=0x1f80_112b => {
-        self.timers.write(address, value as u16);
+        self.timers.write(address, value as u32);
       }
       0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
       0xfffe_0130 => self.cache_control = value as u32,
@@ -203,7 +203,7 @@ impl Bus {
         self.interrupts.set(interrupts);
       }
       0x1f80_1100..=0x1f80_112b => {
-        self.timers.write(address, value);
+        self.timers.write(address, value as u32);
       }
       0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
       0xfffe_0130 => self.cache_control = value as u32,
@@ -253,7 +253,7 @@ impl Bus {
         self.dma.set(dma);
       }
       0x1f80_1100..=0x1f80_1126 => {
-        self.timers.write(address, value as u16);
+        self.timers.write(address, value);
       }
       0x1f80_1810..=0x1f80_1817 => {
         let offset = address - 0x1f80_1810;

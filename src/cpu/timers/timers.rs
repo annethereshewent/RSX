@@ -23,7 +23,7 @@ impl Timers {
     }
   }
 
-  pub fn read(&mut self, address: u32) -> u16 {
+  pub fn read(&mut self, address: u32) -> u32 {
     let timer_id = ((address & 0x30) >> 4) as usize;
     let offset = address & 0xcc;
 
@@ -34,10 +34,14 @@ impl Timers {
       4 => {
         let val = timer.mode.val;
 
+        // clear both bits on mode read
         timer.mode.set_overflow_reached(false);
-        timer.mode.set_target_reached(false);
+        // but only clear the target if the values don't match
+        if timer.value != timer.target_value {
+          timer.mode.set_target_reached(false);
+        }
 
-        val
+        val as u32
       }
       8 => timer.target_value,
       _ => panic!("unsupported offset given to timer io: {offset}")
@@ -91,13 +95,13 @@ impl Timers {
   }
 
   pub fn set_vblank(&mut self, value: bool) {
-    let trigger_irq = self.t[1].check_sync_mode(value);
+    let mut timer = self.t[1];
+    let trigger_irq = timer.check_sync_mode(value);
 
     if trigger_irq {
-      let mut timer = self.t[1];
       self.assert_interrupt(&mut timer);
-      self.t[1] = timer;
     }
+    self.t[1] = timer;
   }
 
   pub fn tick_dotclock(&mut self, cycles: i32) {
@@ -127,7 +131,7 @@ impl Timers {
   }
 
 
-  pub fn write(&mut self, address: u32, value: u16) {
+  pub fn write(&mut self, address: u32, value: u32) {
     let timer_id = ((address & 0x30) >> 4) as usize;
     let offset = address & 0xc;
 
@@ -141,7 +145,7 @@ impl Timers {
       4 => {
         // timer is reset to 0 on writes to mode
         timer.value = 0;
-        timer.mode.write(value);
+        timer.mode.write(value as u16);
         timer.irq_inhibit = false;
         timer.xblank_occurred = false;
       }
