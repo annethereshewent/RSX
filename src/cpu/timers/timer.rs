@@ -36,6 +36,17 @@ impl Timer {
     false
   }
 
+  pub fn check_overflow_irq(&mut self) -> bool {
+    if self.mode.irq_on_overflow() && !self.irq_inhibit {
+      if self.mode.one_shot_mode() {
+        self.irq_inhibit = true;
+      }
+      return true
+    }
+
+    false
+  }
+
   pub fn can_run(&self) -> bool {
     let clock_source = self.mode.clock_source();
     match self.timer_id {
@@ -69,13 +80,8 @@ impl Timer {
       irq_triggered = self.check_target_irq();
     }
 
-    if previous_val < self.value || self.value == 0xffff {
-      if self.mode.irq_on_overflow() && !self.irq_inhibit {
-        if self.mode.one_shot_mode() {
-          self.irq_inhibit = true;
-        }
-        irq_triggered = true;
-      }
+    if previous_val > self.value || self.value == 0xffff {
+      irq_triggered = self.check_overflow_irq();
     }
 
     irq_triggered
