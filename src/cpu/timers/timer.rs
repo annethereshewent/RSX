@@ -132,7 +132,7 @@ impl Timer {
     self.timer_id == 1 && self.mode.clock_source() & 0b1 == 1
   }
 
-  pub fn run_div8(&self) -> bool {
+  pub fn can_run_div8(&self) -> bool {
     let clock_source = self.mode.clock_source();
     self.timer_id == 2 && (clock_source == 2 || clock_source == 3)
   }

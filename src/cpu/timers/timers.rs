@@ -56,7 +56,7 @@ impl Timers {
         let ticks = self.div8 / 8;
         self.div8 &= 7;
 
-        if timer.run_div8() {
+        if timer.can_run_div8() {
           if timer.tick(ticks) {
             self.assert_interrupt(&mut timer);
           }
@@ -71,13 +71,14 @@ impl Timers {
   }
 
   pub fn set_hblank(&mut self, value: bool) {
-    let trigger_irq = self.t[0].check_sync_mode(value);
+    let mut timer = self.t[0];
+    let trigger_irq = timer.check_sync_mode(value);
 
     if trigger_irq {
-      let mut timer = self.t[0];
       self.assert_interrupt(&mut timer);
-      self.t[0] = timer;
     }
+
+    self.t[0] = timer;
 
     if value {
       let mut timer = self.t[1];
