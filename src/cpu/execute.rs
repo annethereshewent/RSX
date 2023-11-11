@@ -12,7 +12,7 @@ const PRIMARY_OPS: [&str; 64] = [
   "",     "",       "",     "",     "",
   "",     "",       "LB",   "LH",   "LWL",
   "LW",   "LBU",    "LHU",  "LWR",  "",
-  "SB",   "SH",     "SWL",  "SWI",  "",
+  "SB",   "SH",     "SWL",  "SW",  "",
   "",     "SWR",    "",     "LWC0", "LWC1",
   "LWC2", "LWC3",   "",     "",     "",
   "",     "SWC0",   "SWC1", "SWC2", "SWC3",
@@ -49,7 +49,7 @@ const PRIMARY_HANDLERS: [fn(&mut CPU, Instruction); 64] = [
   CPU::illegal,   CPU::illegal, CPU::lb,      CPU::lh,      CPU::lwl,
   CPU::lw,        CPU::lbu,     CPU::lhu,     CPU::lwr,     CPU::illegal,
   // 0x28
-  CPU::sb,        CPU::sh,      CPU::swl,     CPU::swi,     CPU::illegal,
+  CPU::sb,        CPU::sh,      CPU::swl,     CPU::sw,     CPU::illegal,
   CPU::illegal,   CPU::swr,     CPU::illegal, CPU::lwc0,    CPU::lwc1,
   // 0x32
   CPU::lwc2,      CPU::lwc3,    CPU::illegal, CPU::illegal, CPU::illegal,
@@ -504,12 +504,14 @@ impl CPU {
   }
 
   fn jalr(&mut self, instr: Instruction) {
-    self.set_reg(instr.rd(), self.next_pc);
+    let ra = self.next_pc;
 
     self.next_pc = self.r[instr.rs()];
     self.branch = true;
 
     self.execute_load_delay();
+
+    self.set_reg(instr.rd(), ra);
   }
 
   fn jr(&mut self, instr: Instruction) {
@@ -819,7 +821,7 @@ impl CPU {
     self.store_32(aligned_address, result);
   }
 
-  fn swi(&mut self, instr: Instruction) {
+  fn sw(&mut self, instr: Instruction) {
     if self.cop0.is_cache_disabled() {
       let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 

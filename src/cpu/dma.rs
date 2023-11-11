@@ -209,9 +209,9 @@ impl DMA {
     for channel in &mut self.channels {
       if channel.gap_ticks > 0 {
         channel.gap_ticks -= self.cycles as i32;
-        self.cycles = 0;
       }
     }
+    self.cycles = 0;
   }
 
   pub fn chopping_enabled(&self) -> bool {
