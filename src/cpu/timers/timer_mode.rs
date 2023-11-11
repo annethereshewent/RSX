@@ -1,3 +1,10 @@
+pub enum SyncMode {
+  PauseDuringXBlank,
+  ResetAtXBlank,
+  XBlankOnly,
+  PauseThenFreeRun
+}
+
 #[derive(Clone, Copy)]
 pub struct TimerMode {
   pub val: u16
@@ -43,8 +50,28 @@ impl TimerMode {
     self.val & 0b1 == 1
   }
 
-  pub fn sync_mode(&self) -> u16 {
-    (self.val >> 1) & 0b11
+  pub fn is_free_run(&self) -> bool {
+    let mode = (self.val >> 1) & 0b11;
+
+    if mode == 0 || mode == 3 {
+      return false;
+    }
+
+    true
+  }
+
+  pub fn sync_mode(&self, timer_id: usize) -> SyncMode {
+    if timer_id == 2 {
+      unreachable!("shouldn't happen");
+    } else {
+      match (self.val >> 1) & 0b11 {
+        0 => SyncMode::PauseDuringXBlank,
+        1 => SyncMode::ResetAtXBlank,
+        2 => SyncMode::XBlankOnly,
+        3 => SyncMode::PauseThenFreeRun,
+        _ => unreachable!("can't happen")
+      }
+    }
   }
 
 

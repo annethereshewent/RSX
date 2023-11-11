@@ -60,6 +60,7 @@ pub struct GPU {
   halfwords_remaining: u32,
   gp0_mode: GP0Mode,
   cycles: i32,
+  dotclock_cycles: i32,
   num_scanlines: u32,
   current_scanline: u32,
   pub frame_complete: bool,
@@ -99,14 +100,23 @@ impl GPU {
       num_scanlines: 263,
       current_scanline: 0,
       frame_complete: false,
-      interrupts
+      interrupts,
+      dotclock_cycles: 0
     }
   }
 
   pub fn tick(&mut self, cycles: i32, timers: &mut Timers) {
     let elapsed_gpu_cycles = ((cycles as f64) * GPU_CYCLES_TO_CPU_CYCLES).round() as i32;
+    let dotclock = self.get_dotclock();
 
     self.cycles += elapsed_gpu_cycles;
+    self.dotclock_cycles += elapsed_gpu_cycles;
+
+    timers.tick_dotclock(elapsed_gpu_cycles / dotclock);
+
+    self.dotclock_cycles %= dotclock;
+
+    let previous_hblank = self.in_hblank();
 
     let horizontal_cycles = match self.stat.video_mode {
       VideoMode::Ntsc => 3413,
@@ -128,12 +138,14 @@ impl GPU {
         let mut interrupts = self.interrupts.get();
 
         interrupts.status.set_interrupt(Interrupt::Vblank);
+        timers.set_vblank(true);
 
         self.interrupts.set(interrupts);
       }
 
       if self.current_scanline == self.num_scanlines {
         // exiting vblank
+        timers.set_vblank(true);
         self.num_scanlines = if self.num_scanlines == 263 {
           262
         } else {
@@ -144,6 +156,16 @@ impl GPU {
           self.stat.even_odd = !self.stat.even_odd;
         }
         self.current_scanline = 0;
+      }
+    }
+
+    if self.in_hblank() {
+      if !previous_hblank {
+        timers.set_hblank(true);
+      }
+    } else {
+      if previous_hblank {
+        timers.set_hblank(false);
       }
     }
 
@@ -158,6 +180,22 @@ impl GPU {
 
   fn transfer_to_vram(&mut self, val: u16) {
     // TODO
+  }
+
+  pub fn in_hblank(&self) -> bool {
+    self.cycles < self.display_horizontal_start as i32
+      || self.cycles >= self.display_horizontal_end as i32
+  }
+
+  pub fn get_dotclock(&self) -> i32 {
+    match self.stat.horizontal_resolution {
+      320 => 8,
+      640 => 4,
+      256 => 10,
+      512 => 5,
+      368 => 7,
+      _ => unreachable!(),
+    }
   }
 
   pub fn stat_value(&self) -> u32 {
@@ -293,8 +331,6 @@ impl GPU {
       GPU::parse_position(self.command_buffer[2]),
       GPU::parse_position(self.command_buffer[4])
     ];
-
-
   }
 
   fn textured_quad_with_blending(&mut self) {

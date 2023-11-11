@@ -23,15 +23,22 @@ impl Timers {
     }
   }
 
-  pub fn read(&self, address: u32) -> u16 {
+  pub fn read(&mut self, address: u32) -> u16 {
     let timer_id = ((address & 0x30) >> 4) as usize;
     let offset = address & 0xcc;
 
-    let timer = self.t[timer_id];
+    let timer = &mut self.t[timer_id];
 
     match offset {
       0 => timer.value,
-      4 => timer.mode.val,
+      4 => {
+        let val = timer.mode.val;
+
+        timer.mode.set_overflow_reached(false);
+        timer.mode.set_target_reached(false);
+
+        val
+      }
       8 => timer.target_value,
       _ => panic!("unsupported offset given to timer io: {offset}")
     }
@@ -61,6 +68,45 @@ impl Timers {
       }
       self.t[i] = timer;
     }
+  }
+
+  pub fn set_hblank(&mut self, value: bool) {
+    let trigger_irq = self.t[0].check_sync_mode(value);
+
+    if trigger_irq {
+      let mut timer = self.t[0];
+      self.assert_interrupt(&mut timer);
+      self.t[0] = timer;
+    }
+
+    if value {
+      let mut timer = self.t[1];
+      if timer.can_run_hblank_clock() && timer.tick(1) {
+        self.assert_interrupt(&mut timer);
+
+      }
+      self.t[1] = timer;
+    }
+  }
+
+  pub fn set_vblank(&mut self, value: bool) {
+    let trigger_irq = self.t[1].check_sync_mode(value);
+
+    if trigger_irq {
+      let mut timer = self.t[1];
+      self.assert_interrupt(&mut timer);
+      self.t[1] = timer;
+    }
+  }
+
+  pub fn tick_dotclock(&mut self, cycles: i32) {
+    let mut timer = self.t[0];
+
+    if timer.can_run_dotclock() && timer.tick(cycles) {
+      self.assert_interrupt(&mut timer);
+    }
+
+    self.t[0] = timer;
   }
 
 
@@ -94,9 +140,9 @@ impl Timers {
       4 => {
         // timer is reset to 0 on writes to mode
         timer.value = 0;
-
         timer.mode.write(value);
         timer.irq_inhibit = false;
+        timer.xblank_occurred = false;
       }
       8 => timer.target_value = value,
       _ => panic!("unsupported offset given to timer io: {offset}")

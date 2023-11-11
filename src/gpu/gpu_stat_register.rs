@@ -46,6 +46,7 @@ pub struct GpuStatRegister {
   pub reverse_flag: bool,
   pub hres1: u8,
   pub hres2: u8,
+  pub horizontal_resolution: u16,
   pub vres: u8,
   pub vertical_resolution: u16,
   pub video_mode: VideoMode,
@@ -87,7 +88,8 @@ impl GpuStatRegister {
       ready_rcv_dma_block: true,
       ready_vram_to_cpu: true,
       even_odd: false,
-      vertical_resolution: 0
+      vertical_resolution: 240,
+      horizontal_resolution: 320
     }
   }
 
@@ -121,6 +123,17 @@ impl GpuStatRegister {
     self.vres = ((val >> 2) & 0b1) as u8;
 
     self.vertical_resolution = 240;
+    self.horizontal_resolution = if self.hres2 == 1 {
+      368
+    } else {
+      match self.hres2 {
+        0 => 256,
+        1 => 320,
+        2 => 512,
+        3 => 640,
+        _ => unreachable!("can't happen")
+      }
+    };
 
     self.display_color_depth = if ((val >> 4) & 0b1) == 1 {
       ColorDepth::TwentyFourBit

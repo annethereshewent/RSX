@@ -1,4 +1,4 @@
-use super::timer_mode::TimerMode;
+use super::timer_mode::{TimerMode, SyncMode};
 
 #[derive(Clone, Copy)]
 pub struct Timer {
@@ -7,7 +7,8 @@ pub struct Timer {
   pub mode: TimerMode,
   pub timer_id: usize,
   pub irq_inhibit: bool,
-  is_running: bool
+  is_running: bool,
+  pub xblank_occurred: bool
 }
 
 impl Timer {
@@ -18,11 +19,13 @@ impl Timer {
       mode: TimerMode::new(),
       timer_id,
       irq_inhibit: false,
-      is_running: true
+      is_running: true,
+      xblank_occurred: false
     }
   }
 
   pub fn check_target_irq(&mut self) -> bool {
+    self.mode.set_target_reached(true);
     if self.mode.reset_on_target() {
       self.value %= self.target_value;
     }
@@ -36,7 +39,71 @@ impl Timer {
     false
   }
 
+  pub fn check_sync_mode(&mut self, entering_xblank: bool) -> bool {
+    if ![0,1].contains(&self.timer_id) {
+      return false;
+    }
+    let mut trigger_irq = false;
+
+
+    if self.mode.sync_enable() {
+      match self.mode.sync_mode(self.timer_id) {
+        SyncMode::PauseDuringXBlank => {
+          if entering_xblank {
+            self.is_running = false;
+          }
+        }
+        SyncMode::ResetAtXBlank => {
+          if entering_xblank {
+            self.value = 0;
+
+            if self.target_value == 0 && self.check_target_irq() {
+              trigger_irq = true;
+            }
+          }
+        }
+        SyncMode::XBlankOnly => {
+          if entering_xblank {
+            self.is_running = true;
+          } else {
+            self.value = 0;
+
+            if self.target_value == 0 && self.check_target_irq() {
+              trigger_irq = true;
+            }
+
+            self.is_running = false;
+          }
+        }
+        SyncMode::PauseThenFreeRun => {
+          if !self.xblank_occurred {
+            self.value = 0;
+            self.is_running = false;
+          } else if !entering_xblank {
+            self.is_running = true;
+          }
+
+          if entering_xblank && !self.xblank_occurred {
+            self.xblank_occurred = true;
+          }
+        }
+        _ => unreachable!("shouldn't happen")
+      }
+    }
+
+    trigger_irq
+  }
+
+  fn check_timer2_sync_mode(&self) -> bool {
+    if self.mode.sync_enable() && !self.mode.is_free_run() {
+      return false
+    }
+
+    true
+  }
+
   pub fn check_overflow_irq(&mut self) -> bool {
+    self.mode.set_overflow_reached(true);
     if self.mode.irq_on_overflow() && !self.irq_inhibit {
       if self.mode.one_shot_mode() {
         self.irq_inhibit = true;
@@ -52,9 +119,17 @@ impl Timer {
     match self.timer_id {
       0 => clock_source & 0b1 == 0,
       1 => clock_source & 0b1 == 0,
-      2 => clock_source == 0 || clock_source == 1,
+      2 => clock_source == 0 || clock_source == 1 || self.check_timer2_sync_mode(),
       _ => unreachable!("can't happen")
     }
+  }
+
+  pub fn can_run_dotclock(&self) -> bool {
+    self.timer_id == 0 && self.mode.clock_source() & 0b1 == 1
+  }
+
+  pub fn can_run_hblank_clock(&self) -> bool {
+    self.timer_id == 1 && self.mode.clock_source() & 0b1 == 1
   }
 
   pub fn run_div8(&self) -> bool {
