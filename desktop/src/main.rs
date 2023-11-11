@@ -28,6 +28,7 @@ pub fn main() {
 
     cpu.bus.gpu.frame_complete = false;
 
+    frontend.render(&mut cpu.bus.gpu);
     frontend.handle_events();
   }
 }

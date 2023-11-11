@@ -5,6 +5,7 @@ use crate::cpu::{CPU_FREQUENCY, interrupt::{interrupt_registers::InterruptRegist
 use self::gpu_stat_register::{GpuStatRegister, VideoMode};
 
 pub mod gpu_stat_register;
+pub mod render;
 
 const COMMAND_LENGTH: [u32; 256] = [
   1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
@@ -28,9 +29,28 @@ pub const CYCLES_IN_HSYNC: i32 = 200;
 
 pub const FPS_INTERVAL: u128 = 1000 / 60;
 
-enum GP0Mode {
-  Command,
-  ImageTransfer
+struct ImageTransfer {
+  pub x: u32,
+  pub y: u32,
+  pub w: u32,
+  pub h: u32,
+  pub transferred_x: u32,
+  pub transferred_y: u32,
+  pub is_active: bool
+}
+
+impl ImageTransfer {
+  pub fn new() -> Self {
+    Self {
+      x: 0,
+      y: 0,
+      transferred_x: 0,
+      transferred_y: 0,
+      w: 0,
+      h: 0,
+      is_active: false
+    }
+  }
 }
 
 pub struct GPU {
@@ -58,15 +78,17 @@ pub struct GPU {
   command_buffer: [u32; 12],
   command_index: usize,
   words_remaining: u32,
-  halfwords_remaining: u32,
-  gp0_mode: GP0Mode,
+  // halfwords_remaining: u32,
   cycles: i32,
   dotclock_cycles: i32,
   num_scanlines: u32,
   current_scanline: u32,
   pub frame_complete: bool,
   interrupts: Rc<Cell<InterruptRegisters>>,
-  previous_time: u128
+  previous_time: u128,
+  image_transfer: ImageTransfer,
+  vram: Box<[u8]>,
+  pub picture: Box<[u8]>
 }
 
 impl GPU {
@@ -86,25 +108,27 @@ impl GPU {
       drawing_y_offset: 0,
       drawing_vram_x_start: 0,
       drawing_vram_y_start: 0,
-      display_horizontal_start: 0,
-      display_horizontal_end: 0,
-      display_line_start: 0,
-      display_line_end: 0,
+      display_horizontal_start: 512,
+      display_horizontal_end: 3072,
+      display_line_start: 16,
+      display_line_end: 256,
       texture_window_x_offset: 0,
       display_vram_x_start: 0,
       display_vram_y_start: 0,
       command_buffer: [0; 12],
       command_index: 0,
       words_remaining: 0,
-      halfwords_remaining: 0,
-      gp0_mode: GP0Mode::Command,
+      // halfwords_remaining: 0,
       cycles: 0,
       num_scanlines: 263,
       current_scanline: 0,
       frame_complete: false,
       interrupts,
       dotclock_cycles: 0,
-      previous_time: 0
+      previous_time: 0,
+      image_transfer: ImageTransfer::new(),
+      vram: vec![0; 0x100000].into_boxed_slice(),
+      picture: vec![0; 1024 * 512 * 3].into_boxed_slice()
     }
   }
 
@@ -116,7 +140,6 @@ impl GPU {
 
     if self.previous_time != 0 {
       let diff = current_time - self.previous_time;
-      // println!("fps = {}", 1000 / diff);
       if diff < FPS_INTERVAL {
         sleep(Duration::from_millis((FPS_INTERVAL - diff) as u64));
       }
@@ -203,8 +226,34 @@ impl GPU {
     }
   }
 
-  fn transfer_to_vram(&mut self, _val: u16) {
-    // TODO
+  fn transfer_to_vram(&mut self, val: u16) {
+    let curr_x = self.image_transfer.x + self.image_transfer.transferred_x;
+    let curr_y = self.image_transfer.y + self.image_transfer.transferred_y;
+
+    self.image_transfer.transferred_x += 1;
+
+    let vram_address = self.get_vram_address(curr_x & 0x3ff, curr_y & 0x1ff);
+
+    if self.image_transfer.transferred_x == self.image_transfer.w {
+      self.image_transfer.transferred_x = 0;
+
+      self.image_transfer.transferred_y += 1;
+
+      if self.image_transfer.transferred_y == self.image_transfer.h {
+        self.image_transfer.is_active = false;
+      }
+    }
+
+    self.vram[vram_address] = val as u8;
+    self.vram[vram_address + 1] = (val >> 8) as u8;
+  }
+
+  pub fn get_vram_address(&mut self, x: u32, y: u32) -> usize {
+    2 * (((x & 0x3ff) + 1024 * (y & 0x1ff))) as usize
+  }
+
+  pub fn get_vram_address_24(&mut self, x: u32, y: u32) -> usize {
+    3 * (((x & 0x3ff) + 2048 * (y & 0x1ff))) as usize
   }
 
   pub fn in_hblank(&self) -> bool {
@@ -234,18 +283,11 @@ impl GPU {
   }
 
   pub fn gp0(&mut self, val: u32) {
-    if matches!(self.gp0_mode, GP0Mode::ImageTransfer) {
+    if self.image_transfer.is_active {
       self.transfer_to_vram(val as u16);
 
-      self.halfwords_remaining -= 1;
-
-      if self.halfwords_remaining > 0 {
+      if self.image_transfer.is_active {
         self.transfer_to_vram((val >> 16) as u16);
-        self.halfwords_remaining -= 1;
-      }
-
-      if self.halfwords_remaining == 0 {
-        self.gp0_mode = GP0Mode::Command;
       }
 
       return;
@@ -312,7 +354,6 @@ impl GPU {
   fn gp1_clear_command_buffer(&mut self) {
     self.command_index = 0;
     self.words_remaining = 0;
-    self.gp0_mode = GP0Mode::Command;
   }
 
   fn gp1_acknowledge_interrupt(&mut self) {
@@ -363,19 +404,26 @@ impl GPU {
   }
 
   fn gp0_image_transfer_to_vram(&mut self) {
-    let _val = self.command_buffer[0];
     // TODO: add coordinates from command buffer index 1
+    let coordinates = self.command_buffer[1];
     let dimensions = self.command_buffer[2];
 
-    let w = dimensions & 0xffff;
-    let h = dimensions >> 16;
+    let x = coordinates & 0x3ff;
+    let y = (coordinates >> 16) & 0x3ff;
 
-    let image_size = w * h;
+    let w = dimensions & 0x3ff;
+    let h = (dimensions >> 16) & 0x1ff;
 
-    self.halfwords_remaining = image_size;
+    self.image_transfer.x = x;
+    self.image_transfer.y = y;
 
-    // TODO: actually transfer image data to vram
-    self.gp0_mode = GP0Mode::ImageTransfer;
+    self.image_transfer.transferred_x = 0;
+    self.image_transfer.transferred_y = 0;
+
+    self.image_transfer.w = if w > 0 { w } else { 0x400 };
+    self.image_transfer.h = if h > 0 { h } else { 0x200 };
+
+    self.image_transfer.is_active = true;
   }
 
   fn gp0_mask_bit(&mut self) {
