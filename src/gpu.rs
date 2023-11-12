@@ -404,7 +404,22 @@ impl GPU {
 }
 
   fn gp0_shaded_quadrilateral(&mut self) {
-    // TODO
+    let mut colors = [
+      GPU::parse_color(self.command_buffer[0]),
+      GPU::parse_color(self.command_buffer[2]),
+      GPU::parse_color(self.command_buffer[4]),
+      GPU::parse_color(self.command_buffer[6])
+    ];
+
+    let mut positions = [
+      self.parse_position(self.command_buffer[1]),
+      self.parse_position(self.command_buffer[3]),
+      self.parse_position(self.command_buffer[5]),
+      self.parse_position(self.command_buffer[7])
+    ];
+
+    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], true);
+    self.rasterize_triangle(&mut colors[1..4], &mut positions[1..4], true);
   }
 
   fn gp0_shaded_triangle(&mut self) {
@@ -420,7 +435,7 @@ impl GPU {
       self.parse_position(self.command_buffer[5])
     ];
 
-    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3]);
+    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], true);
   }
 
   fn textured_quad_with_blending(&mut self) {
@@ -428,7 +443,6 @@ impl GPU {
   }
 
   fn gp0_image_transfer_to_vram(&mut self) {
-    // TODO: add coordinates from command buffer index 1
     let coordinates = self.command_buffer[1];
     let dimensions = self.command_buffer[2];
 
@@ -457,7 +471,17 @@ impl GPU {
   }
 
   fn gp0_monochrome_quadrilateral(&mut self) {
-    // TODO
+    let color = GPU::parse_color(self.command_buffer[0]);
+
+    let mut positions = [
+      self.parse_position(self.command_buffer[1]),
+      self.parse_position(self.command_buffer[2]),
+      self.parse_position(self.command_buffer[3]),
+      self.parse_position(self.command_buffer[4])
+    ];
+
+    self.rasterize_triangle(&mut [color, color, color][0..3], &mut positions[0..3], false);
+    self.rasterize_triangle(&mut [color, color, color][0..3], &mut positions[1..4], false);
   }
 
   fn gp0_texture_window(&mut self) {

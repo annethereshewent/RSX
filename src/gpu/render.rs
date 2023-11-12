@@ -85,7 +85,7 @@ impl GPU {
     self.vram[vram_address + 1] = (value >> 8) as u8;
   }
 
-  pub fn rasterize_triangle(&mut self, c: &mut [(u8, u8, u8)], p: &mut [(i32, i32)]) {
+  pub fn rasterize_triangle(&mut self, c: &mut [(u8, u8, u8)], p: &mut [(i32, i32)], is_shaded: bool) {
     let mut area = GPU::get_2d_area(p[0], p[1], p[2]);
 
     if area == 0 {
@@ -146,6 +146,8 @@ impl GPU {
     let w1_bias = -(GPU::is_top_left(b20, a20) as i32);
     let w2_bias = -(GPU::is_top_left(b01, a01) as i32);
 
+    let mut color = c[0];
+
     while curr_p.1 < max_y {
       curr_p.0 = min_x;
 
@@ -156,7 +158,9 @@ impl GPU {
         if ((w0 + w0_bias) | (w1 + w1_bias) | (w2 + w2_bias)) >= 0 {
           let vec_3d = (w0, w1, w2);
 
-          let color = GPU::interpolate_color(area as i32, vec_3d, c[0], c[1], c[2]);
+          if is_shaded {
+            color = GPU::interpolate_color(area as i32, vec_3d, c[0], c[1], c[2]);
+          }
 
           self.render_pixel(curr_p, color);
         }
