@@ -181,7 +181,7 @@ impl GPU {
 
       if self.current_scanline == (self.num_scanlines - 20) {
         self.frame_complete = true;
-        self.cap_fps();
+        // self.cap_fps();
         // entering VBlank
         let mut interrupts = self.interrupts.get();
 
@@ -377,26 +377,50 @@ impl GPU {
     (r, g, b)
   }
 
-  pub fn parse_position(val: u32) -> (i16, i16) {
-    (val as i16, (val >> 16) as i16)
+  pub fn parse_position(&self, val: u32) -> (i32, i32) {
+    let mut x = (val & 0xffff) as i32;
+    let mut y = (val >> 16) as i32;
+
+    x = GPU::sign_extend_i32(x, 11);
+    y = GPU::sign_extend_i32(y, 11);
+
+    let x_offset = self.drawing_x_offset as i32;
+    let y_offset = self.drawing_y_offset as i32;
+
+    (x + x_offset, y + y_offset)
   }
+
+  fn sign_extend_i32(mut value: i32, size: usize) -> i32 {
+    let sign = 1 << (size - 1);
+    let mask = (1 << size) - 1;
+
+    if (value & sign) != 0 {
+        value |= !mask;
+    } else {
+        value &= mask;
+    }
+
+    return value;
+}
 
   fn gp0_shaded_quadrilateral(&mut self) {
     // TODO
   }
 
   fn gp0_shaded_triangle(&mut self) {
-    let colors = [
+    let mut colors = [
       GPU::parse_color(self.command_buffer[0]),
       GPU::parse_color(self.command_buffer[2]),
       GPU::parse_color(self.command_buffer[4])
     ];
 
-    let positions = [
-      GPU::parse_position(self.command_buffer[0]),
-      GPU::parse_position(self.command_buffer[2]),
-      GPU::parse_position(self.command_buffer[4])
+    let mut positions = [
+      self.parse_position(self.command_buffer[1]),
+      self.parse_position(self.command_buffer[3]),
+      self.parse_position(self.command_buffer[5])
     ];
+
+    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3]);
   }
 
   fn textured_quad_with_blending(&mut self) {
