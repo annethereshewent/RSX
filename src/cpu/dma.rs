@@ -1,10 +1,6 @@
-use std::{rc::Rc, cell::Cell};
-
-use crate::cpu::interrupt::interrupt_register::Interrupt;
-
 use self::{dma_interrupt::DmaInterrupt, dma_channel::DmaChannel, dma_channel_control_register::SyncMode};
 
-use super::{counter::{Counter, Device}, bus::Bus, interrupt::interrupt_registers::InterruptRegisters};
+use super::bus::Bus;
 
 pub mod dma_interrupt;
 pub mod dma_channel;

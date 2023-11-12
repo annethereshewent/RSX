@@ -1,8 +1,7 @@
 use rustation::gpu::GPU;
-use sdl2::{video::{Window}, Sdl, EventPump, event::Event, render::Canvas, pixels::PixelFormatEnum};
+use sdl2::{video::Window, EventPump, event::Event, render::Canvas, pixels::PixelFormatEnum};
 
 pub struct SdlFrontend {
-  sdl_context: Sdl,
   event_pump: EventPump,
   canvas: Canvas<Window>
 }
@@ -24,7 +23,6 @@ impl SdlFrontend {
     let event_pump = sdl_context.event_pump().unwrap();
 
     Self {
-      sdl_context,
       event_pump,
       canvas
     }
@@ -33,8 +31,8 @@ impl SdlFrontend {
   pub fn handle_events(&mut self) {
     for event in self.event_pump.poll_iter() {
       match event {
-        Event::KeyDown { keycode: Some(k), .. } => (),
-        Event::KeyUp { keycode: Some(k), .. } => (),
+        Event::KeyDown { keycode: Some(_k), .. } => (),
+        Event::KeyUp { keycode: Some(_k), .. } => (),
         Event::Quit { .. } => std::process::exit(0),
         _ => {},
     };

@@ -328,11 +328,11 @@ impl GPU {
     }
   }
 
-  fn read_8bit_clut(&self, uv: (i32, i32), clut: (i32, i32)) -> Option<(u8,u8,u8)> {
+  fn read_8bit_clut(&self, _uv: (i32, i32), _clut: (i32, i32)) -> Option<(u8,u8,u8)> {
     Some((0,0,0))
   }
 
-  fn read_texture(&self, uv: (i32, i32)) -> Option<(u8,u8,u8)> {
+  fn read_texture(&self, _uv: (i32, i32)) -> Option<(u8,u8,u8)> {
     Some((0,0,0))
   }
 }
