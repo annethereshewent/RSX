@@ -299,11 +299,11 @@ impl CPU {
   }
 
   pub fn fetch_instruction(&mut self) -> u32 {
-    self.bus.tick(5);
-
     if self.bus.cache_enabled() && self.pc < 0xa0000000 {
       return self.fetch_instruction_cache();
     }
+
+    self.bus.tick(5);
 
     self.bus.mem_read_32(self.pc)
   }
