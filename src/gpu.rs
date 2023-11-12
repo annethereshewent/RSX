@@ -2,7 +2,7 @@ use std::{rc::Rc, cell::Cell, time::{UNIX_EPOCH, SystemTime, Duration}, thread::
 
 use crate::cpu::{CPU_FREQUENCY, interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}, timers::timers::Timers};
 
-use self::gpu_stat_register::{GpuStatRegister, VideoMode};
+use self::gpu_stat_register::{GpuStatRegister, VideoMode, ColorDepth, TextureColors};
 
 pub mod gpu_stat_register;
 pub mod render;
@@ -28,6 +28,23 @@ pub const GPU_CYCLES_TO_CPU_CYCLES: f64 = GPU_FREQUENCY / CPU_FREQUENCY;
 pub const CYCLES_IN_HSYNC: i32 = 200;
 
 pub const FPS_INTERVAL: u128 = 1000 / 60;
+
+
+#[derive(Clone, Copy)]
+struct TextureCache {
+  tag: isize,
+  data: [u8; 8]
+}
+
+
+impl TextureCache {
+  pub fn new() -> Self {
+    Self {
+      tag: -1,
+      data: [0; 8]
+    }
+  }
+}
 
 struct ImageTransfer {
   pub x: u32,
@@ -88,7 +105,10 @@ pub struct GPU {
   previous_time: u128,
   image_transfer: ImageTransfer,
   vram: Box<[u8]>,
-  pub picture: Box<[u8]>
+  pub picture: Box<[u8]>,
+  texture_cache: [TextureCache; 256],
+  clut_tag: isize,
+  clut_cache: [u16; 256]
 }
 
 impl GPU {
@@ -128,7 +148,10 @@ impl GPU {
       previous_time: 0,
       image_transfer: ImageTransfer::new(),
       vram: vec![0; 0x100000].into_boxed_slice(),
-      picture: vec![0; 1024 * 512 * 3].into_boxed_slice()
+      picture: vec![0; 1024 * 512 * 3].into_boxed_slice(),
+      texture_cache: [TextureCache::new(); 256],
+      clut_tag: -1,
+      clut_cache: [0; 256]
     }
   }
 
@@ -319,7 +342,7 @@ impl GPU {
       0x00 => (), // NOP,
       0x01 => (), // clear cache, not implemented
       0x28 => self.gp0_monochrome_quadrilateral(),
-      0x2c => self.textured_quad_with_blending(),
+      0x2c => self.gp0_textured_quad_with_blending(),
       0x30 => self.gp0_shaded_triangle(),
       0x38 => self.gp0_shaded_quadrilateral(),
       0xa0 => self.gp0_image_transfer_to_vram(),
@@ -418,8 +441,8 @@ impl GPU {
       self.parse_position(self.command_buffer[7])
     ];
 
-    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], true);
-    self.rasterize_triangle(&mut colors[1..4], &mut positions[1..4], true);
+    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], None, None, true, false);
+    self.rasterize_triangle(&mut colors[1..4], &mut positions[1..4], None, None, true, false);
   }
 
   fn gp0_shaded_triangle(&mut self) {
@@ -435,11 +458,73 @@ impl GPU {
       self.parse_position(self.command_buffer[5])
     ];
 
-    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], true);
+    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], None, None, true, false);
   }
 
-  fn textured_quad_with_blending(&mut self) {
-    // TODO
+  fn gp0_textured_quad_with_blending(&mut self) {
+    let color = GPU::parse_color(self.command_buffer[0]);
+    let mut colors = [
+      color,
+      color,
+      color,
+      color
+    ];
+
+    let mut positions = [
+      self.parse_position(self.command_buffer[1]),
+      self.parse_position(self.command_buffer[3]),
+      self.parse_position(self.command_buffer[5]),
+      self.parse_position(self.command_buffer[7])
+    ];
+
+    let mut texture_positions = [
+      GPU::parse_texture_coords(self.command_buffer[2]),
+      GPU::parse_texture_coords(self.command_buffer[4]),
+      GPU::parse_texture_coords(self.command_buffer[6]),
+      GPU::parse_texture_coords(self.command_buffer[8]),
+    ];
+
+    let clut = GPU::to_clut(self.command_buffer[2]);
+    self.parse_texture_data(self.command_buffer[4]);
+
+    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], Some(&mut texture_positions[0..3]), Some(clut), false, true);
+    self.rasterize_triangle(&mut colors[1..4], &mut positions[1..4], Some(&mut texture_positions[1..4]), Some(clut), false, true);
+
+  }
+
+  fn parse_texture_coords(command: u32) -> (i32, i32) {
+    let x = (command & 0xff) as i32;
+    let y = ((command >> 8) & 0xff) as i32;
+
+    (x, y)
+  }
+
+  fn parse_texture_data(&mut self, command: u32) {
+    let texture_data = command >> 16;
+
+    self.texture_rectangle_x_flip = (texture_data >> 13) & 0b1 == 1;
+    self.texture_rectangle_y_flip = (texture_data >> 12) & 0b1 == 1;
+    self.stat.texture_y_base2 = ((texture_data >> 11) & 0b1) as u8;
+    self.stat.draw_to_display = (texture_data >> 10) & 0b1 == 1;
+    self.stat.dither_enabled = (texture_data >> 9) & 0b1 == 1;
+
+    self.stat.texture_colors = match (texture_data >> 7) & 0b11 {
+      0 => TextureColors::FourBit,
+      1 => TextureColors::EightBit,
+      2 => TextureColors::FifteenBit,
+      n => panic!("invalid value received: {n}")
+    };
+
+    self.stat.semi_transparency = ((texture_data >> 5) & 0b11) as u8;
+    self.stat.texture_x_base = (texture_data & 0xf) as u8;
+    self.stat.texture_y_base1 = ((texture_data >> 4) & 0b1) as u8;
+  }
+
+  fn to_clut(command: u32) -> (i32, i32) {
+    let x = ((command >> 16) & 0x3f) << 4;
+    let y = ((command >> 16) & 0x7fc0) >> 6;
+
+    (x as i32, y as i32)
   }
 
   fn gp0_image_transfer_to_vram(&mut self) {
@@ -480,8 +565,8 @@ impl GPU {
       self.parse_position(self.command_buffer[4])
     ];
 
-    self.rasterize_triangle(&mut [color, color, color][0..3], &mut positions[0..3], false);
-    self.rasterize_triangle(&mut [color, color, color][0..3], &mut positions[1..4], false);
+    self.rasterize_triangle(&mut [color, color, color][0..3], &mut positions[0..3], None, None, false, false);
+    self.rasterize_triangle(&mut [color, color, color][0..3], &mut positions[1..4], None, None, false, false);
   }
 
   fn gp0_texture_window(&mut self) {
