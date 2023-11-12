@@ -46,23 +46,23 @@ impl TextureCache {
   }
 }
 
-struct ImageTransfer {
+struct Transfer {
   pub x: u32,
   pub y: u32,
   pub w: u32,
   pub h: u32,
-  pub transferred_x: u32,
-  pub transferred_y: u32,
+  pub read_x: u32,
+  pub read_y: u32,
   pub is_active: bool
 }
 
-impl ImageTransfer {
+impl Transfer {
   pub fn new() -> Self {
     Self {
       x: 0,
       y: 0,
-      transferred_x: 0,
-      transferred_y: 0,
+      read_x: 0,
+      read_y: 0,
       w: 0,
       h: 0,
       is_active: false
@@ -95,7 +95,6 @@ pub struct GPU {
   command_buffer: [u32; 12],
   command_index: usize,
   words_remaining: u32,
-  // halfwords_remaining: u32,
   cycles: i32,
   dotclock_cycles: i32,
   num_scanlines: u32,
@@ -103,7 +102,8 @@ pub struct GPU {
   pub frame_complete: bool,
   interrupts: Rc<Cell<InterruptRegisters>>,
   previous_time: u128,
-  image_transfer: ImageTransfer,
+  image_transfer: Transfer,
+  cpu_transfer: Transfer,
   vram: Box<[u8]>,
   pub picture: Box<[u8]>,
   texture_cache: [TextureCache; 256],
@@ -151,7 +151,8 @@ impl GPU {
       interrupts,
       dotclock_cycles: 0,
       previous_time: 0,
-      image_transfer: ImageTransfer::new(),
+      image_transfer: Transfer::new(),
+      cpu_transfer: Transfer::new(),
       vram: vec![0; 0x100000].into_boxed_slice(),
       picture: vec![0; 1024 * 512 * 3].into_boxed_slice(),
       texture_cache: [TextureCache::new(); 256],
@@ -162,6 +163,17 @@ impl GPU {
       current_texture_x_base: 0,
       current_texture_y_base: 0
     }
+  }
+
+  pub fn gpuread(&mut self) -> u32 {
+    if self.cpu_transfer.is_active {
+      let lower = self.transfer_to_cpu();
+      let upper = self.transfer_to_cpu();
+
+      return (lower as u32) | (upper as u32) << 16;
+    }
+
+    0
   }
 
   pub fn cap_fps(&mut self) {
@@ -259,25 +271,46 @@ impl GPU {
   }
 
   fn transfer_to_vram(&mut self, val: u16) {
-    let curr_x = self.image_transfer.x + self.image_transfer.transferred_x;
-    let curr_y = self.image_transfer.y + self.image_transfer.transferred_y;
+    let curr_x = self.image_transfer.x + self.image_transfer.read_x;
+    let curr_y = self.image_transfer.y + self.image_transfer.read_y;
 
-    self.image_transfer.transferred_x += 1;
+    self.image_transfer.read_x += 1;
 
     let vram_address = self.get_vram_address(curr_x & 0x3ff, curr_y & 0x1ff);
 
-    if self.image_transfer.transferred_x == self.image_transfer.w {
-      self.image_transfer.transferred_x = 0;
+    if self.image_transfer.read_x == self.image_transfer.w {
+      self.image_transfer.read_x = 0;
 
-      self.image_transfer.transferred_y += 1;
+      self.image_transfer.read_y += 1;
 
-      if self.image_transfer.transferred_y == self.image_transfer.h {
+      if self.image_transfer.read_y == self.image_transfer.h {
         self.image_transfer.is_active = false;
       }
     }
 
     self.vram[vram_address] = val as u8;
     self.vram[vram_address + 1] = (val >> 8) as u8;
+  }
+
+  fn transfer_to_cpu(&mut self) -> u16 {
+    let x = self.cpu_transfer.x + self.cpu_transfer.read_x;
+    let y = self.cpu_transfer.y + self.cpu_transfer.read_y;
+
+    self.cpu_transfer.read_x += 1;
+
+    if self.cpu_transfer.read_x == self.cpu_transfer.w {
+      self.cpu_transfer.read_x = 0;
+
+      self.cpu_transfer.read_y += 1;
+
+      if self.cpu_transfer.read_y == self.cpu_transfer.h {
+        self.cpu_transfer.is_active = false;
+      }
+    }
+
+    let vram_address = self.get_vram_address(x, y);
+
+    (self.vram[vram_address] as u16) | (self.vram[vram_address + 1] as u16) << 8
   }
 
   pub fn get_vram_address(&mut self, x: u32, y: u32) -> usize {
@@ -393,12 +426,27 @@ impl GPU {
   }
 
   fn gp0_image_transfer_to_cpu(&mut self) {
+    let coordinates = self.command_buffer[1];
     let dimensions = self.command_buffer[2];
 
-    let width = dimensions as u16;
-    let height = (dimensions >> 16) as u16;
+    let width = (dimensions & 0x3ff) as u32;
+    let height = ((dimensions >> 16) & 0x1ff) as u32;
+
+    let x = (coordinates & 0x3ff) as u32;
+    let y = ((coordinates >> 16) & 0x1ff) as u32;
 
     // TODO: do something with this data
+
+    self.cpu_transfer.h = height;
+    self.cpu_transfer.w = width;
+
+    self.cpu_transfer.x = x;
+    self.cpu_transfer.y = y;
+
+    self.cpu_transfer.read_x = 0;
+    self.cpu_transfer.read_y = 0;
+
+    self.cpu_transfer.is_active = true;
   }
 
   pub fn parse_color(val: u32) -> (u8,u8,u8) {
@@ -561,8 +609,8 @@ impl GPU {
     self.image_transfer.x = x;
     self.image_transfer.y = y;
 
-    self.image_transfer.transferred_x = 0;
-    self.image_transfer.transferred_y = 0;
+    self.image_transfer.read_x = 0;
+    self.image_transfer.read_y = 0;
 
     self.image_transfer.w = if w > 0 { w } else { 0x400 };
     self.image_transfer.h = if h > 0 { h } else { 0x200 };

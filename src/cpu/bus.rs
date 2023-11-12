@@ -6,6 +6,9 @@ use super::{counter::Counter, interrupt::interrupt_registers::InterruptRegisters
 
 const RAM_SIZE: usize = 2 * 1024 * 1024;
 
+const EXP2_WRITE_ADDR: u32 = 0x1f802021;
+const EXP2_READ_ADDR: u32 = 0x1f802023;
+
 // @TODO: Refactor all of the mem_read and mem_loads into one generic method
 pub struct Bus {
   bios: Vec<u8>,
@@ -16,7 +19,8 @@ pub struct Bus {
   timers: Timers,
   dma: Rc<Cell<DMA>>,
   pub cycles: i32,
-  pub cache_control: u32
+  pub cache_control: u32,
+  exp2_buffer: Vec<u8>
 }
 
 impl Bus {
@@ -30,7 +34,8 @@ impl Bus {
       interrupts,
       dma,
       cycles: 0,
-      cache_control: 0
+      cache_control: 0,
+      exp2_buffer: Vec::new()
     }
   }
 
@@ -92,10 +97,7 @@ impl Bus {
         let offset = address - 0x1f80_1810;
 
         match offset {
-          0 => {
-            println!("returning 0 for GPUREAD register");
-            0
-          }
+          0 => self.gpu.gpuread(),
           4 => self.gpu.stat_value(),
           _ => todo!("GPU read register not implemented yet: {offset}")
         }
@@ -163,7 +165,7 @@ impl Bus {
       0x1f80_1100..=0x1f80_112b => {
         self.timers.write(address, value as u32);
       }
-      0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
+      0x1f80_2000..=0x1f80_207f  => self.write_expansion_2(address, value),
       0xfffe_0130 => self.cache_control = value as u32,
       _ => panic!("write to unsupported address: {:08x}", address)
     }
@@ -205,7 +207,6 @@ impl Bus {
       0x1f80_1100..=0x1f80_112b => {
         self.timers.write(address, value as u32);
       }
-      0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
       0xfffe_0130 => self.cache_control = value as u32,
       _ => panic!("write to unsupported address: {:08x}", address)
     }
@@ -264,7 +265,6 @@ impl Bus {
           _ => panic!("GPU write register not implemented yet: {offset}")
         }
       }
-      0x1f80_2041 => println!("ignoring writes to EXPANSION 2"),
       0xfffe_0130 => self.cache_control = value,
       _ => panic!("write to unsupported address: {:06x}", address)
     }
@@ -283,5 +283,19 @@ impl Bus {
 
   pub fn reset_cycles(&mut self) {
     self.cycles = 0;
+  }
+
+  fn write_expansion_2(&mut self, address: u32, val: u8) {
+    if address == EXP2_WRITE_ADDR {
+      if val != 0xd {
+        if val == 0xa {
+          self.exp2_buffer.clear();
+
+          return;
+        }
+      }
+    }
+
+    self.exp2_buffer.push(val);
   }
 }
