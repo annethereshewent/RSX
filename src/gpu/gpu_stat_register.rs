@@ -1,4 +1,4 @@
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum TextureColors {
   FourBit = 0,
   EightBit = 1,
@@ -185,6 +185,7 @@ impl GpuStatRegister {
     self.hres2 = 0;
     self.vres = 0;
     self.vertical_resolution = 240;
+    self.horizontal_resolution = 320;
     self.video_mode = VideoMode::Ntsc;
     self.vertical_interlace = true;
     self.display_color_depth = ColorDepth::FifteenBit;

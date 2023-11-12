@@ -2,7 +2,7 @@ use std::{rc::Rc, cell::Cell, time::{UNIX_EPOCH, SystemTime, Duration}, thread::
 
 use crate::cpu::{CPU_FREQUENCY, interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}, timers::timers::Timers};
 
-use self::gpu_stat_register::{GpuStatRegister, VideoMode, ColorDepth, TextureColors};
+use self::gpu_stat_register::{GpuStatRegister, VideoMode, TextureColors};
 
 pub mod gpu_stat_register;
 pub mod render;
@@ -108,7 +108,12 @@ pub struct GPU {
   pub picture: Box<[u8]>,
   texture_cache: [TextureCache; 256],
   clut_tag: isize,
-  clut_cache: [u16; 256]
+  clut_cache: [u16; 256],
+  current_texture_x_base: u8,
+  current_texture_y_base: u8,
+  current_clut: (i32, i32),
+  current_texture_colors: TextureColors,
+
 }
 
 impl GPU {
@@ -151,7 +156,11 @@ impl GPU {
       picture: vec![0; 1024 * 512 * 3].into_boxed_slice(),
       texture_cache: [TextureCache::new(); 256],
       clut_tag: -1,
-      clut_cache: [0; 256]
+      clut_cache: [0; 256],
+      current_clut: (0,0),
+      current_texture_colors: TextureColors::FourBit,
+      current_texture_x_base: 0,
+      current_texture_y_base: 0
     }
   }
 
@@ -340,7 +349,7 @@ impl GPU {
 
     match op_code {
       0x00 => (), // NOP,
-      0x01 => (), // clear cache, not implemented
+      0x01 => self.gp0_invalidate_cache(),
       0x28 => self.gp0_monochrome_quadrilateral(),
       0x2c => self.gp0_textured_quad_with_blending(),
       0x30 => self.gp0_shaded_triangle(),
@@ -487,6 +496,18 @@ impl GPU {
     let clut = GPU::to_clut(self.command_buffer[2]);
     self.parse_texture_data(self.command_buffer[4]);
 
+    if clut != self.current_clut ||
+      self.stat.texture_x_base != self.current_texture_x_base ||
+      self.stat.texture_y_base1 != self.current_texture_y_base ||
+      self.stat.texture_colors != self.current_texture_colors {
+        self.gp0_invalidate_cache();
+    }
+
+    self.current_texture_x_base = self.stat.texture_x_base;
+    self.current_texture_y_base = self.stat.texture_y_base1;
+    self.current_texture_colors = self.stat.texture_colors;
+    self.current_clut = clut;
+
     self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], Some(&mut texture_positions[0..3]), Some(clut), false, true);
     self.rasterize_triangle(&mut colors[1..4], &mut positions[1..4], Some(&mut texture_positions[1..4]), Some(clut), false, true);
 
@@ -611,6 +632,14 @@ impl GPU {
     self.drawing_y_offset = ((y << 5) as i16) >> 5;
   }
 
+  fn gp0_invalidate_cache(&mut self) {
+    for cache_entry in &mut self.texture_cache {
+      cache_entry.tag = -1;
+    }
+
+    self.clut_tag = -1;
+  }
+
   fn gp1_display_mode(&mut self, val: u32) {
     self.stat.update_display_mode(val);
   }
@@ -667,8 +696,5 @@ impl GPU {
 
     self.display_line_start = 0x10;
     self.display_line_end = 0x100;
-
-    // TODO: invalidate GPU cache and clear command FIFO when implemented
-
   }
 }
