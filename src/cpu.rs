@@ -17,6 +17,24 @@ pub const CPU_FREQUENCY: f64 = 33_868_800.0;
 
 pub const CYCLES_PER_FRAME: i64 = ((CYCLES_PER_SCANLINE * NUM_SCANLINES_PER_FRAME) as f64 * (CPU_FREQUENCY / GPU_FREQUENCY)) as i64;
 
+
+#[derive(Clone, Copy)]
+struct IsolatedCacheLine {
+  valid: usize,
+  tag: u32,
+  data: [u32; 4]
+}
+
+impl IsolatedCacheLine {
+  pub fn new() -> Self {
+    Self {
+      valid: 0xdeadbeef,
+      tag: 0xdeadbeef,
+      data: [0xdeadbeef; 4]
+    }
+  }
+}
+
 #[derive(Clone, Copy)]
 pub enum Cause {
   Interrupt = 0x0,
@@ -102,7 +120,8 @@ pub struct CPU {
   load: Option<(usize, u32)>,
   dma: Rc<Cell<DMA>>,
   interrupts: Rc<Cell<InterruptRegisters>>,
-  current_instruction: u32
+  current_instruction: u32,
+  isolated_cache: [IsolatedCacheLine; 256]
 }
 
 impl CPU {
@@ -130,6 +149,7 @@ impl CPU {
       dma,
       interrupts,
       current_instruction: 0,
+      isolated_cache: [IsolatedCacheLine::new(); 256]
     }
   }
 
@@ -231,9 +251,59 @@ impl CPU {
     }
   }
 
+  fn write_to_cache(&mut self, address: u32, value: u32) {
+    let line = ((address >> 4) & 0xff) as usize;
+    let index = ((address >> 2) & 0b11) as usize;
+
+    let cache_line = &mut self.isolated_cache[line];
+
+    if (self.bus.cache_control >> 2) & 0b1 == 1 {
+      cache_line.tag = value;
+    } else {
+      cache_line.data[index] = value;
+    }
+
+    // this invalidates the cache line, as index cannot be greater than 3
+    cache_line.valid = 4;
+  }
+
+  fn fetch_instruction_cache(&mut self) -> u32 {
+    let tag = self.pc & 0x7ffff000;
+
+    let line = ((self.pc >> 4) & 0xff) as usize;
+    let index = ((self.pc >> 2) & 0b11) as usize;
+
+    let address = Bus::translate_address(self.pc);
+
+    let cache_line = &mut self.isolated_cache[line];
+
+    if (cache_line.tag != tag) || (cache_line.valid > index) {
+      // invalidate the cache
+      let mut address = (address & !0xf) + (0x4 * index as u32);
+
+      for i in index..4 {
+        let value = self.bus.mem_read_32(address);
+
+        cache_line.data[i] = value;
+
+        address += 4;
+      }
+
+      cache_line.tag = tag;
+      cache_line.valid = index;
+
+      self.bus.tick(5);
+    }
+
+    cache_line.data[index]
+  }
+
   pub fn fetch_instruction(&mut self) -> u32 {
     self.bus.tick(5);
-    // TODO: add caching code later
+
+    if self.bus.cache_enabled() && self.pc < 0xa0000000 {
+      return self.fetch_instruction_cache();
+    }
 
     self.bus.mem_read_32(self.pc)
   }
@@ -241,17 +311,35 @@ impl CPU {
   pub fn store_32(&mut self, address: u32, value: u32) {
     self.bus.tick(5);
 
+    if !self.cop0.is_cache_disabled() {
+      self.write_to_cache(address, value);
+
+      return;
+    }
+
     self.bus.mem_write_32(address, value);
   }
 
   pub fn store_16(&mut self, address: u32, value: u16) {
     self.bus.tick(5);
 
+    if !self.cop0.is_cache_disabled() {
+      self.write_to_cache(address, value as u32);
+
+      return;
+    }
+
     self.bus.mem_write_16(address, value)
   }
 
   pub fn store_8(&mut self, address: u32, value: u8) {
     self.bus.tick(5);
+
+    if !self.cop0.is_cache_disabled() {
+      self.write_to_cache(address, value as u32);
+
+      return;
+    }
 
     self.bus.mem_write_8(address, value)
   }

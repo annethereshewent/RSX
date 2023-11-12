@@ -298,4 +298,8 @@ impl Bus {
 
     self.exp2_buffer.push(val);
   }
+
+  pub fn cache_enabled(&self) -> bool {
+    (self.cache_control >> 11) & 0b1 == 1
+  }
 }

@@ -121,35 +121,27 @@ impl CPU {
   }
 
   fn sh(&mut self, instr: Instruction) {
-    if self.cop0.is_cache_disabled() {
-      let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
+    let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
-      let value = self.r[instr.rt()];
+    let value = self.r[instr.rt()];
 
-      self.execute_load_delay();
+    self.execute_load_delay();
 
-      if address & 0b1 == 0 {
-        self.store_16(address, value as u16);
-      } else {
-        self.exception(Cause::StoreAddressError);
-      }
+    if address & 0b1 == 0 {
+      self.store_16(address, value as u16);
     } else {
-      // println!("ignoring writes to cache");
+      self.exception(Cause::StoreAddressError);
     }
   }
 
   fn sb(&mut self, instr: Instruction) {
-    if self.cop0.is_cache_disabled() {
-      let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
+    let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
-      let value = self.r[instr.rt()];
+    let value = self.r[instr.rt()];
 
-      self.execute_load_delay();
+    self.execute_load_delay();
 
-      self.store_8(address, value as u8);
-    } else {
-      // println!("ignoring writes to cache");
-    }
+    self.store_8(address, value as u8);
   }
 
   fn lb(&mut self, instr: Instruction) {
@@ -822,20 +814,16 @@ impl CPU {
   }
 
   fn sw(&mut self, instr: Instruction) {
-    if self.cop0.is_cache_disabled() {
-      let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
+    let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
-      let value = self.r[instr.rt()];
+    let value = self.r[instr.rt()];
 
-      self.execute_load_delay();
+    self.execute_load_delay();
 
-      if address & 0b11 == 0 {
-        self.store_32(address, value);
-      } else {
-        self.exception(Cause::StoreAddressError);
-      }
+    if address & 0b11 == 0 {
+      self.store_32(address, value);
     } else {
-      // println!("ignoring writes to cache");
+      self.exception(Cause::StoreAddressError);
     }
   }
 
