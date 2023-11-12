@@ -8,11 +8,11 @@ impl GPU {
   }
 
   pub fn update_picture(&mut self) {
-    let mut x_start = self.display_vram_x_start;
-    let mut y_start = self.display_vram_y_start;
+    let mut x_start = self.display_vram_x_start as u32;
+    let mut y_start = self.display_vram_y_start as u32;
 
-    x_start += (self.display_horizontal_start - 608) / (self.get_dotclock() as u16);
-    y_start += (self.display_line_start - 16) * 2;
+    x_start += ((self.display_horizontal_start as u32) - 608) / (self.get_dotclock() as u32);
+    y_start += ((self.display_line_start as u32) - 16) * 2;
 
     let (w, h) = self.get_dimensions();
 
@@ -58,15 +58,16 @@ impl GPU {
     (r, g, b)
   }
 
-  pub fn get_dimensions(&self) -> (u16, u16) {
+  pub fn get_dimensions(&self) -> (u32, u32) {
+    let dotclock = self.get_dotclock() as u32;
     let mut w = if self.display_horizontal_start <= self.display_horizontal_end {
       self.display_horizontal_end - self.display_horizontal_start
     } else {
       50
-    };
+    } as u32;
 
-    w = (((w / (self.get_dotclock()) as u16)) + 2) & !0b11;
-    let mut h = self.display_line_end - self.display_line_start;
+    w = ((w / dotclock) + 2) & !0b11;
+    let mut h = (self.display_line_end - self.display_line_start) as u32;
 
     if self.stat.vertical_interlace {
       h *= 2;

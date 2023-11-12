@@ -126,7 +126,7 @@ impl GpuStatRegister {
     self.horizontal_resolution = if self.hres2 == 1 {
       368
     } else {
-      match self.hres2 {
+      match self.hres1 {
         0 => 256,
         1 => 320,
         2 => 512,

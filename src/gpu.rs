@@ -181,7 +181,7 @@ impl GPU {
 
       if self.current_scanline == (self.num_scanlines - 20) {
         self.frame_complete = true;
-        // self.cap_fps();
+        self.cap_fps();
         // entering VBlank
         let mut interrupts = self.interrupts.get();
 
