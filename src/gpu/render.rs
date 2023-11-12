@@ -155,7 +155,8 @@ impl GPU {
     let w1_bias = -(GPU::is_top_left(b20, a20) as i32);
     let w2_bias = -(GPU::is_top_left(b01, a01) as i32);
 
-    let mut color = c[0];
+    let blend_color = c[0];
+    let mut output = blend_color;
 
     while curr_p.1 < max_y {
       curr_p.0 = min_x;
@@ -168,7 +169,7 @@ impl GPU {
           let vec_3d = (w0, w1, w2);
 
           if is_shaded {
-            color = GPU::interpolate_color(area as i32, vec_3d, c[0], c[1], c[2]);
+            output = GPU::interpolate_color(area as i32, vec_3d, c[0], c[1], c[2]);
           }
 
           if let Some(clut) = clut {
@@ -177,12 +178,12 @@ impl GPU {
 
             if let Some(mut texture) = self.get_texture(uv, clut) {
               if is_blended {
-                texture.0 = cmp::min(((texture.0 as u16) * (color.0 as u16)) >> 7,255) as u8;
-                texture.1 = cmp::min(((texture.1 as u16) * (color.1 as u16)) >> 7,255) as u8;
-                texture.2 = cmp::min(((texture.2 as u16) * (color.2 as u16)) >> 7,255) as u8;
+                texture.0 = (((texture.0 as u32) * (blend_color.0 as u32)) >> 7) as u8;
+                texture.1 = (((texture.1 as u32) * (blend_color.1 as u32)) >> 7) as u8;
+                texture.2 = (((texture.2 as u32) * (blend_color.2 as u32)) >> 7) as u8;
               }
 
-              color = texture;
+              output = texture;
             } else {
               w0 += a12;
               w1 += a20;
@@ -193,7 +194,7 @@ impl GPU {
             }
           }
 
-          self.render_pixel(curr_p, color);
+          self.render_pixel(curr_p, output);
         }
         w0 += a12;
         w1 += a20;
