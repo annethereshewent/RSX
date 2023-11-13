@@ -47,7 +47,6 @@ pub enum Cause {
   IllegalInstruction = 0xa,
   CoprocessorError = 0xb,
   Overflow = 0xc
-
 }
 
 pub struct COP0 {
@@ -267,6 +266,19 @@ impl CPU {
     cache_line.valid = 4;
   }
 
+  pub fn read_from_cache(&mut self, address: u32) -> u32 {
+    let line = ((address >> 4) & 0xff) as usize;
+    let index = ((address >> 2) & 0b11) as usize;
+
+    let cache_line = &mut self.isolated_cache[line];
+
+    if (self.bus.cache_control >> 2) & 0b1 == 1 {
+      return cache_line.tag;
+    }
+
+    cache_line.data[index]
+  }
+
   fn fetch_instruction_cache(&mut self) -> u32 {
     let tag = self.pc & 0x7ffff000;
 
@@ -309,55 +321,69 @@ impl CPU {
   }
 
   pub fn store_32(&mut self, address: u32, value: u32) {
-    self.bus.tick(5);
-
     if !self.cop0.is_cache_disabled() {
       self.write_to_cache(address, value);
 
       return;
     }
 
+    self.bus.tick(5);
+
     self.bus.mem_write_32(address, value);
   }
 
   pub fn store_16(&mut self, address: u32, value: u16) {
-    self.bus.tick(5);
-
     if !self.cop0.is_cache_disabled() {
       self.write_to_cache(address, value as u32);
 
       return;
     }
+
+    self.bus.tick(5);
 
     self.bus.mem_write_16(address, value)
   }
 
   pub fn store_8(&mut self, address: u32, value: u8) {
-    self.bus.tick(5);
-
     if !self.cop0.is_cache_disabled() {
       self.write_to_cache(address, value as u32);
 
       return;
     }
+
+    self.bus.tick(5);
 
     self.bus.mem_write_8(address, value)
   }
 
   // TODO: refactor this into just one method
   pub fn load_32(&mut self, address: u32) -> u32 {
+    if !self.cop0.is_cache_disabled() {
+      return self.read_from_cache(address);
+    }
+
+
     self.bus.tick(5);
 
     self.bus.mem_read_32(address)
   }
 
   pub fn load_16(&mut self, address: u32) -> u16 {
+    if !self.cop0.is_cache_disabled() {
+      return self.read_from_cache(address) as u16;
+    }
+
+
     self.bus.tick(5);
 
     self.bus.mem_read_16(address)
   }
 
   pub fn load_8(&mut self, address: u32) -> u8 {
+    if !self.cop0.is_cache_disabled() {
+      return self.read_from_cache(address) as u8;
+    }
+
     self.bus.tick(5);
 
     self.bus.mem_read_8(address)

@@ -145,60 +145,43 @@ impl CPU {
   }
 
   fn lb(&mut self, instr: Instruction) {
-    if self.cop0.is_cache_disabled() {
-      let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
+    let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
-      let value = self.load_8(address);
+    let value = self.load_8(address);
 
-      self.update_load(instr.rt(), value as i8 as i32 as u32);
-    } else {
-      // println!("cache not implemented yet for loads");
-    }
+    self.update_load(instr.rt(), value as i8 as i32 as u32);
   }
 
   fn lbu(&mut self, instr: Instruction) {
-    if self.cop0.is_cache_disabled() {
-      let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
+    let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
-      let value = self.load_8(address);
+    let value = self.load_8(address);
 
-      self.update_load(instr.rt(), value as u32);
-    } else {
-      // println!("cache not implemented yet for loads");
-    }
+    self.update_load(instr.rt(), value as u32);
   }
 
   fn lhu(&mut self, instr: Instruction) {
-    if self.cop0.is_cache_disabled() {
-      let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
+    let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
-      if address & 0b1 == 0 {
-        let value = self.load_16(address);
-
-        self.update_load(instr.rt(), value as u32);
-      } else {
-        self.execute_load_delay();
-        self.exception(Cause::LoadAddressError);
-      }
+    if address & 0b1 == 0 {
+      let value = self.load_16(address);
+      self.update_load(instr.rt(), value as u32);
     } else {
-      // println!("cache not implemented yet for loads");
+      self.execute_load_delay();
+      self.exception(Cause::LoadAddressError);
     }
   }
 
   fn lh(&mut self, instr: Instruction) {
-    if self.cop0.is_cache_disabled() {
-      let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
+    let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
-      if address & 0b1 == 0 {
-        let value = self.load_16(address);
+    if address & 0b1 == 0 {
+      let value = self.load_16(address);
 
-        self.update_load(instr.rt(), value as i16 as u32);
-      } else {
-        self.execute_load_delay();
-        self.exception(Cause::LoadAddressError);
-      }
+      self.update_load(instr.rt(), value as i16 as u32);
     } else {
-      // println!("cache not implemented yet for loads");
+      self.execute_load_delay();
+      self.exception(Cause::LoadAddressError);
     }
   }
 
@@ -415,20 +398,16 @@ impl CPU {
   }
 
   fn lw(&mut self, instr: Instruction) {
-    if self.cop0.is_cache_disabled() {
-      let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
+    let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
-      if address & 0b11 == 0 {
-        let val = self.load_32(address);
-        self.update_load(instr.rt(), val);
-      } else {
-        self.execute_load_delay();
-        self.exception(Cause::LoadAddressError);
-      }
+    if address & 0b11 == 0 {
+      let val = self.load_32(address);
+      self.update_load(instr.rt(), val);
     } else {
-      // println!("cache not implemented yet for loads");
+      self.execute_load_delay();
+      self.exception(Cause::LoadAddressError);
     }
-  }
+}
 
   fn lwl(&mut self, instr: Instruction) {
     let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
