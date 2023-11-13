@@ -32,7 +32,7 @@ impl DmaInterrupt {
   }
 
   pub fn set_irq_flag(&mut self, channel_number: u32) {
-    let offset = 16 + channel_number;
+    let offset = 24 + channel_number;
     self.val |= 1 << offset;
   }
 
@@ -42,6 +42,13 @@ impl DmaInterrupt {
     (self.val >> offset) & 0b1 == 1
   }
 
+  pub fn is_irq_pending(&self) -> bool {
+    let irq_flags = (self.val >> 24) & 0x7f;
+    let irq_enable = (self.val >> 16) & 0x7f;
+
+    irq_flags & irq_enable > 0
+  }
+
   pub fn irq_master_flag(&self) -> bool {
     (self.val >> 31) & 0b1 == 1
   }
@@ -49,7 +56,7 @@ impl DmaInterrupt {
   pub fn update_master_flag(&mut self) -> bool {
     let previous_master = self.irq_master_flag();
 
-    if ((self.val >> 15) & 0b1 == 1) || ((self.val >> 23) & 0b1 == 1 && (self.val >> 24) & 0x7f > 0) {
+    if (self.force_irq()) || (self.irq_master_enable() && self.is_irq_pending()) {
       self.val |= 1 << 31;
 
       if !previous_master {
