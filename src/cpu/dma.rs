@@ -1,6 +1,6 @@
 use self::{dma_interrupt::DmaInterrupt, dma_channel::DmaChannel, dma_channel_control_register::SyncMode};
 
-use super::bus::Bus;
+use super::{bus::Bus, interrupt::interrupt_register::Interrupt};
 
 pub mod dma_interrupt;
 pub mod dma_channel;
@@ -103,8 +103,24 @@ impl DMA {
       } else {
         channel.finish();
 
-        // TODO: interrupts
+        let channel_id = channel.channel_id;
+        self.update_interrupt_flags(channel_id, bus);
       }
+    }
+  }
+
+  fn update_interrupt_flags(&mut self, channel_id: usize, bus: &mut Bus) {
+    let offset = channel_id as u32;
+    if self.interrupt.is_dma_channel_irq_enabled(offset) {
+      self.interrupt.set_irq_flag(offset);
+    }
+
+    if self.interrupt.update_master_flag() {
+      let mut interrupts = bus.interrupts.get();
+
+      interrupts.status.set_interrupt(Interrupt::Dma);
+
+      bus.interrupts.set(interrupts);
     }
   }
 
@@ -152,7 +168,8 @@ impl DMA {
 
       channel.finish();
 
-      // TODO interrupts
+      let channel_id = channel.channel_id;
+      self.update_interrupt_flags(channel_id, bus);
     }
   }
 
@@ -191,7 +208,9 @@ impl DMA {
 
     if (header & 0xffffff) == 0xffffff {
       channel.finish();
-      // TODO: set interrupt here
+
+      let channel_id = channel.channel_id;
+      self.update_interrupt_flags(channel_id, bus);
     } else {
       channel.gap_ticks += 1;
     }
