@@ -289,17 +289,14 @@ impl Bus {
   }
 
   fn write_expansion_2(&mut self, address: u32, val: u8) {
-    if address == EXP2_WRITE_ADDR {
-      if val != 0xd {
-        if val == 0xa {
-          self.exp2_buffer.clear();
+    if address == EXP2_WRITE_ADDR && val != 0xd {
+      if val == 0xa {
+        self.exp2_buffer.clear();
 
-          return;
-        }
+        return;
       }
+      self.exp2_buffer.push(val);
     }
-
-    self.exp2_buffer.push(val);
   }
 
   pub fn cache_enabled(&self) -> bool {
