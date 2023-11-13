@@ -1,6 +1,6 @@
 use std::{rc::Rc, cell::Cell};
 
-use crate::gpu::GPU;
+use crate::{gpu::GPU, spu::SPU};
 
 use super::{counter::Counter, interrupt::interrupt_registers::InterruptRegisters, timers::timers::Timers, dma::DMA};
 
@@ -15,6 +15,7 @@ pub struct Bus {
   ram: [u8; RAM_SIZE],
   pub counter: Counter,
   pub gpu: GPU,
+  pub spu: SPU,
   pub interrupts: Rc<Cell<InterruptRegisters>>,
   timers: Timers,
   dma: Rc<Cell<DMA>>,
@@ -29,6 +30,7 @@ impl Bus {
       bios,
       ram: [0; RAM_SIZE],
       gpu: GPU::new(interrupts.clone()),
+      spu: SPU::new(interrupts.clone()),
       timers: Timers::new(interrupts.clone()),
       counter: Counter::new(),
       interrupts,
@@ -56,7 +58,6 @@ impl Bus {
       0x1f00_0000..=0x1f08_0000 => 0xff,
       0x1fc0_0000..=0x1fc7_ffff => self.bios[(address - 0x1fc0_0000) as usize],
       0x0000_0000..=0x001f_ffff => {
-
         self.ram[address as usize]
       }
       _ => panic!("not implemented: {:08x}", address)
@@ -275,6 +276,8 @@ impl Bus {
 
     self.timers.tick(cycles);
     self.gpu.tick(cycles, &mut self.timers);
+
+    self.spu.tick_counter(cycles);
 
     let mut dma = self.dma.get();
     dma.tick_counter(cycles);
