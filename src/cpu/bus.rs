@@ -103,10 +103,8 @@ impl Bus {
           _ => todo!("GPU read register not implemented yet: {offset}")
         }
       }
-      0x1f80_1c00..=0x1f80_1e80 => {
-
-        // println!("ignoring reads to SPU registers");
-        0
+      0x1f80_1c00..=0x1f80_1e7f => {
+        self.spu.read_32(address)
       }
       _ => panic!("not implemented: {:08x}", address)
     }
@@ -135,10 +133,8 @@ impl Bus {
         (self.bios[offset] as u16) | ((self.bios[offset + 1] as u16) << 8)
       }
 
-      0x1f80_1c00..=0x1f80_1e80 => {
-
-        // println!("ignoring reads to SPU registers");
-        0
+      0x1f80_1c00..=0x1f80_1e7f => {
+        self.spu.read_16(address)
       }
       0x1f80_1070 => {
 
@@ -166,6 +162,7 @@ impl Bus {
       0x1f80_1100..=0x1f80_112b => {
         self.timers.write(address, value as u32);
       }
+      0x1f80_1c00..=0x1f80_1e7f => panic!("8 bit writes to spu not supported"),
       0x1f80_2000..=0x1f80_207f  => self.write_expansion_2(address, value),
       0xfffe_0130 => self.cache_control = value as u32,
       _ => panic!("write to unsupported address: {:08x}", address)
@@ -186,9 +183,7 @@ impl Bus {
         self.ram[offset] = (value & 0xff) as u8;
         self.ram[offset + 1] = ((value >> 8) & 0xff) as u8;
       }
-      0x1f80_1c00..=0x1f80_1e80 => {
-        // println!("ignoring writes to SPU registers");
-      }
+      0x1f80_1c00..=0x1f80_1e80 => self.spu.write_16(address, value),
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070 => {
@@ -229,9 +224,7 @@ impl Bus {
         self.ram[offset + 2] = ((value >> 16) & 0xff) as u8;
         self.ram[offset + 3] = ((value >> 24)) as u8;
       }
-      0x1f80_1c00..=0x1f80_1e80 => {
-        // println!("ignoring writes to SPU registers");
-      }
+      0x1f80_1c00..=0x1f80_1e80 => panic!("32 bit writes to SPU not supported"),
       0x1f80_1000..=0x1f80_1023 => (), // println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => (), // println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070 => {
