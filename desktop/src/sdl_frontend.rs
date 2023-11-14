@@ -10,10 +10,17 @@ impl AudioCallback for PsxAudioCallback<'_> {
 
   fn callback(&mut self, buf: &mut [Self::Channel]) {
     let mut index = 0;
+    let buffer_index = self.spu.buffer_index;
+
+    let (last_left, last_right) = if buffer_index > 1 {
+      (self.spu.audio_buffer[buffer_index - 2], self.spu.audio_buffer[buffer_index - 1])
+    } else {
+      (0, 0)
+    };
 
     for b in buf.iter_mut() {
-      *b = if index >= self.spu.buffer_index {
-        self.spu.previous_value
+      *b = if index >= buffer_index {
+        if index % 2 == 0 { last_left } else { last_right }
       } else {
         self.spu.audio_buffer[index]
       };
