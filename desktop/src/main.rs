@@ -2,11 +2,11 @@ use std::fs;
 
 pub mod sdl_frontend;
 
-use rustation::cpu::CPU;
+use rsx::cpu::CPU;
 use sdl2::audio::AudioSpecDesired;
 use sdl_frontend::{SdlFrontend, PsxAudioCallback};
 
-extern crate rustation;
+extern crate rsx;
 
 pub fn main() {
   // let args: Vec<String> = env::args().collect();

@@ -1,10 +1,10 @@
 [package]
-name = "rustation-desktop"
+name = "rsx-desktop"
 version = "0.1.0"
 authors = ["Anne Castrillon <anne.castrillon@gmail.com>"]
 edition = "2021"
 
-[dependencies.rustation]
+[dependencies.rsx]
 path = "../"
 
 [dependencies.sdl2]

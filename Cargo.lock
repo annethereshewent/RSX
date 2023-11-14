@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "rustation"
+name = "rsx"
 version = "0.1.0"
