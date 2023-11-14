@@ -3,7 +3,8 @@ use std::fs;
 pub mod sdl_frontend;
 
 use rustation::cpu::CPU;
-use sdl_frontend::SdlFrontend;
+use sdl2::audio::AudioSpecDesired;
+use sdl_frontend::{SdlFrontend, PsxAudioCallback};
 
 extern crate rustation;
 
@@ -18,8 +19,26 @@ pub fn main() {
 
   // let bytes: Vec<u8> = fs::read(filepath).unwrap();
 
+  let sdl_context = sdl2::init().unwrap();
+
   let mut cpu = CPU::new(fs::read("../SCPH1001.BIN").unwrap());
-  let mut frontend = SdlFrontend::new();
+  let mut frontend = SdlFrontend::new(&sdl_context);
+
+  let audio_subsystem = sdl_context.audio().unwrap();
+
+  let spec = AudioSpecDesired {
+    freq: Some(44100),
+    channels: Some(2),
+    samples: Some(4096)
+  };
+
+  let device = audio_subsystem.open_playback(
+    None,
+    &spec,
+    |_| PsxAudioCallback { spu: &mut cpu.bus.spu }
+  ).unwrap();
+
+  device.resume();
 
   loop {
     while !cpu.bus.gpu.frame_complete {

@@ -1,15 +1,39 @@
-use rustation::gpu::GPU;
-use sdl2::{video::Window, EventPump, event::Event, render::Canvas, pixels::PixelFormatEnum};
+use rustation::{gpu::GPU, spu::SPU};
+use sdl2::{video::Window, EventPump, event::Event, render::Canvas, pixels::PixelFormatEnum, audio::{AudioSpecDesired, AudioCallback}, Sdl};
+
+pub struct PsxAudioCallback<'a> {
+  pub spu: &'a mut SPU
+}
+
+impl AudioCallback for PsxAudioCallback<'_> {
+  type Channel = f32;
+
+  fn callback(&mut self, buf: &mut [Self::Channel]) {
+    let mut index = 0;
+
+    for b in buf.iter_mut() {
+      *b = if index >= self.spu.buffer_index {
+        self.spu.previous_value
+      } else {
+        self.spu.audio_buffer[index] * 0.0005
+      };
+
+      self.spu.previous_value = *b;
+      index += 1;
+    }
+
+    self.spu.buffer_index = 0;
+  }
+}
 
 pub struct SdlFrontend {
   event_pump: EventPump,
   canvas: Canvas<Window>
 }
 
-
 impl SdlFrontend {
-  pub fn new() -> Self {
-    let sdl_context = sdl2::init().unwrap();
+  pub fn new(sdl_context: &Sdl) -> Self {
+
     let video = sdl_context.video().unwrap();
 
     let window = video.window("RSX", 640, 480)

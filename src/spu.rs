@@ -34,7 +34,8 @@ impl DataTransfer {
 pub struct SPU {
   pub audio_buffer: [f32; NUM_SAMPLES],
   pub buffer_index: usize,
-  interrupts: Rc<Cell<InterruptRegisters>>,
+  pub previous_value: f32,
+  // interrupts: Rc<Cell<InterruptRegisters>>,
   cpu_cycles: i32,
   voices: [Voice; 24],
   volume_left: i16,
@@ -65,7 +66,7 @@ pub const CPU_TO_APU_CYCLES: i32 = 768;
 impl SPU {
   pub fn new(interrupts: Rc<Cell<InterruptRegisters>>) -> Self {
     Self {
-      interrupts,
+      // interrupts,
       cpu_cycles: 0,
       voices: [Voice::new(); 24],
       volume_left: 0,
@@ -90,7 +91,8 @@ impl SPU {
       reverb: Reverb::new(),
       endx: 0,
       audio_buffer: [0.0; NUM_SAMPLES],
-      buffer_index: 0
+      buffer_index: 0,
+      previous_value: 0.0
     }
   }
 
