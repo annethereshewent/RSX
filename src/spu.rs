@@ -193,7 +193,7 @@ impl SPU {
     if sample >= 0.0 {
       (sample * f32::from(i16::max_value())) as i16
     } else {
-        (-sample * f32::from(i16::min_value())) as i16
+      (-sample * f32::from(i16::min_value())) as i16
     }
   }
 
@@ -201,7 +201,7 @@ impl SPU {
     if value >= 0 {
       f32::from(value) / f32::from(i16::max_value())
     } else {
-        -f32::from(value) / f32::from(i16::min_value())
+      -f32::from(value) / f32::from(i16::min_value())
     }
   }
 

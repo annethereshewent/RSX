@@ -140,7 +140,7 @@ impl Voice {
 
     sample *= SPU::to_f32(self.adsr.current_volume);
 
-    self.modulator = sample as i16;
+    self.modulator = SPU::to_i16(sample);
 
     let volume_left = SPU::to_f32(self.volume_left);
     let volume_right = SPU::to_f32(self.volume_right);
