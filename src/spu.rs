@@ -149,7 +149,6 @@ impl SPU {
     }
   }
 
-
   // tick for one APU cycle
   fn tick(&mut self) {
     let mut output_left = 0.0;
@@ -177,6 +176,9 @@ impl SPU {
 
       modulator = voice.modulator;
     }
+
+    output_left *= SPU::to_f32(self.volume_left);
+    output_right *= SPU::to_f32(self.volume_right);
 
     self.push_sample(output_left);
     self.push_sample(output_right);

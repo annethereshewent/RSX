@@ -49,6 +49,9 @@ pub const GAUSS_TABLE: [i32; 512] = [
   0x5997, 0x599E, 0x59A4, 0x59A9, 0x59AD, 0x59B0, 0x59B2, 0x59B3,
 ];
 
+const POS_ADPCM_TABLE: [i32; 5] = [0, 60, 115, 98, 122];
+const NEG_ADPCM_TABLE: [i32; 5] = [0, 0, -52, -55, -60];
+
 
 #[derive(Copy, Clone)]
 pub struct Voice {
@@ -67,8 +70,7 @@ pub struct Voice {
   counter: usize,
   noise_level: i16,
   pub modulator: i16,
-  previous_samples: [i16; 2],
-  last_samples: [i16; 2]
+  pub previous_samples: [i16; 2]
 }
 
 impl Voice {
@@ -89,8 +91,7 @@ impl Voice {
       counter: 0,
       noise_level: 0,
       modulator: 0,
-      previous_samples: [0; 2],
-      last_samples: [0; 2]
+      previous_samples: [0; 2]
     }
   }
 
@@ -113,6 +114,7 @@ impl Voice {
 
     self.endx = false;
 
+    // only set the repeat address if it hasn't been written to already.
     if !self.repeat_address_io_write {
       self.repeat_address = self.start_address;
     }
@@ -152,7 +154,7 @@ impl Voice {
     let mut step = self.pitch as u32;
 
     if modulate {
-      let factor = (modulator as u32) + 0x8000;
+      let factor = ((modulator as i32) + 0x8000) as u32;
 
       step = step as i16 as u16 as u32;
 
@@ -168,14 +170,13 @@ impl Voice {
     let sample_index = (self.counter >> 12) as usize;
 
     if sample_index >= MAX_SAMPLES {
-      // update the sample index
       let new_index = sample_index - MAX_SAMPLES;
 
       // clear out the upper 12 bits (which are the sample index)
       self.counter &= 0xfff;
       self.counter |= new_index << 12;
 
-      self.fetch_new_samples(sound_ram);
+      self.decode_samples(sound_ram);
     }
   }
 
@@ -183,20 +184,23 @@ impl Voice {
     (self.current_address / 2) as usize
   }
 
-  fn fetch_new_samples(&mut self, sound_ram: &mut [u16]) {
+  fn decode_samples(&mut self, sound_ram: &mut [u16]) {
     let header = sound_ram[self.get_ram_address()];
 
     let flags = header >> 8;
     let options = header & 0xff;
 
     let mut shift = options & 0xf;
-    let filter = (options >> 4) & 0xf;
+    let filter = ((options >> 4) & 0xf) as usize;
 
     if shift > 12 {
       shift = 8;
     }
 
     self.current_address += 2;
+
+    let f0 = POS_ADPCM_TABLE[filter];
+    let f1 = NEG_ADPCM_TABLE[filter];
 
     // there are 14 samples to fetch after getting the header
     for i in 0..7 {
@@ -209,10 +213,18 @@ impl Voice {
 
         sample >>= shift;
 
-        // TODO: add filtering here (can't find any good sources on what the filters are)
+        // per https://psx-spx.consoledev.net/cdromdrive/#cdrom-xa-audio-adpcm-compression
+        let filter = (32 + self.previous_samples[0] as i32 * f0 + self.previous_samples[1] as i32 * f1) / 64;
+
+        sample += filter;
+
+        if sample > 0x7fff {
+          sample = 0x7fff;
+        } else if sample < -0x8000 {
+          sample = -0x8000;
+        }
 
         self.samples[i * 4 + j] = sample as i16;
-
         self.previous_samples[1] = self.previous_samples[0];
         self.previous_samples[0] = sample as i16;
 
@@ -220,16 +232,15 @@ impl Voice {
       }
 
       self.current_address += 2;
+    }
 
-      if flags & 0b1 == 1 {
-        self.endx = true;
-        self.current_address = self.repeat_address;
+    if flags & 0b1 == 1 {
+      self.endx = true;
+      self.current_address = self.repeat_address;
 
-
-        if (flags >> 1) & 0b1 == 0 && !self.noise {
-          self.adsr.current_volume = 0;
-          self.update_key_off();
-        }
+      if (flags >> 1) & 0b1 == 0 && !self.noise {
+        self.adsr.current_volume = 0;
+        self.update_key_off();
       }
     }
   }
@@ -253,13 +264,11 @@ impl Voice {
   }
 
   fn get_sample(&self, sample_index: isize) -> i16 {
-    let index = if sample_index < 0 {
-      sample_index + 4
+    if sample_index < 0 {
+      self.samples[(self.samples.len() as isize + sample_index) as usize]
     } else {
-      sample_index
-    };
-
-    self.samples[index as usize]
+      self.samples[sample_index as usize]
+    }
   }
 
   pub fn read_16(&self, offset: u32) -> u16 {
@@ -278,8 +287,8 @@ impl Voice {
 
   pub fn write_16(&mut self, offset: u32, value: u16) {
     match offset {
-      0 => self.volume_left = (value & 0x7fff) as i16,
-      2 => self.volume_right = (value & 0x7fff) as i16,
+      0 => self.volume_left = ((value * 2) & 0x7fff) as i16,
+      2 => self.volume_right = ((value * 2) & 0x7fff) as i16,
       4 => self.pitch = value,
       6 => self.start_address = (value as u32) * 8,
       8 => {
