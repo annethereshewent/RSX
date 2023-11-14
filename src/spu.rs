@@ -11,6 +11,8 @@ pub mod reverb;
 pub const FIFO_CAPACITY: usize = 32;
 pub const SPU_RAM_SIZE: usize = 0x80000; // 512 kb
 
+pub const NUM_SAMPLES: usize = 4096 * 2;
+
 struct DataTransfer {
   control: u16,
   transfer_address: u32,
@@ -30,6 +32,8 @@ impl DataTransfer {
 }
 
 pub struct SPU {
+  pub audio_buffer: [f32; NUM_SAMPLES],
+  pub buffer_index: usize,
   interrupts: Rc<Cell<InterruptRegisters>>,
   cpu_cycles: i32,
   voices: [Voice; 24],
@@ -84,7 +88,9 @@ impl SPU {
       data_transfer: DataTransfer::new(),
       sound_ram: vec![0; SPU_RAM_SIZE / 2].into_boxed_slice(),
       reverb: Reverb::new(),
-      endx: 0
+      endx: 0,
+      audio_buffer: [0.0; NUM_SAMPLES],
+      buffer_index: 0
     }
   }
 
@@ -170,9 +176,14 @@ impl SPU {
       modulator = voice.modulator;
     }
 
-    // push the samples into the audio buffer
-    if output_left > 0.0 || output_right > 0.0 {
-      println!("received samples {output_left} and {output_right}");
+    self.push_sample(output_left);
+    self.push_sample(output_right);
+  }
+
+  fn push_sample(&mut self, sample: f32) {
+    if self.buffer_index < NUM_SAMPLES {
+      self.audio_buffer[self.buffer_index] = sample;
+      self.buffer_index += 1;
     }
   }
 

@@ -331,7 +331,9 @@ impl DMA {
       7 => {
         match minor {
           0 => self.control = value,
-          4 => self.interrupt.write(value),
+          4 => {
+            self.interrupt.write(value)
+          }
           _ => panic!("unhandled DMA write at offset {:X}", offset)
         }
       }

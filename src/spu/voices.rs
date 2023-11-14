@@ -107,7 +107,7 @@ impl Voice {
   }
 
   pub fn update_key_on(&mut self) {
-    self.adsr.state = AdsrState::Sustain;
+    self.adsr.state = AdsrState::Attack;
     self.adsr.current_volume = 0;
     self.adsr.cycles = 0;
 

@@ -38,7 +38,7 @@ impl Adsr {
   pub fn new() -> Self {
     Self {
       value: 0,
-      current_volume: 1,
+      current_volume: 0,
       attack_direction: AdsrDirection::Increasing,
       decay_direction: AdsrDirection::Increasing,
       release_direction: AdsrDirection::Increasing,
@@ -115,7 +115,6 @@ impl Adsr {
 
     let mut cycles = 1 << cycle_shift;
     step = step << step_shift;
-
 
 
     if mode == AdsrMode::Exponential {

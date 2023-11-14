@@ -16,6 +16,8 @@ impl DmaInterrupt {
     self.val &= !(val & 0x7f00_0000);
     // per specs (and other emulators)
     self.val |= val & 0xff_803f;
+
+    self.update_master_flag();
   }
 
   pub fn force_irq(&self) -> bool {
