@@ -153,9 +153,6 @@ impl Bus {
 
     match address {
       0x0000_0000..=0x001f_ffff => self.ram[address as usize] = value,
-      0x1f80_1c00..=0x1f80_1e80 => {
-        // println!("ignoring writes to SPU registers");
-      }
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070..=0x1f80_1074 => panic!("unimplemented writes to interrupt registers"),
