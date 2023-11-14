@@ -70,7 +70,8 @@ pub struct Voice {
   counter: usize,
   noise_level: i16,
   pub modulator: i16,
-  pub previous_samples: [i16; 2]
+  previous_samples: [i16; 2],
+  last_samples: [i16; 4]
 }
 
 impl Voice {
@@ -91,7 +92,8 @@ impl Voice {
       counter: 0,
       noise_level: 0,
       modulator: 0,
-      previous_samples: [0; 2]
+      previous_samples: [0; 2],
+      last_samples: [0; 4]
     }
   }
 
@@ -175,6 +177,12 @@ impl Voice {
       // clear out the upper 12 bits (which are the sample index)
       self.counter &= 0xfff;
       self.counter |= new_index << 12;
+
+      let mut j = 0;
+      for i in 24..28 {
+        self.last_samples[j] = self.samples[i];
+        j += 1;
+      }
 
       self.decode_samples(sound_ram);
     }
@@ -265,7 +273,7 @@ impl Voice {
 
   fn get_sample(&self, sample_index: isize) -> i16 {
     if sample_index < 0 {
-      self.samples[(self.samples.len() as isize + sample_index) as usize]
+      self.last_samples[(3 + sample_index) as usize]
     } else {
       self.samples[sample_index as usize]
     }

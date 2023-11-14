@@ -29,7 +29,7 @@ pub fn main() {
   let spec = AudioSpecDesired {
     freq: Some(44100),
     channels: Some(2),
-    samples: Some(4096)
+    samples: Some(8192)
   };
 
   let device = audio_subsystem.open_playback(

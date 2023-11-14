@@ -11,7 +11,7 @@ pub mod reverb;
 pub const FIFO_CAPACITY: usize = 32;
 pub const SPU_RAM_SIZE: usize = 0x80000; // 512 kb
 
-pub const NUM_SAMPLES: usize = 4096 * 2;
+pub const NUM_SAMPLES: usize = 8192 * 2;
 
 struct DataTransfer {
   control: u16,
