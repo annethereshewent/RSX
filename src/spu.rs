@@ -32,9 +32,9 @@ impl DataTransfer {
 }
 
 pub struct SPU {
-  pub audio_buffer: [f32; NUM_SAMPLES],
+  pub audio_buffer: [i16; NUM_SAMPLES],
   pub buffer_index: usize,
-  pub previous_value: f32,
+  pub previous_value: i16,
   // interrupts: Rc<Cell<InterruptRegisters>>,
   cpu_cycles: i32,
   voices: [Voice; 24],
@@ -90,9 +90,9 @@ impl SPU {
       sound_ram: vec![0; SPU_RAM_SIZE / 2].into_boxed_slice(),
       reverb: Reverb::new(),
       endx: 0,
-      audio_buffer: [0.0; NUM_SAMPLES],
+      audio_buffer: [0; NUM_SAMPLES],
       buffer_index: 0,
-      previous_value: 0.0
+      previous_value: 0
     }
   }
 
@@ -184,8 +184,24 @@ impl SPU {
 
   fn push_sample(&mut self, sample: f32) {
     if self.buffer_index < NUM_SAMPLES {
-      self.audio_buffer[self.buffer_index] = sample;
+      self.audio_buffer[self.buffer_index] = SPU::to_i16(sample);
       self.buffer_index += 1;
+    }
+  }
+
+  fn to_i16(sample: f32) -> i16 {
+    if sample >= 0.0 {
+      (sample * f32::from(i16::max_value())) as i16
+    } else {
+        (-sample * f32::from(i16::min_value())) as i16
+    }
+  }
+
+  fn to_f32(value: i16) -> f32 {
+    if value >= 0 {
+      f32::from(value) / f32::from(i16::max_value())
+    } else {
+        -f32::from(value) / f32::from(i16::min_value())
     }
   }
 

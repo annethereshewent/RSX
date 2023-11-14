@@ -1,4 +1,4 @@
-use super::adsr::{Adsr, AdsrState};
+use super::{adsr::{Adsr, AdsrState}, SPU};
 
 pub const MAX_SAMPLES: usize = 28;
 
@@ -133,17 +133,17 @@ impl Voice {
     let sample_index = (self.counter >> 12) as usize;
 
     let mut sample = if self.noise {
-      self.noise_level as f32
+      SPU::to_f32(self.noise_level)
     } else {
       self.gaussian_interpolation(sample_index as isize)
     };
 
-    sample *= self.adsr.current_volume as f32;
+    sample *= SPU::to_f32(self.adsr.current_volume);
 
     self.modulator = sample as i16;
 
-    let volume_left = self.volume_left as f32;
-    let volume_right = self.volume_right as f32;
+    let volume_left = SPU::to_f32(self.volume_left);
+    let volume_right = SPU::to_f32(self.volume_right);
 
     (sample * volume_left, sample * volume_right)
   }
@@ -249,7 +249,7 @@ impl Voice {
     out += (GAUSS_TABLE[0x100 + gauss_index] * newer) >> 15;
     out += (GAUSS_TABLE[gauss_index] * newest) >> 15;
 
-    out as f32
+    SPU::to_f32(out as i16)
   }
 
   fn get_sample(&self, sample_index: isize) -> i16 {

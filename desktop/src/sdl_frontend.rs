@@ -6,7 +6,7 @@ pub struct PsxAudioCallback<'a> {
 }
 
 impl AudioCallback for PsxAudioCallback<'_> {
-  type Channel = f32;
+  type Channel = i16;
 
   fn callback(&mut self, buf: &mut [Self::Channel]) {
     let mut index = 0;
@@ -15,7 +15,7 @@ impl AudioCallback for PsxAudioCallback<'_> {
       *b = if index >= self.spu.buffer_index {
         self.spu.previous_value
       } else {
-        self.spu.audio_buffer[index] * 0.0005
+        self.spu.audio_buffer[index]
       };
 
       self.spu.previous_value = *b;
