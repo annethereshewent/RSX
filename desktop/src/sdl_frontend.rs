@@ -1,5 +1,5 @@
 use rustation::{gpu::GPU, spu::SPU};
-use sdl2::{video::Window, EventPump, event::Event, render::Canvas, pixels::PixelFormatEnum, audio::{AudioSpecDesired, AudioCallback}, Sdl};
+use sdl2::{video::Window, EventPump, event::Event, render::Canvas, pixels::PixelFormatEnum, audio::AudioCallback, Sdl};
 
 pub struct PsxAudioCallback<'a> {
   pub spu: &'a mut SPU
