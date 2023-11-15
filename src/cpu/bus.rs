@@ -30,7 +30,7 @@ impl Bus {
       bios,
       ram: [0; RAM_SIZE],
       gpu: GPU::new(interrupts.clone()),
-      spu: SPU::new(interrupts.clone()),
+      spu: SPU::new(),
       timers: Timers::new(interrupts.clone()),
       counter: Counter::new(),
       interrupts,
@@ -267,7 +267,11 @@ impl Bus {
     self.timers.tick(cycles);
     self.gpu.tick(cycles, &mut self.timers);
 
-    self.spu.tick_counter(cycles);
+    let mut interrupts = self.interrupts.get();
+
+    self.spu.tick_counter(cycles, &mut interrupts);
+
+    self.interrupts.set(interrupts);
 
     let mut dma = self.dma.get();
     dma.tick_counter(cycles);

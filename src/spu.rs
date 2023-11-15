@@ -1,6 +1,4 @@
-use std::{rc::Rc, cell::Cell};
-
-use crate::cpu::interrupt::interrupt_registers::InterruptRegisters;
+use crate::cpu::interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt};
 use self::{voices::Voice, spu_control::{SpuControlRegister, RamTransferMode}, reverb::Reverb};
 
 pub mod voices;
@@ -14,23 +12,36 @@ pub const SPU_RAM_SIZE: usize = 0x80000; // 512 kb
 pub const NUM_SAMPLES: usize = 4096 * 2;
 
 pub struct SoundRam {
-  data: Box<[u8]>
+  data: Box<[u8]>,
+  pub irq_address: u32,
+  pub irq: bool
 }
 
 impl SoundRam {
   pub fn new() -> Self {
     Self {
-      data: vec![0; SPU_RAM_SIZE].into_boxed_slice()
+      data: vec![0; SPU_RAM_SIZE].into_boxed_slice(),
+      irq_address: 0,
+      irq: false
     }
   }
 
-  pub fn read_16(&self, address: u32) -> u16 {
+  pub fn read_16(&mut self, address: u32) -> u16 {
+    if address == self.irq_address {
+      self.irq = true;
+    }
+
     (self.data[address as usize] as u16) | (self.data[(address + 1) as usize] as u16) << 8
   }
 
   pub fn write_16(&mut self, address: u32, val: u16) {
     self.data[address as usize] = val as u8;
     self.data[(address + 1) as usize] = ((val >> 8) & 0xff) as u8;
+
+
+    if address == self.irq_address {
+      self.irq = true;
+    }
   }
 }
 
@@ -56,7 +67,6 @@ pub struct SPU {
   pub audio_buffer: [i16; NUM_SAMPLES],
   pub buffer_index: usize,
   pub previous_value: i16,
-  // interrupts: Rc<Cell<InterruptRegisters>>,
   cpu_cycles: i32,
   voices: [Voice; 24],
   volume_left: i16,
@@ -87,7 +97,7 @@ pub struct SPU {
 pub const CPU_TO_APU_CYCLES: i32 = 768;
 
 impl SPU {
-  pub fn new(interrupts: Rc<Cell<InterruptRegisters>>) -> Self {
+  pub fn new() -> Self {
     Self {
       // interrupts,
       cpu_cycles: 0,
@@ -122,12 +132,12 @@ impl SPU {
   }
 
   // update counter until 768 cycles have passed
-  pub fn tick_counter(&mut self, cycles: i32) {
+  pub fn tick_counter(&mut self, cycles: i32, interrupts: &mut InterruptRegisters) {
     self.cpu_cycles += cycles;
 
     while self.cpu_cycles >= CPU_TO_APU_CYCLES {
       self.cpu_cycles -= CPU_TO_APU_CYCLES;
-      self.tick();
+      self.tick(interrupts);
     }
   }
 
@@ -187,16 +197,16 @@ impl SPU {
 
     if self.noise_timer < 0 {
       self.noise_level = self.noise_level * 2 + parity_bit;
-      self.noise_timer += 0x2000 >> self.control.noise_frequency_shift();
+      self.noise_timer += 0x2_0000 >> self.control.noise_frequency_shift();
 
       if self.noise_timer < 0 {
-        self.noise_timer += 0x2000 >> self.control.noise_frequency_shift();
+        self.noise_timer += 0x2_0000 >> self.control.noise_frequency_shift();
       }
     }
   }
 
   // tick for one APU cycle
-  fn tick(&mut self) {
+  fn tick(&mut self, interrupts: &mut InterruptRegisters) {
     let mut output_left = 0.0;
     let mut output_right = 0.0;
 
@@ -241,6 +251,11 @@ impl SPU {
       output_right += self.reverb.right_out * SPU::to_f32(self.reverb_volume_right);
 
       self.reverb.calculate_reverb([left_reverb, right_reverb], &mut self.sound_ram);
+    }
+
+    if self.control.irq9_enable() && self.sound_ram.irq {
+      self.sound_ram.irq = false;
+      interrupts.status.set_interrupt(Interrupt::Spu);
     }
 
     self.push_sample(output_left);
@@ -395,6 +410,7 @@ impl SPU {
         self.update_echo();
       }
       0x1f80_1da2 => self.reverb.write_mbase(val),
+      0x1f80_1da4 => self.sound_ram.irq_address = (val as u32) * 8,
       0x1f80_1da6 => {
         self.data_transfer.transfer_address = (val as u32) * 8;
         self.data_transfer.current_address = (val as u32) * 8;

@@ -68,7 +68,6 @@ pub struct Voice {
   repeat_address_io_write: bool,
   samples: [i16; MAX_SAMPLES],
   counter: usize,
-  noise_level: i16,
   pub modulator: i16,
   previous_samples: [i16; 2],
   last_samples: [i16; 4]
@@ -90,7 +89,6 @@ impl Voice {
       repeat_address_io_write: false,
       samples: [0; MAX_SAMPLES],
       counter: 0,
-      noise_level: 0,
       modulator: 0,
       previous_samples: [0; 2],
       last_samples: [0; 4]
