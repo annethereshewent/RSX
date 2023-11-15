@@ -197,7 +197,18 @@ impl Cdrom {
   }
 
   fn drive_get_stat(&mut self) {
-    todo!("drive_get_stat not implemented");
+    if self.interrupt_flags == 0 {
+      self.push_stat();
+
+      self.controller_interrupt_flags = 0x2;
+
+      self.controller_mode = ControllerMode::ResponseClear;
+      self.controller_cycles += 10;
+
+      self.drive_mode = DriveMode::Idle;
+    }
+
+    self.drive_cycles += 1;
   }
 
   fn tick_drive(&mut self, spu: &mut SPU) {
