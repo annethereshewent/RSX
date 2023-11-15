@@ -36,7 +36,7 @@ pub struct Reverb {
   mlapf2: u32,
   mrapf1: u32,
   mrapf2: u32,
-  even_odd: bool,
+  calculate_left: bool,
   pub left_out: f32,
   pub right_out: f32,
   pub buffer_address: u32
@@ -80,7 +80,7 @@ impl Reverb {
       mrdiff: 0,
       left_out: 0.0,
       right_out: 0.0,
-      even_odd: false,
+      calculate_left: false,
       buffer_address: 0
     }
   }
@@ -110,61 +110,70 @@ impl Reverb {
     BufferAddress = MAX(mBASE, (BufferAddress+2) AND 7FFFEh)
   */
   pub fn calculate_reverb(&mut self, input: [f32; 2], ram: &mut [u16]) {
-    self.even_odd = !self.even_odd;
+    self.calculate_left = !self.calculate_left;
 
-    if !self.even_odd {
-      return;
+    // per no$psx specs, reverb spends one cycle calculating left output, and the right on the next.
+    if self.calculate_left {
+      self.calculate_left_reverb(ram, input[0]);
+    } else {
+      self.calculate_right_reverb(ram, input[1]);
+
+      // once we have finished calculating both lin and rout, we can update the buffer address to the next address.
+      self.buffer_address = cmp::max((self.buffer_address + 2) & 0x7fffe, self.mbase);
     }
+  }
 
-    let lin = SPU::to_f32(self.vlin) * input[0];
-    let rin = SPU::to_f32(self.vrin) * input[1];
-
-    let temp = self.get_from_ram(ram, self.mlsame - 2);
-    let mlsame = lin + self.get_from_ram(ram,self.dlsame) * SPU::to_f32(self.vwall) - temp * SPU::to_f32(self.viir) + temp;
-    self.write_to_ram(ram, self.mlsame, mlsame);
+  fn calculate_right_reverb(&mut self, ram: &mut [u16], right_input: f32) {
+    let rin = SPU::to_f32(self.vrin) * right_input;
 
     let temp = self.get_from_ram(ram, self.mrsame - 2);
     let mrsame = rin + self.get_from_ram(ram,self.drsame) * SPU::to_f32(self.vwall) - temp * SPU::to_f32(self.viir) + temp;
     self.write_to_ram(ram, self.mrsame, mrsame);
 
-    let temp = self.get_from_ram(ram, self.mldiff -2);
-    let mldiff = lin + self.get_from_ram(ram, self.drdiff) * SPU::to_f32(self.vwall) - temp * SPU::to_f32(self.viir) + temp;
-    self.write_to_ram(ram, self.mldiff, mldiff);
-
     let temp = self.get_from_ram(ram, self.mrdiff -2);
     let mrdiff = rin + self.get_from_ram(ram, self.dldiff) * SPU::to_f32(self.vwall) - temp * SPU::to_f32(self.viir) + temp;
     self.write_to_ram(ram, self.mrdiff, mrdiff);
-
-    let mut lout = SPU::to_f32(self.vcomb1) * self.get_from_ram(ram, self.mlcomb1);
-    lout += SPU::to_f32(self.vcomb2) * self.get_from_ram(ram, self.mlcomb2);
-    lout += SPU::to_f32(self.vcomb3) * self.get_from_ram(ram, self.mlcomb3);
-    lout += SPU::to_f32(self.vcomb4) * self.get_from_ram(ram, self.mlcomb4);
 
     let mut rout = SPU::to_f32(self.vcomb1) * self.get_from_ram(ram, self.mrcomb1);
     rout += SPU::to_f32(self.vcomb2) * self.get_from_ram(ram, self.mrcomb2);
     rout += SPU::to_f32(self.vcomb3) * self.get_from_ram(ram, self.mrcomb3);
     rout += SPU::to_f32(self.vcomb4) * self.get_from_ram(ram, self.mrcomb4);
 
-    lout -= SPU::to_f32(self.vapf1) * self.get_from_ram(ram, self.mlapf1 - self.dapf1);
-    self.write_to_ram(ram, self.mlapf1, lout);
-    lout = lout * SPU::to_f32(self.vapf1) + self.get_from_ram(ram, self.mlapf1 - self.dapf1);
-
     rout -= SPU::to_f32(self.vapf1) * self.get_from_ram(ram, self.mrapf1 - self.dapf1);
     self.write_to_ram(ram, self.mrapf1, rout);
     rout = rout * SPU::to_f32(self.vapf1) + self.get_from_ram(ram, self.mrapf1 - self.dapf1);
-
-    lout -= SPU::to_f32(self.vapf2) * self.get_from_ram(ram, self.mlapf2 - self.dapf2);
-    self.write_to_ram(ram, self.mlapf2, lout);
-    lout = lout * SPU::to_f32(self.vapf2) + self.get_from_ram(ram, self.mlapf2 - self.dapf2);
 
     rout -= SPU::to_f32(self.vapf2) * self.get_from_ram(ram, self.mrapf2 - self.dapf2);
     self.write_to_ram(ram, self.mrapf2, rout);
     rout = rout * SPU::to_f32(self.vapf2) + self.get_from_ram(ram, self.mrapf2 - self.dapf2);
 
-    self.left_out = lout;
     self.right_out = rout;
+  }
+  fn calculate_left_reverb(&mut self, ram: &mut [u16], left_input: f32) {
+    let lin = SPU::to_f32(self.vlin) * left_input;
 
-    self.buffer_address = cmp::max((self.buffer_address + 2) & 0x7fffe, self.mbase);
+    let temp = self.get_from_ram(ram, self.mlsame - 2);
+    let mlsame = lin + self.get_from_ram(ram,self.dlsame) * SPU::to_f32(self.vwall) - temp * SPU::to_f32(self.viir) + temp;
+    self.write_to_ram(ram, self.mlsame, mlsame);
+
+    let temp = self.get_from_ram(ram, self.mldiff -2);
+    let mldiff = lin + self.get_from_ram(ram, self.drdiff) * SPU::to_f32(self.vwall) - temp * SPU::to_f32(self.viir) + temp;
+    self.write_to_ram(ram, self.mldiff, mldiff);
+
+    let mut lout = SPU::to_f32(self.vcomb1) * self.get_from_ram(ram, self.mlcomb1);
+    lout += SPU::to_f32(self.vcomb2) * self.get_from_ram(ram, self.mlcomb2);
+    lout += SPU::to_f32(self.vcomb3) * self.get_from_ram(ram, self.mlcomb3);
+    lout += SPU::to_f32(self.vcomb4) * self.get_from_ram(ram, self.mlcomb4);
+
+    lout -= SPU::to_f32(self.vapf1) * self.get_from_ram(ram, self.mlapf1 - self.dapf1);
+    self.write_to_ram(ram, self.mlapf1, lout);
+    lout = lout * SPU::to_f32(self.vapf1) + self.get_from_ram(ram, self.mlapf1 - self.dapf1);
+
+    lout -= SPU::to_f32(self.vapf2) * self.get_from_ram(ram, self.mlapf2 - self.dapf2);
+    self.write_to_ram(ram, self.mlapf2, lout);
+    lout = lout * SPU::to_f32(self.vapf2) + self.get_from_ram(ram, self.mlapf2 - self.dapf2);
+
+    self.left_out = lout;
   }
 
   fn get_from_ram(&self, ram: &mut [u16], address: u32) -> f32 {
