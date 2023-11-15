@@ -1,6 +1,6 @@
 use std::cmp;
 
-use super::SPU;
+use super::{SPU, SoundRam};
 
 pub struct Reverb {
   pub mbase: u32,
@@ -109,7 +109,7 @@ impl Reverb {
     ___Finally, before repeating the above steps_________________________________
     BufferAddress = MAX(mBASE, (BufferAddress+2) AND 7FFFEh)
   */
-  pub fn calculate_reverb(&mut self, input: [f32; 2], ram: &mut [u8]) {
+  pub fn calculate_reverb(&mut self, input: [f32; 2], ram: &mut SoundRam) {
     self.calculate_left = !self.calculate_left;
 
     // per no$psx specs, reverb spends one cycle calculating left output, and the right on the next.
@@ -123,7 +123,7 @@ impl Reverb {
     }
   }
 
-  fn calculate_right_reverb(&mut self, ram: &mut [u8], right_input: f32) {
+  fn calculate_right_reverb(&mut self, ram: &mut SoundRam, right_input: f32) {
     let rin = SPU::to_f32(self.vrin) * right_input;
 
     let temp = self.get_from_ram(ram, self.mrsame - 2);
@@ -149,7 +149,7 @@ impl Reverb {
 
     self.right_out = rout;
   }
-  fn calculate_left_reverb(&mut self, ram: &mut [u8], left_input: f32) {
+  fn calculate_left_reverb(&mut self, ram: &mut SoundRam, left_input: f32) {
     let lin = SPU::to_f32(self.vlin) * left_input;
 
     let temp = self.get_from_ram(ram, self.mlsame - 2);
@@ -176,26 +176,23 @@ impl Reverb {
     self.left_out = lout;
   }
 
-  fn get_from_ram(&self, ram: &mut [u8], address: u32) -> f32 {
-    let address = self.calculate_address(address);
-
-    let value = (ram[address] as u16) | (ram[address + 1] as u16) << 8;
-    SPU::to_f32(value as i16)
+  fn get_from_ram(&self, ram: &mut SoundRam, address: u32) -> f32 {
+    let value = ram.read_16(self.calculate_address(address)) as i16;
+    SPU::to_f32(value)
   }
 
-  fn write_to_ram(&self, ram: &mut [u8], address: u32, val: f32) {
+  fn write_to_ram(&self, ram: &mut SoundRam, address: u32, val: f32) {
     let address = self.calculate_address(address);
     let result = SPU::to_i16(val) as u16;
 
-    ram[address] = result as u8;
-    ram[address + 1] = (result >> 8) as u8;
+    ram.write_16(address, result);
   }
 
-  fn calculate_address(&self, address: u32) -> usize {
+  fn calculate_address(&self, address: u32) -> u32 {
     let mut offset = self.buffer_address + address - self.mbase;
     offset %= 0x80000 - self.mbase;
 
-    ((self.mbase + offset) & 0x7fffe) as usize
+    (self.mbase + offset) & 0x7fffe
   }
 
   pub fn write_16(&mut self, address: u32, val: u16) {

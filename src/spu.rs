@@ -13,6 +13,27 @@ pub const SPU_RAM_SIZE: usize = 0x80000; // 512 kb
 
 pub const NUM_SAMPLES: usize = 4096 * 2;
 
+pub struct SoundRam {
+  data: Box<[u8]>
+}
+
+impl SoundRam {
+  pub fn new() -> Self {
+    Self {
+      data: vec![0; SPU_RAM_SIZE].into_boxed_slice()
+    }
+  }
+
+  pub fn read_16(&self, address: u32) -> u16 {
+    (self.data[address as usize] as u16) | (self.data[(address + 1) as usize] as u16) << 8
+  }
+
+  pub fn write_16(&mut self, address: u32, val: u16) {
+    self.data[address as usize] = val as u8;
+    self.data[(address + 1) as usize] = ((val >> 8) & 0xff) as u8;
+  }
+}
+
 struct DataTransfer {
   control: u16,
   transfer_address: u32,
@@ -56,7 +77,7 @@ pub struct SPU {
   control: SpuControlRegister,
   irq_status: bool,
   data_transfer: DataTransfer,
-  sound_ram: Box<[u8]>,
+  sound_ram: SoundRam,
   reverb: Reverb,
   endx: u32
 }
@@ -87,7 +108,7 @@ impl SPU {
       control: SpuControlRegister::new(),
       irq_status: false,
       data_transfer: DataTransfer::new(),
-      sound_ram: vec![0; SPU_RAM_SIZE].into_boxed_slice(),
+      sound_ram: SoundRam::new(),
       reverb: Reverb::new(),
       endx: 0,
       audio_buffer: [0; NUM_SAMPLES],
@@ -363,8 +384,7 @@ impl SPU {
 
             let address = self.data_transfer.current_address;
 
-            self.sound_ram[address as usize] = sample as u8;
-            self.sound_ram[(address + 1) as usize] = ((sample >> 8) & 0xff) as u8;
+            self.sound_ram.write_16(address, sample);
 
             self.data_transfer.current_address = (self.data_transfer.current_address + 2) & 0x7ffff;
           }

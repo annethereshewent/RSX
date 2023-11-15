@@ -1,4 +1,4 @@
-use super::{adsr::{Adsr, AdsrState}, SPU};
+use super::{adsr::{Adsr, AdsrState}, SPU, SoundRam};
 
 pub const MAX_SAMPLES: usize = 28;
 
@@ -152,7 +152,7 @@ impl Voice {
     (sample * volume_left, sample * volume_right)
   }
 
-  pub fn tick(&mut self, modulate: bool, modulator: i16, sound_ram: &mut [u8]) {
+  pub fn tick(&mut self, modulate: bool, modulator: i16, sound_ram: &mut SoundRam) {
     let mut step = self.pitch as u32;
 
     if modulate {
@@ -188,12 +188,8 @@ impl Voice {
     }
   }
 
-  fn get_ram_address(&self) -> usize {
-    self.current_address as usize
-  }
-
-  fn decode_samples(&mut self, sound_ram: &mut [u8]) {
-    let header = sound_ram[self.get_ram_address()] as u16 | (sound_ram[self.get_ram_address() + 1] as u16) << 8;
+  fn decode_samples(&mut self, sound_ram: &mut SoundRam) {
+    let header = sound_ram.read_16(self.current_address);
 
     let flags = header >> 8;
     let options = header & 0xff;
@@ -212,8 +208,7 @@ impl Voice {
 
     // there are 14 samples to fetch after getting the header
     for i in 0..7 {
-      let address = self.get_ram_address();
-      let mut samples = (sound_ram[address] as u16) | (sound_ram[address + 1] as u16) << 8;
+      let mut samples = sound_ram.read_16(self.current_address);
 
       // each sample is 4 bits long, 16 / 4 = 4
       for j in 0..4 {
