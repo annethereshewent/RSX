@@ -55,7 +55,11 @@ pub struct Cdrom {
   drive_mode: DriveMode,
   next_drive_mode: DriveMode,
   double_speed: bool,
-  processing_seek: bool
+  processing_seek: bool,
+  send_adpcm_sectors: bool,
+  report_interrupts: bool,
+  xa_filter: bool,
+  sector_size: bool
 }
 
 impl Cdrom {
@@ -84,7 +88,11 @@ impl Cdrom {
       mm: 0,
       sect: 0,
       double_speed: false,
-      processing_seek: false
+      processing_seek: false,
+      send_adpcm_sectors: false,
+      report_interrupts: false,
+      xa_filter: false,
+      sector_size: false
     }
   }
 
@@ -320,11 +328,13 @@ impl Cdrom {
     }
   }
 
-  pub fn execute(&mut self, command: u8) {
+  fn execute(&mut self, command: u8) {
     let mut interrupt = 0x3;
     match command {
       0x01 => self.push_stat(),
       0x02 => self.setloc(),
+      0x06 => self.readn(),
+      0x0e => self.setmode(),
       0x15 | 0x16 => self.seek(),
       0x19 => {
         let sub_function = self.controller_param_buffer.pop_front().unwrap();
@@ -356,6 +366,45 @@ impl Cdrom {
     }
 
     self.controller_interrupt_flags = interrupt;
+  }
+
+  fn setmode(&mut self) {
+    let param = self.controller_param_buffer.pop_front().unwrap();
+
+    self.double_speed = (param >> 7) & 0b1 == 1;
+    self.send_adpcm_sectors = (param >> 6) & 0b1 == 1;
+    self.sector_size = (param >> 5) & 0b1 == 1;
+    // bit 4 is the ignore bit, but according to no$psx its purpose is unknown.
+    // ignoring it for now
+
+    self.xa_filter = (param >> 3) & 0b1 == 1;
+    self.report_interrupts = (param >> 2) & 0b1 == 1;
+
+  }
+
+  fn readn(&mut self) {
+    if self.processing_seek {
+      self.drive_mode = DriveMode::Seek;
+      self.next_drive_mode = DriveMode::Read;
+
+      self.drive_cycles += if self.double_speed {
+        140
+      } else {
+        280
+      };
+    } else {
+      self.drive_mode = DriveMode::Read;
+
+      let divisor = if self.double_speed {
+        150
+      } else {
+        75
+      };
+
+      self.drive_cycles += 44100 / divisor;
+    }
+
+    self.push_stat();
   }
 
   fn push_stat(&mut self) {
