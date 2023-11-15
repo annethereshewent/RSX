@@ -225,81 +225,95 @@ impl Cdrom {
     }
   }
 
+  fn controller_check_commands(&mut self) {
+    if self.command.is_some() {
+      if !self.param_buffer.is_empty() {
+        self.controller_mode = ControllerMode::ParamTransfer;
+      } else {
+        self.controller_mode = ControllerMode::CommandTransfer;
+      }
+
+      self.controller_cycles += 1;
+    }
+  }
+
+  fn controller_param_transfer(&mut self) {
+    if !self.param_buffer.is_empty() {
+      let param = self.param_buffer.pop_front().unwrap();
+
+      self.controller_param_buffer.push_back(param);
+    } else {
+      self.controller_mode = ControllerMode::CommandTransfer;
+    }
+
+    self.controller_cycles += 10;
+  }
+
+  fn controller_command_transfer(&mut self) {
+    self.current_command = self.command.take().unwrap();
+
+    self.controller_mode = ControllerMode::CommandExecute;
+
+    self.controller_cycles += 10;
+  }
+
+  fn controller_command_execute(&mut self) {
+    let command = self.current_command;
+
+    self.controller_cycles += 10;
+
+    self.controller_response_buffer.clear();
+
+    self.execute(command);
+
+    self.controller_param_buffer.clear();
+
+    self.controller_mode = ControllerMode::ResponseClear;
+  }
+
+  fn controller_response_clear(&mut self) {
+    if !self.response_buffer.is_empty() {
+      self.response_buffer.pop_front();
+    } else {
+      self.controller_mode = ControllerMode::ResponseTransfer;
+    }
+
+    self.controller_cycles += 10;
+  }
+
+  fn controller_response_transfer(&mut self) {
+    if !self.controller_response_buffer.is_empty() {
+      self.response_buffer.push_back(self.controller_response_buffer.pop_front().unwrap());
+    } else {
+      self.controller_mode = ControllerMode::InterruptTransfer
+    }
+
+    self.controller_cycles += 10;
+  }
+
+  fn controller_interrupt_transfer(&mut self) {
+    if self.interrupt_flags == 0 {
+      self.interrupt_flags = self.controller_interrupt_flags;
+
+      self.controller_mode = ControllerMode::Idle;
+      self.controller_cycles += 10;
+    } else {
+      self.controller_cycles += 1;
+    }
+  }
+
   fn tick_controller(&mut self) {
     self.controller_cycles -= 1;
 
     if self.controller_cycles <= 0 {
       match self.controller_mode {
-        ControllerMode::Idle => {
-          if self.command.is_some() {
-            if !self.param_buffer.is_empty() {
-              self.controller_mode = ControllerMode::ParamTransfer;
-            } else {
-              self.controller_mode = ControllerMode::CommandTransfer;
-            }
-
-            self.controller_cycles += 1;
-          }
-        },
-        ControllerMode::ParamTransfer => {
-          if !self.param_buffer.is_empty() {
-            let param = self.param_buffer.pop_front().unwrap();
-
-            self.controller_param_buffer.push_back(param);
-          } else {
-            self.controller_mode = ControllerMode::CommandTransfer;
-          }
-
-          self.controller_cycles += 10;
-        }
-        ControllerMode::CommandTransfer => {
-          self.current_command = self.command.take().unwrap();
-
-          self.controller_mode = ControllerMode::CommandExecute;
-
-          self.controller_cycles += 10;
-        }
-        ControllerMode::CommandExecute => {
-          let command = self.current_command;
-
-          self.controller_cycles += 10;
-
-          self.controller_response_buffer.clear();
-
-          self.execute(command);
-
-          self.controller_param_buffer.clear();
-
-          self.controller_mode = ControllerMode::ResponseClear;
-        }
-        ControllerMode::ResponseClear => {
-          if !self.response_buffer.is_empty() {
-            self.response_buffer.pop_front();
-          } else {
-            self.controller_mode = ControllerMode::ResponseTransfer;
-          }
-
-          self.controller_cycles += 10;
-        }
-        ControllerMode::ResponseTransfer => {
-          if !self.controller_response_buffer.is_empty() {
-            self.response_buffer.push_back(self.controller_response_buffer.pop_front().unwrap());
-          } else {
-            self.controller_mode = ControllerMode::InterruptTransfer
-          }
-
-          self.controller_cycles += 10;
-        }
-        ControllerMode::InterruptTransfer => {
-          if self.interrupt_flags == 0 {
-            self.interrupt_flags = self.controller_interrupt_flags;
-
-            self.controller_mode = ControllerMode::Idle;
-            self.controller_cycles += 10;
-          } else {
-            self.controller_cycles += 1;
-          }
-        }
+        ControllerMode::Idle => self.controller_check_commands(),
+        ControllerMode::ParamTransfer => self.controller_param_transfer(),
+        ControllerMode::CommandTransfer => self.controller_command_transfer(),
+        ControllerMode::CommandExecute => self.controller_command_execute(),
+        ControllerMode::ResponseClear => self.controller_response_clear(),
+        ControllerMode::ResponseTransfer => self.controller_response_transfer(),
+        ControllerMode::InterruptTransfer => self.controller_interrupt_transfer()
       }
     }
   }
