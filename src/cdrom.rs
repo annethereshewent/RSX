@@ -21,7 +21,7 @@ pub enum ControllerMode {
   InterruptTransfer
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 pub enum DriveMode {
   Idle,
   Seek,
@@ -52,7 +52,9 @@ pub struct Cdrom {
   mm: u8,
   sect: u8,
   drive_mode: DriveMode,
-  next_drive_mode: DriveMode
+  next_drive_mode: DriveMode,
+  double_speed: bool,
+  processing_seek: bool
 }
 
 impl Cdrom {
@@ -79,7 +81,9 @@ impl Cdrom {
       controller_interrupt_flags: 0,
       ss: 0,
       mm: 0,
-      sect: 0
+      sect: 0,
+      double_speed: false,
+      processing_seek: false
     }
   }
 
@@ -105,68 +109,109 @@ impl Cdrom {
     }
   }
 
+  pub fn subresponse_get_id(&mut self) {
+    // per https://psx-spx.consoledev.net/cdromdrive/#getid-command-1ah-int3stat-int25-statflagstypeatipscex
+    /*
+      1st byte: stat  (as usually, but with bit3 same as bit7 in 2nd byte)
+      2nd byte: flags (bit7=denied, bit4=audio... or reportedly import, uh?)
+        bit7: Licensed (0=Licensed Data CD, 1=Denied Data CD or Audio CD)
+        bit6: Missing  (0=Disk Present, 1=Disk Missing)
+        bit4: Audio CD (0=Data CD, 1=Audio CD) (always 0 when Modchip installed)
+      3rd byte: Disk type (from TOC Point=A0h) (eg. 00h=Audio or Mode1, 20h=Mode2)
+      4th byte: Usually 00h (or 8bit ATIP from Point=C0h, if session info exists)
+        that 8bit ATIP value is taken form the middle 8bit of the 24bit ATIP value
+      5th-8th byte: SCEx region (eg. ASCII "SCEE" = Europe) (0,0,0,0 = Unlicensed)
+      */
+
+      if self.interrupt_flags == 0 {
+      self.controller_response_buffer.push_back(0x2);
+      self.controller_response_buffer.push_back(0x0);
+      self.controller_response_buffer.push_back(0x20);
+      self.controller_response_buffer.push_back(0x0);
+      self.controller_response_buffer.push_back('S' as u8);
+      self.controller_response_buffer.push_back('C' as u8);
+      self.controller_response_buffer.push_back('E' as u8);
+      self.controller_response_buffer.push_back('A' as u8);
+
+      self.controller_mode = ControllerMode::ResponseClear;
+      self.controller_interrupt_flags = 0x2;
+
+      self.controller_cycles += 10;
+
+      self.subresponse = SubResponse::Disabled;
+    }
+
+    self.subresponse_cycles += 1;
+  }
+
+  fn subresponse_get_stat(&mut self) {
+    // this is supposed to get the table of contents, but apparently we can effectively just get stat again as the second byte and issue an interrupt
+    if self.interrupt_flags == 0 {
+      self.push_stat();
+
+      self.controller_mode = ControllerMode::ResponseClear;
+
+      self.controller_interrupt_flags = 0x2;
+
+      self.controller_cycles += 10;
+
+      self.subresponse = SubResponse::Disabled;
+    }
+
+    self.subresponse_cycles += 1;
+  }
+
   fn tick_subresponse(&mut self) {
     self.subresponse_cycles -= 1;
 
     if self.subresponse_cycles <= 0 {
       match self.subresponse {
         SubResponse::Disabled => self.subresponse_cycles += 1,
-        SubResponse::GetID => {
-          // per https://psx-spx.consoledev.net/cdromdrive/#getid-command-1ah-int3stat-int25-statflagstypeatipscex
-          /*
-            1st byte: stat  (as usually, but with bit3 same as bit7 in 2nd byte)
-            2nd byte: flags (bit7=denied, bit4=audio... or reportedly import, uh?)
-              bit7: Licensed (0=Licensed Data CD, 1=Denied Data CD or Audio CD)
-              bit6: Missing  (0=Disk Present, 1=Disk Missing)
-              bit4: Audio CD (0=Data CD, 1=Audio CD) (always 0 when Modchip installed)
-            3rd byte: Disk type (from TOC Point=A0h) (eg. 00h=Audio or Mode1, 20h=Mode2)
-            4th byte: Usually 00h (or 8bit ATIP from Point=C0h, if session info exists)
-              that 8bit ATIP value is taken form the middle 8bit of the 24bit ATIP value
-            5th-8th byte: SCEx region (eg. ASCII "SCEE" = Europe) (0,0,0,0 = Unlicensed)
-           */
-
-          if self.interrupt_flags == 0 {
-            self.controller_response_buffer.push_back(0x2);
-            self.controller_response_buffer.push_back(0x0);
-            self.controller_response_buffer.push_back(0x20);
-            self.controller_response_buffer.push_back(0x0);
-            self.controller_response_buffer.push_back('S' as u8);
-            self.controller_response_buffer.push_back('C' as u8);
-            self.controller_response_buffer.push_back('E' as u8);
-            self.controller_response_buffer.push_back('A' as u8);
-
-            self.controller_mode = ControllerMode::ResponseClear;
-            self.controller_interrupt_flags = 0x2;
-
-            self.controller_cycles += 10;
-
-            self.subresponse = SubResponse::Disabled;
-          }
-
-          self.subresponse_cycles += 1;
-        }
-        SubResponse::GetStat => {
-          // this is supposed to get the table of contents, but apparently we can effectively just get stat again as the second byte and issue an interrupt
-          if self.interrupt_flags == 0 {
-            self.push_stat();
-
-            self.controller_mode = ControllerMode::ResponseClear;
-
-            self.controller_interrupt_flags = 0x2;
-
-            self.controller_cycles += 10;
-
-            self.subresponse = SubResponse::Disabled;
-          }
-
-          self.subresponse_cycles += 1;
-        }
+        SubResponse::GetID => self.subresponse_get_id(),
+        SubResponse::GetStat => self.subresponse_get_stat()
       }
     }
   }
 
-  fn tick_drive(&mut self, spu: &mut SPU) {
+  fn seek_drive(&mut self) {
+    self.processing_seek = false;
 
+    match self.next_drive_mode {
+      DriveMode::Read | DriveMode::Play => {
+        let divisor = if self.double_speed { 150 } else { 75 };
+
+        self.drive_cycles += 44100 / divisor;
+      }
+      _ => self.drive_cycles += 10
+    }
+
+    self.drive_mode = self.next_drive_mode;
+  }
+
+  fn play_drive(&mut self) {
+    todo!("play_drive not implemented");
+  }
+
+  fn read_drive(&mut self) {
+    todo!("read_drive not implemented");
+  }
+
+  fn drive_get_stat(&mut self) {
+    todo!("drive_get_stat not implemented");
+  }
+
+  fn tick_drive(&mut self, spu: &mut SPU) {
+    self.drive_cycles -= 1;
+
+    if self.drive_cycles <= 0 {
+      match self.drive_mode {
+        DriveMode::Idle => self.drive_cycles += 1,
+        DriveMode::Seek => self.seek_drive(),
+        DriveMode::Play => self.play_drive(),
+        DriveMode::Read => self.read_drive(),
+        DriveMode::GetStat => self.drive_get_stat()
+      }
+    }
   }
 
   fn tick_controller(&mut self) {
@@ -253,7 +298,7 @@ impl Cdrom {
     match command {
       0x01 => self.push_stat(),
       0x02 => self.setloc(),
-      // 0x15 | 0x16 => self.seek(),
+      0x15 | 0x16 => self.seek(),
       0x19 => {
         let sub_function = self.controller_param_buffer.pop_front().unwrap();
         // per https://psx-spx.consoledev.net/cdromdrive/#19h20h-int3yymmddver
@@ -297,13 +342,21 @@ impl Cdrom {
     self.mm = self.controller_param_buffer.pop_front().unwrap();
     self.ss = self.controller_param_buffer.pop_front().unwrap();
     self.sect = self.controller_param_buffer.pop_front().unwrap();
+
+    self.processing_seek = true;
   }
 
   fn seek(&mut self) {
     self.push_stat();
 
     self.drive_mode = DriveMode::Seek;
+    self.next_drive_mode = DriveMode::GetStat;
 
+    self.drive_cycles += if self.double_speed {
+      28
+    } else {
+      14
+    };
   }
 
   fn get_stat(&self) -> u8 {
