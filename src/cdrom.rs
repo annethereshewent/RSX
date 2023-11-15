@@ -3,6 +3,10 @@ use std::{rc::Rc, cell::Cell, collections::VecDeque};
 use crate::{cpu::interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}, spu::SPU};
 
 const CDROM_CYCLES: i32 = 768;
+pub const SECTORS_PER_SECOND: u64 = 75;
+pub const SECTORS_PER_MINUTE: u64 = 60 * SECTORS_PER_SECOND;
+pub const BYTES_PER_SECTOR: u64 = 2352;
+pub const LEAD_IN_SECTORS: u64 = 2 * SECTORS_PER_SECOND;
 
 #[derive(PartialEq)]
 pub enum SubResponse {
@@ -52,6 +56,9 @@ pub struct Cdrom {
   ss: u8,
   mm: u8,
   sect: u8,
+  current_ss: u8,
+  current_mm: u8,
+  current_sect: u8,
   drive_mode: DriveMode,
   next_drive_mode: DriveMode,
   double_speed: bool,
@@ -87,6 +94,9 @@ impl Cdrom {
       ss: 0,
       mm: 0,
       sect: 0,
+      current_ss: 0,
+      current_mm: 0,
+      current_sect: 0,
       double_speed: false,
       processing_seek: false,
       send_adpcm_sectors: false,
@@ -186,6 +196,10 @@ impl Cdrom {
   fn seek_drive(&mut self) {
     self.processing_seek = false;
 
+    self.current_mm = self.mm;
+    self.current_ss = self.ss;
+    self.current_sect = self.sect;
+
     match self.next_drive_mode {
       DriveMode::Read | DriveMode::Play => {
         let divisor = if self.double_speed { 150 } else { 75 };
@@ -203,7 +217,19 @@ impl Cdrom {
   }
 
   fn read_drive(&mut self) {
-    todo!("read_drive not implemented");
+    self.push_stat();
+
+    let file_pointer = self.get_seek_pointer();
+  }
+
+  fn get_seek_pointer(&self) -> u64 {
+    let mut sector = self.current_ss as u64 * SECTORS_PER_SECOND + self.current_mm as u64 * SECTORS_PER_MINUTE + self.current_sect as u64;
+
+    if sector >= LEAD_IN_SECTORS {
+      sector -= LEAD_IN_SECTORS;
+    }
+
+    sector * BYTES_PER_SECTOR
   }
 
   fn drive_get_stat(&mut self) {
