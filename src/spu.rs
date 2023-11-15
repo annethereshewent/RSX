@@ -79,7 +79,9 @@ pub struct SPU {
   data_transfer: DataTransfer,
   sound_ram: SoundRam,
   reverb: Reverb,
-  endx: u32
+  endx: u32,
+  noise_level: i16,
+  noise_timer: isize
 }
 
 pub const CPU_TO_APU_CYCLES: i32 = 768;
@@ -113,7 +115,9 @@ impl SPU {
       endx: 0,
       audio_buffer: [0; NUM_SAMPLES],
       buffer_index: 0,
-      previous_value: 0
+      previous_value: 0,
+      noise_level: 1,
+      noise_timer: 0
     }
   }
 
@@ -121,8 +125,8 @@ impl SPU {
   pub fn tick_counter(&mut self, cycles: i32) {
     self.cpu_cycles += cycles;
 
-    while self.cpu_cycles >= 768 {
-      self.cpu_cycles -= 768;
+    while self.cpu_cycles >= CPU_TO_APU_CYCLES {
+      self.cpu_cycles -= CPU_TO_APU_CYCLES;
       self.tick();
     }
   }
@@ -167,6 +171,30 @@ impl SPU {
     }
   }
 
+  // per https://psx-spx.consoledev.net/soundprocessingunitspu/#spu-noise-generator
+  fn tick_noise(&mut self) {
+    let noise_step = self.control.noise_frequency_step();
+
+    self.noise_timer -= noise_step as isize;
+
+    let mut parity_bit = (self.noise_level >> 15) & 0b1;
+
+    for i in 12..9 {
+      parity_bit ^= (self.noise_level >> i) & 0b1;
+    }
+
+    parity_bit ^= 1;
+
+    if self.noise_timer < 0 {
+      self.noise_level = self.noise_level * 2 + parity_bit;
+      self.noise_timer += 0x2000 >> self.control.noise_frequency_shift();
+
+      if self.noise_timer < 0 {
+        self.noise_timer += 0x2000 >> self.control.noise_frequency_shift();
+      }
+    }
+  }
+
   // tick for one APU cycle
   fn tick(&mut self) {
     let mut output_left = 0.0;
@@ -179,6 +207,8 @@ impl SPU {
 
     self.update_endx();
 
+    self.tick_noise();
+
     for i in 0..self.voices.len() {
       let voice = &mut self.voices[i];
 
@@ -186,7 +216,7 @@ impl SPU {
         continue;
       }
 
-      let (sample_left, sample_right) = voice.get_samples();
+      let (sample_left, sample_right) = voice.get_samples(self.noise_level);
 
       output_left += sample_left;
       output_right += sample_right;

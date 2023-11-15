@@ -131,13 +131,13 @@ impl Voice {
     self.adsr.cycles = 0;
   }
 
-  pub fn get_samples(&mut self) -> (f32, f32) {
+  pub fn get_samples(&mut self, noise_level: i16) -> (f32, f32) {
     self.adsr.tick();
 
     let sample_index = (self.counter >> 12) as usize;
 
     let mut sample = if self.noise {
-      SPU::to_f32(self.noise_level)
+      SPU::to_f32(noise_level)
     } else {
       self.gaussian_interpolation(sample_index as isize)
     };
