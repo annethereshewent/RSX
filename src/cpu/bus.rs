@@ -273,7 +273,7 @@ impl Bus {
 
     self.timers.tick(cycles);
     self.gpu.tick(cycles, &mut self.timers);
-    self.cdrom.tick(cycles, &mut self.spu);
+    self.cdrom.tick_counter(cycles, &mut self.spu);
 
     let mut interrupts = self.interrupts.get();
 
