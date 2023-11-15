@@ -80,7 +80,7 @@ impl Reverb {
       mrdiff: 0,
       left_out: 0.0,
       right_out: 0.0,
-      even_odd: true,
+      even_odd: false,
       buffer_address: 0
     }
   }
@@ -110,11 +110,11 @@ impl Reverb {
     BufferAddress = MAX(mBASE, (BufferAddress+2) AND 7FFFEh)
   */
   pub fn calculate_reverb(&mut self, input: [f32; 2], ram: &mut [u16]) {
+    self.even_odd = !self.even_odd;
+
     if !self.even_odd {
       return;
     }
-
-    self.even_odd = !self.even_odd;
 
     let lin = SPU::to_f32(self.vlin) * input[0];
     let rin = SPU::to_f32(self.vrin) * input[1];
