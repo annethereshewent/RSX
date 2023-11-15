@@ -109,7 +109,7 @@ impl Reverb {
     ___Finally, before repeating the above steps_________________________________
     BufferAddress = MAX(mBASE, (BufferAddress+2) AND 7FFFEh)
   */
-  pub fn calculate_reverb(&mut self, input: [f32; 2], ram: &mut [u16]) {
+  pub fn calculate_reverb(&mut self, input: [f32; 2], ram: &mut [u8]) {
     self.calculate_left = !self.calculate_left;
 
     // per no$psx specs, reverb spends one cycle calculating left output, and the right on the next.
@@ -123,7 +123,7 @@ impl Reverb {
     }
   }
 
-  fn calculate_right_reverb(&mut self, ram: &mut [u16], right_input: f32) {
+  fn calculate_right_reverb(&mut self, ram: &mut [u8], right_input: f32) {
     let rin = SPU::to_f32(self.vrin) * right_input;
 
     let temp = self.get_from_ram(ram, self.mrsame - 2);
@@ -149,7 +149,7 @@ impl Reverb {
 
     self.right_out = rout;
   }
-  fn calculate_left_reverb(&mut self, ram: &mut [u16], left_input: f32) {
+  fn calculate_left_reverb(&mut self, ram: &mut [u8], left_input: f32) {
     let lin = SPU::to_f32(self.vlin) * left_input;
 
     let temp = self.get_from_ram(ram, self.mlsame - 2);
@@ -176,19 +176,26 @@ impl Reverb {
     self.left_out = lout;
   }
 
-  fn get_from_ram(&self, ram: &mut [u16], address: u32) -> f32 {
-    SPU::to_f32(ram[self.calculate_address(address)] as i16)
+  fn get_from_ram(&self, ram: &mut [u8], address: u32) -> f32 {
+    let address = self.calculate_address(address);
+
+    let value = (ram[address] as u16) | (ram[address + 1] as u16) << 8;
+    SPU::to_f32(value as i16)
   }
 
-  fn write_to_ram(&self, ram: &mut [u16], address: u32, val: f32) {
-    ram[self.calculate_address(address)] = SPU::to_i16(val) as u16;
+  fn write_to_ram(&self, ram: &mut [u8], address: u32, val: f32) {
+    let address = self.calculate_address(address);
+    let result = SPU::to_i16(val) as u16;
+
+    ram[address] = result as u8;
+    ram[address + 1] = (result >> 8) as u8;
   }
 
   fn calculate_address(&self, address: u32) -> usize {
     let mut offset = self.buffer_address + address - self.mbase;
     offset %= 0x80000 - self.mbase;
 
-    (((self.mbase + offset) & 0x7fffe) /2) as usize
+    ((self.mbase + offset) & 0x7fffe) as usize
   }
 
   pub fn write_16(&mut self, address: u32, val: u16) {

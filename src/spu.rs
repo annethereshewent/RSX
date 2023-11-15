@@ -56,7 +56,7 @@ pub struct SPU {
   control: SpuControlRegister,
   irq_status: bool,
   data_transfer: DataTransfer,
-  sound_ram: Box<[u16]>,
+  sound_ram: Box<[u8]>,
   reverb: Reverb,
   endx: u32
 }
@@ -87,7 +87,7 @@ impl SPU {
       control: SpuControlRegister::new(),
       irq_status: false,
       data_transfer: DataTransfer::new(),
-      sound_ram: vec![0; SPU_RAM_SIZE / 2].into_boxed_slice(),
+      sound_ram: vec![0; SPU_RAM_SIZE].into_boxed_slice(),
       reverb: Reverb::new(),
       endx: 0,
       audio_buffer: [0; NUM_SAMPLES],
@@ -363,7 +363,8 @@ impl SPU {
 
             let address = self.data_transfer.current_address;
 
-            self.sound_ram[(address / 2 ) as usize] = sample;
+            self.sound_ram[address as usize] = sample as u8;
+            self.sound_ram[(address + 1) as usize] = ((sample >> 8) & 0xff) as u8;
 
             self.data_transfer.current_address = (self.data_transfer.current_address + 2) & 0x7ffff;
           }

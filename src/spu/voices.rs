@@ -152,7 +152,7 @@ impl Voice {
     (sample * volume_left, sample * volume_right)
   }
 
-  pub fn tick(&mut self, modulate: bool, modulator: i16, sound_ram: &mut [u16]) {
+  pub fn tick(&mut self, modulate: bool, modulator: i16, sound_ram: &mut [u8]) {
     let mut step = self.pitch as u32;
 
     if modulate {
@@ -189,11 +189,11 @@ impl Voice {
   }
 
   fn get_ram_address(&self) -> usize {
-    (self.current_address / 2) as usize
+    self.current_address as usize
   }
 
-  fn decode_samples(&mut self, sound_ram: &mut [u16]) {
-    let header = sound_ram[self.get_ram_address()];
+  fn decode_samples(&mut self, sound_ram: &mut [u8]) {
+    let header = sound_ram[self.get_ram_address()] as u16 | (sound_ram[self.get_ram_address() + 1] as u16) << 8;
 
     let flags = header >> 8;
     let options = header & 0xff;
@@ -212,7 +212,8 @@ impl Voice {
 
     // there are 14 samples to fetch after getting the header
     for i in 0..7 {
-      let mut samples = sound_ram[self.get_ram_address()];
+      let address = self.get_ram_address();
+      let mut samples = (sound_ram[address] as u16) | (sound_ram[address + 1] as u16) << 8;
 
       // each sample is 4 bits long, 16 / 4 = 4
       for j in 0..4 {
