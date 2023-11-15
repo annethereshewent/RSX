@@ -1,4 +1,4 @@
-use std::{rc::Rc, cell::Cell, collections::VecDeque};
+use std::{rc::Rc, cell::Cell, collections::VecDeque, fs::File, io::{SeekFrom, Read, Seek}};
 
 use crate::{cpu::interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}, spu::SPU};
 
@@ -7,6 +7,74 @@ pub const SECTORS_PER_SECOND: u64 = 75;
 pub const SECTORS_PER_MINUTE: u64 = 60 * SECTORS_PER_SECOND;
 pub const BYTES_PER_SECTOR: u64 = 2352;
 pub const LEAD_IN_SECTORS: u64 = 2 * SECTORS_PER_SECOND;
+
+const HEADER_START: usize = 12;
+const SUBHEADER_START: usize = 16;
+
+#[derive(PartialEq)]
+pub enum CdSubheaderMode {
+  Video,
+  Audio,
+  Data,
+  Error
+}
+
+
+struct CdHeader {
+  mm: u8,
+  ss: u8,
+  sect: u8,
+  mode: u8
+}
+
+impl CdHeader {
+  pub fn new(buf: &mut [u8]) -> Self {
+    let offset = HEADER_START;
+    Self {
+      mm: Self::bcd_to_u8(buf[offset]),
+      ss: Self::bcd_to_u8(buf[offset + 1]),
+      sect: Self::bcd_to_u8(buf[offset + 2]),
+      mode: Self::bcd_to_u8(buf[offset + 3])
+    }
+  }
+
+  pub fn bcd_to_u8(value: u8) -> u8 {
+    ((value >> 4) * 10) + (value & 0xf)
+  }
+
+  pub fn u8_to_bcd(value: u8) -> u8 {
+    ((value / 10) << 4) | (value % 10)
+  }
+}
+
+#[derive(Copy, Clone)]
+struct CdSubheader {
+  file: u8,
+  channel: u8,
+  coding_info: u8,
+  sub_mode: u8
+}
+
+impl CdSubheader {
+  pub fn new(buf: &mut [u8]) -> Self {
+    let offset = SUBHEADER_START;
+    Self {
+      file: buf[offset],
+      channel: buf[offset + 1],
+      sub_mode: buf[offset + 2],
+      coding_info: buf[offset + 3]
+    }
+  }
+
+  pub fn mode(&self) -> CdSubheaderMode {
+    match self.sub_mode & 0xe {
+      2 => CdSubheaderMode::Video,
+      4 => CdSubheaderMode::Audio,
+      0 | 8 => CdSubheaderMode::Data,
+      _ => CdSubheaderMode::Error
+    }
+  }
+}
 
 #[derive(PartialEq)]
 pub enum SubResponse {
@@ -66,11 +134,18 @@ pub struct Cdrom {
   send_adpcm_sectors: bool,
   report_interrupts: bool,
   xa_filter: bool,
-  sector_size: bool
+  sector_size: bool,
+  game_file: File,
+  sector_header: CdHeader,
+  sector_subheader: CdSubheader,
+  sector_buffer: Vec<u8>,
+
+  drive_interrupt_pending: bool,
+  pending_stat: u8
 }
 
 impl Cdrom {
-  pub fn new(interrupts: Rc<Cell<InterruptRegisters>>) -> Self {
+  pub fn new(interrupts: Rc<Cell<InterruptRegisters>>, game_file: File) -> Self {
     Self {
       interrupts,
       index: 0,
@@ -102,7 +177,23 @@ impl Cdrom {
       send_adpcm_sectors: false,
       report_interrupts: false,
       xa_filter: false,
-      sector_size: false
+      sector_size: false,
+      game_file,
+      sector_header: CdHeader {
+        mm: 0,
+        ss: 0,
+        sect: 0,
+        mode: 0
+      },
+      sector_subheader: CdSubheader {
+        file: 0,
+        channel: 0,
+        coding_info: 0,
+        sub_mode: 0
+      },
+      sector_buffer: Vec::new(),
+      drive_interrupt_pending: false,
+      pending_stat: 0
     }
   }
 
@@ -220,6 +311,41 @@ impl Cdrom {
     self.push_stat();
 
     let file_pointer = self.get_seek_pointer();
+
+    let mut buf = [0u8; 24];
+
+    self.game_file.seek(SeekFrom::Start(file_pointer)).unwrap();
+    let _ = self.game_file.read_exact(&mut buf);
+
+    let header = CdHeader::new(&mut buf);
+    let subheader = CdSubheader::new(&mut buf);
+
+    if header.mm != self.current_mm || header.ss != self.current_ss || header.sect != self.current_sect {
+      panic!("mismatched sector info between header and controller");
+    }
+
+    self.sector_header = header;
+    self.sector_subheader = subheader;
+
+    match subheader.mode() {
+      CdSubheaderMode::Audio => todo!("not implemented yet"),
+      CdSubheaderMode::Data => self.read_data(file_pointer),
+      CdSubheaderMode::Video => panic!("video not implemented"),
+      CdSubheaderMode::Error => panic!("an error occurred parsing subheader")
+    }
+  }
+
+  fn read_data(&mut self, file_pointer: u64) {
+    self.game_file.seek(SeekFrom::Start(file_pointer));
+    self.game_file.read_exact(&mut self.sector_buffer);
+
+    if self.interrupt_flags == 0 {
+      self.interrupt_flags = 1;
+      self.response_buffer.push_back(self.get_stat());
+    } else {
+      self.drive_interrupt_pending = true;
+      self.pending_stat = self.get_stat();
+    }
   }
 
   fn get_seek_pointer(&self) -> u64 {

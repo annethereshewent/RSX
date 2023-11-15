@@ -1,4 +1,4 @@
-use std::{rc::Rc, cell::Cell};
+use std::{rc::Rc, cell::Cell, fs::File};
 
 use crate::{gpu::GPU, spu::SPU, cdrom::Cdrom};
 
@@ -26,14 +26,14 @@ pub struct Bus {
 }
 
 impl Bus {
-  pub fn new(bios: Vec<u8>, interrupts: Rc<Cell<InterruptRegisters>>, dma: Rc<Cell<DMA>>) -> Self {
+  pub fn new(bios: Vec<u8>, interrupts: Rc<Cell<InterruptRegisters>>, dma: Rc<Cell<DMA>>, game_file: File) -> Self {
     Self {
       bios,
       ram: [0; RAM_SIZE],
       gpu: GPU::new(interrupts.clone()),
       spu: SPU::new(),
       timers: Timers::new(interrupts.clone()),
-      cdrom: Cdrom::new(interrupts.clone()),
+      cdrom: Cdrom::new(interrupts.clone(), game_file),
       counter: Counter::new(),
       interrupts,
       dma,
