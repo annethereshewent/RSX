@@ -1,6 +1,6 @@
 use std::{rc::Rc, cell::Cell};
 
-use crate::{gpu::GPU, spu::SPU};
+use crate::{gpu::GPU, spu::SPU, cdrom::Cdrom};
 
 use super::{counter::Counter, interrupt::interrupt_registers::InterruptRegisters, timers::timers::Timers, dma::DMA};
 
@@ -16,6 +16,7 @@ pub struct Bus {
   pub counter: Counter,
   pub gpu: GPU,
   pub spu: SPU,
+  pub cdrom: Cdrom,
   pub interrupts: Rc<Cell<InterruptRegisters>>,
   timers: Timers,
   dma: Rc<Cell<DMA>>,
@@ -32,12 +33,13 @@ impl Bus {
       gpu: GPU::new(interrupts.clone()),
       spu: SPU::new(),
       timers: Timers::new(interrupts.clone()),
+      cdrom: Cdrom::new(interrupts.clone()),
       counter: Counter::new(),
       interrupts,
       dma,
       cycles: 0,
       cache_control: 0,
-      exp2_buffer: Vec::new()
+      exp2_buffer: Vec::new(),
     }
   }
 
@@ -56,6 +58,7 @@ impl Bus {
 
     match address {
       0x1f00_0000..=0x1f08_0000 => 0xff,
+      0x1f80_1800..=0x1f80_1803 => self.cdrom.read(address),
       0x1fc0_0000..=0x1fc7_ffff => self.bios[(address - 0x1fc0_0000) as usize],
       0x0000_0000..=0x001f_ffff => {
         self.ram[address as usize]
@@ -156,6 +159,7 @@ impl Bus {
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070..=0x1f80_1074 => panic!("unimplemented writes to interrupt registers"),
+      0x1f80_1800..=0x1f80_1803 => self.cdrom.write(address, value),
       0x1f80_1100..=0x1f80_112b => {
         self.timers.write(address, value as u32);
       }
@@ -247,6 +251,9 @@ impl Bus {
       0x1f80_1100..=0x1f80_1126 => {
         self.timers.write(address, value);
       }
+      0x1f80_1800..=0x1f80_1803 => {
+
+      }
       0x1f80_1810..=0x1f80_1817 => {
         let offset = address - 0x1f80_1810;
 
@@ -266,6 +273,7 @@ impl Bus {
 
     self.timers.tick(cycles);
     self.gpu.tick(cycles, &mut self.timers);
+    self.cdrom.tick(cycles, &mut self.spu);
 
     let mut interrupts = self.interrupts.get();
 
