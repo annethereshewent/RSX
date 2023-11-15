@@ -120,7 +120,6 @@ impl SPU {
         self.voices[i].update_key_off();
       }
     }
-    self.key_off = 0;
   }
 
   fn update_key_on(&mut self) {
@@ -129,8 +128,6 @@ impl SPU {
         self.voices[i].update_key_on();
       }
     }
-
-    self.key_on = 0;
   }
 
   fn update_noise(&mut self) {
@@ -156,6 +153,9 @@ impl SPU {
 
     let mut modulator: i16 = 0;
 
+    let mut left_reverb = 0.0;
+    let mut right_reverb = 0.0;
+
     self.update_endx();
 
     for i in 0..self.voices.len() {
@@ -170,6 +170,11 @@ impl SPU {
       output_left += sample_left;
       output_right += sample_right;
 
+      if voice.reverb {
+        left_reverb += sample_left;
+        right_reverb += sample_right;
+      }
+
       let should_modulate = (self.modulate_on >> i) & 0b1 == 1;
 
       voice.tick(i > 0 && should_modulate, modulator, &mut self.sound_ram);
@@ -179,6 +184,13 @@ impl SPU {
 
     output_left *= SPU::to_f32(self.volume_left);
     output_right *= SPU::to_f32(self.volume_right);
+
+    if self.control.reverb_master_enable() {
+      output_left += self.reverb.left_out * SPU::to_f32(self.reverb_volume_left);
+      output_right += self.reverb.right_out * SPU::to_f32(self.reverb_volume_right);
+
+      self.reverb.calculate_reverb([left_reverb, right_reverb], &mut self.sound_ram);
+    }
 
     self.push_sample(output_left);
     self.push_sample(output_right);

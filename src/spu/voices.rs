@@ -63,7 +63,7 @@ pub struct Voice {
   current_address: u32,
   adsr: Adsr,
   noise: bool,
-  reverb: bool,
+  pub reverb: bool,
   pub endx: bool,
   repeat_address_io_write: bool,
   samples: [i16; MAX_SAMPLES],
