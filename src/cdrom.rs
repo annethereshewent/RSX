@@ -2,6 +2,7 @@ use std::{rc::Rc, cell::Cell, collections::VecDeque};
 
 use crate::{cpu::interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}, spu::SPU};
 
+const CDROM_CYCLES: i32 = 768;
 
 #[derive(PartialEq)]
 pub enum SubResponse {
@@ -90,17 +91,18 @@ impl Cdrom {
   pub fn tick_counter(&mut self, cycles: i32, spu: &mut SPU) {
     self.cycles += cycles;
 
-    while self.cycles >= 768 {
-      self.cycles -= 768;
+    if self.cycles >= CDROM_CYCLES {
+      let cd_cycles = self.cycles / CDROM_CYCLES;
+      self.cycles %= CDROM_CYCLES;
 
-      self.tick(spu);
+      self.tick(cd_cycles, spu);
     }
   }
 
-  fn tick(&mut self, spu: &mut SPU) {
-    self.tick_subresponse();
-    self.tick_drive(spu);
-    self.tick_controller();
+  fn tick(&mut self, cycles: i32, spu: &mut SPU) {
+    self.tick_subresponse(cycles);
+    self.tick_drive(cycles, spu);
+    self.tick_controller(cycles);
 
     if (self.interrupt_enable & self.interrupt_flags & 0x1f) != 0 {
       let mut interrupts = self.interrupts.get();
@@ -161,12 +163,12 @@ impl Cdrom {
     self.subresponse_cycles += 1;
   }
 
-  fn tick_subresponse(&mut self) {
-    self.subresponse_cycles -= 1;
+  fn tick_subresponse(&mut self, cycles: i32) {
+    self.subresponse_cycles -= cycles;
 
     if self.subresponse_cycles <= 0 {
       match self.subresponse {
-        SubResponse::Disabled => self.subresponse_cycles += 1,
+        SubResponse::Disabled => self.subresponse_cycles += cycles,
         SubResponse::GetID => self.subresponse_get_id(),
         SubResponse::GetStat => self.subresponse_get_stat()
       }
@@ -211,12 +213,12 @@ impl Cdrom {
     self.drive_cycles += 1;
   }
 
-  fn tick_drive(&mut self, spu: &mut SPU) {
-    self.drive_cycles -= 1;
+  fn tick_drive(&mut self, cycles: i32, spu: &mut SPU) {
+    self.drive_cycles -= cycles;
 
     if self.drive_cycles <= 0 {
       match self.drive_mode {
-        DriveMode::Idle => self.drive_cycles += 1,
+        DriveMode::Idle => self.drive_cycles += cycles,
         DriveMode::Seek => self.seek_drive(),
         DriveMode::Play => self.play_drive(),
         DriveMode::Read => self.read_drive(),
@@ -225,7 +227,7 @@ impl Cdrom {
     }
   }
 
-  fn controller_check_commands(&mut self) {
+  fn controller_check_commands(&mut self, cycles: i32) {
     if self.command.is_some() {
       if !self.param_buffer.is_empty() {
         self.controller_mode = ControllerMode::ParamTransfer;
@@ -233,7 +235,7 @@ impl Cdrom {
         self.controller_mode = ControllerMode::CommandTransfer;
       }
 
-      self.controller_cycles += 1;
+      self.controller_cycles += cycles;
     }
   }
 
@@ -302,12 +304,12 @@ impl Cdrom {
     }
   }
 
-  fn tick_controller(&mut self) {
-    self.controller_cycles -= 1;
+  fn tick_controller(&mut self, cycles: i32) {
+    self.controller_cycles -= cycles;
 
     if self.controller_cycles <= 0 {
       match self.controller_mode {
-        ControllerMode::Idle => self.controller_check_commands(),
+        ControllerMode::Idle => self.controller_check_commands(cycles),
         ControllerMode::ParamTransfer => self.controller_param_transfer(),
         ControllerMode::CommandTransfer => self.controller_command_transfer(),
         ControllerMode::CommandExecute => self.controller_command_execute(),
