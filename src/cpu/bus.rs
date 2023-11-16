@@ -128,7 +128,6 @@ impl Bus {
       }
       // 0x1f00_0000..=0x1f08_0000 => 0xffffffff,
       0x1f80_1100..=0x1f80_1126 => {
-        self.counter.tick(1);
         self.timers.read(address) as u16
       }
       0x1fc0_0000..=0x1fc7_ffff => {
