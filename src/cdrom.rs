@@ -580,7 +580,7 @@ impl Cdrom {
       self.subresponse_cycles += if self.double_speed {
         1400
       } else {
-        24800
+        2800
       };
     }
 
@@ -646,9 +646,9 @@ impl Cdrom {
     self.next_drive_mode = DriveMode::GetStat;
 
     self.drive_cycles += if self.double_speed {
-      28
-    } else {
       14
+    } else {
+      28
     };
 
     self.is_seeking = true;
