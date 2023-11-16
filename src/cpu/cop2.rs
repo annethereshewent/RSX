@@ -1,6 +1,7 @@
 use super::instruction::Instruction;
 
-struct GteRgb {
+#[derive(Clone, Copy)]
+struct Rgb {
   r: u8,
   g: u8,
   b: u8,
@@ -22,7 +23,7 @@ pub struct COP2 {
   light: [[i16; 3]; 3],
   rotation: [[i16; 3]; 3],
   v: [(i16, i16, i16); 3],
-  rgbc: GteRgb,
+  rgbc: Rgb,
   otz: u16,
   ir: [i16; 4],
   flags: u32,
@@ -30,7 +31,14 @@ pub struct COP2 {
   mx: usize,
   sv: usize,
   cv: usize,
-  lm: bool
+  lm: bool,
+  sxy_fifo: [(i16, i16); 3],
+  sz_fifo: [u16; 4],
+  rgb_fifo: [Rgb; 3],
+  res1: u32,
+  mac: [i32; 4],
+  lzcs: i32,
+  lzcr: i32
 }
 
 impl COP2 {
@@ -50,7 +58,7 @@ impl COP2 {
       rotation: [[0; 3]; 3],
       tr: (0, 0, 0),
       v: [(0,0,0); 3],
-      rgbc: GteRgb {
+      rgbc: Rgb {
         r: 0,
         g: 0,
         b: 0,
@@ -63,7 +71,14 @@ impl COP2 {
       mx: 0,
       sv: 0,
       cv: 0,
-      lm: false
+      lm: false,
+      sxy_fifo: [(0, 0); 3],
+      sz_fifo: [0; 4],
+      rgb_fifo: [Rgb { r: 0, g: 0, b: 0, c: 0 }; 3],
+      res1: 0,
+      mac: [0; 4],
+      lzcs: 0,
+      lzcr: 0
     }
   }
 
@@ -87,9 +102,14 @@ impl COP2 {
     self.flags = 0;
 
     match op_code {
+      0x06 => self.nclip(),
       0x30 => self.triple_perspective_transform(),
       _ => panic!("unimplemented op code for gte: {:x}", op_code)
     }
+  }
+
+  fn nclip(&mut self) {
+    println!("clipping completed (just kidding!)");
   }
 
   fn triple_perspective_transform(&mut self) {
@@ -105,7 +125,51 @@ impl COP2 {
     */
     let mac1 = (self.tr.0 * 0x1000 + self.rotation[0][0] as i32 * self.v[0].0 as i32 + self.rotation[0][1] as i32 * self.v[0].1 as i32 + self.rotation[0][2] as i32 * self.v[0].2 as i32)  >> (self.sf * 12);
 
-    panic!("todo!");
+    println!("triple transform todo!");
+  }
+
+  fn push_sx(&mut self, sx: i16) {
+    self.sxy_fifo[0].0 = self.sxy_fifo[1].0;
+    self.sxy_fifo[1].0 = self.sxy_fifo[2].0;
+    self.sxy_fifo[2].0 = sx;
+  }
+
+  fn push_sy(&mut self, sy: i16) {
+    self.sxy_fifo[0].1 = self.sxy_fifo[1].1;
+    self.sxy_fifo[1].1 = self.sxy_fifo[2].1;
+    self.sxy_fifo[2].1 = sy;
+  }
+
+  pub fn push_sz(&mut self, sz: u16) {
+    self.sz_fifo[0] = self.sz_fifo[1];
+    self.sz_fifo[1] = self.sz_fifo[2];
+    self.sz_fifo[2] = self.sz_fifo[3];
+    self.sz_fifo[3] = sz;
+  }
+
+  pub fn read_data(&mut self, destination: usize) -> u32 {
+    match destination {
+      0 => (self.v[0].0 as u16 as u32) | (self.v[0].1 as u16 as u32) << 16,
+      1 => self.v[0].2 as u32,
+      2 => (self.v[1].0 as u16 as u32) | (self.v[1].1 as u16 as u32) << 16,
+      3 => self.v[1].2 as u32,
+      4 => (self.v[2].0 as u16 as u32) | (self.v[2].1 as u16 as u32) << 16,
+      5 => self.v[1].2 as u32,
+      6 => {
+        (self.rgbc.r as u32) | (self.rgbc.g as u32) << 8 | (self.rgbc.b as u32) << 16 | (self.rgbc.c as u32) << 24
+      }
+      7 => self.otz as u32,
+      8..=11 => self.ir[destination - 8] as u32,
+      12..=14 => (self.sxy_fifo[destination - 12].0 as u32) | (self.sxy_fifo[destination - 12].1 as u32) << 16,
+      15 => (self.sxy_fifo[2].0 as u16 as u32) | (self.sxy_fifo[2].1 as u16 as u32) << 16,
+      16..=19 => self.sz_fifo[destination - 16] as u16 as u32,
+      20..=22 => {
+        (self.rgb_fifo[destination - 20].r as u32) | (self.rgb_fifo[destination - 20].g as u32) << 8 | (self.rgb_fifo[destination - 20].b as u32) << 16 | (self.rgb_fifo[destination - 20].c as u32) << 24
+      }
+      23 => self.res1,
+      24..=27 => self.mac[destination - 24] as u32,
+      _ => panic!("unsupported destination: {destination}")
+    }
   }
 
   pub fn write_data(&mut self, destination: usize, value: u32) {
@@ -132,11 +196,35 @@ impl COP2 {
         self.rgbc.c = (value >> 24) as u8;
       }
       7 => self.otz = value as u16,
-      8 => self.ir[0] = value as i16,
-      9 => self.ir[1] = value as i16,
-      10 => self.ir[2] = value as i16,
-      11 => self.ir[3] = value as i16,
-
+      8..=11 => self.ir[destination - 8] = value as i16,
+      12..=14 => {
+        self.sxy_fifo[destination - 12].0 = value as i16;
+        self.sxy_fifo[destination - 12].1 = (value >> 16) as i16;
+      }
+      15 => {
+        self.push_sx(value as i16);
+        self.push_sy((value >> 16) as i16);
+      }
+      16..=19 => self.sz_fifo[destination - 16] = value as u16,
+      20..=22 => {
+        self.rgb_fifo[destination - 20].r = value as u8;
+        self.rgb_fifo[destination - 20].g = (value >> 8) as u8;
+        self.rgb_fifo[destination - 20].b = (value >> 16) as u8;
+        self.rgb_fifo[destination - 20].c = (value >> 24) as u8;
+      }
+      23 => self.res1 = value,
+      24..=27 => self.mac[destination - 24] = value as i32,
+      28 => {
+        self.ir[1] = ((value & 0x1f) << 7) as i16;
+        self.ir[2] = (((value >> 5) & 0x1f) << 7) as i16;
+        self.ir[3] = (((value >> 10) & 0x1f) << 7) as i16;
+      }
+      29 => (),
+      30 => {
+        self.lzcs = value as i32;
+        self.lzcr = Self::get_num_leading_bits(self.lzcs);
+      }
+      31 => (),
       _ => panic!("unhandled destination received: {destination}")
     }
   }
@@ -220,6 +308,24 @@ impl COP2 {
       }
       _ => panic!("unhandled destination received: {destination}")
     }
+  }
+
+  fn get_num_leading_bits(num: i32) -> i32 {
+    let leading_bit = ((num as u32) >> 31) & 0b1;
+
+    let mut num_bits = 1;
+
+    for i in 1..32 {
+      let bit = ((num as u32) >> (31 - i)) & 0b1;
+
+      if bit == leading_bit {
+        num_bits += 1;
+      } else {
+        break;
+      }
+    }
+
+    num_bits
   }
 
   pub fn read_control(&self, destination: usize) -> u32 {

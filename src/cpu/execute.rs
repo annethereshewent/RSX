@@ -224,7 +224,9 @@ impl CPU {
   }
 
   fn mfc2(&mut self, instr: Instruction) {
-    todo!("not implemented");
+    let value = self.cop2.read_data(instr.rd());
+
+    self.update_load(instr.rd(), value);
   }
 
   fn mtc2(&mut self, instr: Instruction) {
