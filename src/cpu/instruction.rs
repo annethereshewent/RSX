@@ -12,7 +12,7 @@ impl Instruction {
     ((self.0 >> 21) & 0b11111) as usize
   }
 
-  pub fn cop0_code(&self) -> u32 {
+  pub fn cop_code(&self) -> u32 {
     (self.0 >> 21) & 0b11111
   }
 

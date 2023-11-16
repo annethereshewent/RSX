@@ -2,7 +2,7 @@ use std::{rc::Rc, cell::Cell, fs::File};
 
 use crate::{cpu::instruction::Instruction, gpu::{CYCLES_PER_SCANLINE, NUM_SCANLINES_PER_FRAME, GPU_FREQUENCY}};
 
-use self::{bus::Bus, dma::DMA, interrupt::interrupt_registers::InterruptRegisters};
+use self::{bus::Bus, dma::DMA, interrupt::interrupt_registers::InterruptRegisters, cop2::COP2};
 
 pub mod bus;
 pub mod execute;
@@ -11,6 +11,7 @@ pub mod dma;
 pub mod counter;
 pub mod interrupt;
 pub mod timers;
+pub mod cop2;
 
 // 33.868MHZ
 pub const CPU_FREQUENCY: f64 = 33_868_800.0;
@@ -120,7 +121,8 @@ pub struct CPU {
   dma: Rc<Cell<DMA>>,
   interrupts: Rc<Cell<InterruptRegisters>>,
   current_instruction: u32,
-  isolated_cache: [IsolatedCacheLine; 256]
+  isolated_cache: [IsolatedCacheLine; 256],
+  cop2: COP2
 }
 
 impl CPU {
@@ -148,7 +150,8 @@ impl CPU {
       dma,
       interrupts,
       current_instruction: 0,
-      isolated_cache: [IsolatedCacheLine::new(); 256]
+      isolated_cache: [IsolatedCacheLine::new(); 256],
+      cop2: COP2::new()
     }
   }
 

@@ -186,7 +186,7 @@ impl CPU {
   }
 
   fn cop0(&mut self, instr: Instruction) {
-    let op_code = instr.cop0_code();
+    let op_code = instr.cop_code();
 
     match op_code {
       0b00000 => self.mfc0(instr),
@@ -201,9 +201,36 @@ impl CPU {
     self.exception(Cause::CoprocessorError);
   }
 
-  fn cop2(&mut self, _instr: Instruction) {
+  fn cop2(&mut self, instr: Instruction) {
+    let op_code = instr.cop_code();
+
+    match op_code {
+      0b00000 => self.mfc2(instr),
+      0b00100 => self.mtc2(instr),
+      0b00110 => self.ctc2(instr),
+      0b10000 => self.cop2_command(instr),
+      _ => panic!("op code not implemented: {:b}", op_code)
+    }
+  }
+
+  fn mfc2(&mut self, instr: Instruction) {
+    todo!("not implemented");
+  }
+
+  fn mtc2(&mut self, instr: Instruction) {
+    todo!("not implemented");
+  }
+
+  fn cop2_command(&mut self, instr: Instruction) {
+    todo!("not implemented");
+  }
+
+  fn ctc2(&mut self, instr: Instruction) {
+    let value = self.r[instr.rt()];
+
+    self.cop2.write_control(instr.rd(), value);
+
     self.execute_load_delay();
-    todo!("unhandled instruction to cop2 processor");
   }
 
   fn cop3(&mut self, _: Instruction) {
@@ -222,9 +249,16 @@ impl CPU {
     self.exception(Cause::CoprocessorError);
   }
 
-  fn lwc2(&mut self, _instr: Instruction) {
-    self.execute_load_delay();
-    todo!("load word to coprocessor 2 not implemented");
+  fn lwc2(&mut self, instr: Instruction) {
+    let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
+
+    if address & 0b11 == 0 {
+      let value = self.load_32(address);
+      self.cop2.write_data(instr.rt(), value);
+    } else {
+      self.execute_load_delay();
+      self.exception(Cause::LoadAddressError);
+    }
   }
 
   fn lwc3(&mut self, _instr: Instruction) {
