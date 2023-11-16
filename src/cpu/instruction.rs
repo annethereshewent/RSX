@@ -28,6 +28,10 @@ impl Instruction {
     self.0 & 0x3ff_ffff
   }
 
+  pub fn cop2_command(&self) -> u32 {
+    self.0 & 0x3ff_ffff
+  }
+
   pub fn immediate_signed(&self) -> u32 {
     (self.0 & 0xffff) as i16 as u32
   }

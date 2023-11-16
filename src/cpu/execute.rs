@@ -206,11 +206,21 @@ impl CPU {
 
     match op_code {
       0b00000 => self.mfc2(instr),
+      0b00010 => self.cfc2(instr),
       0b00100 => self.mtc2(instr),
       0b00110 => self.ctc2(instr),
-      0b10000 => self.cop2_command(instr),
-      _ => panic!("op code not implemented: {:b}", op_code)
+      _ => if op_code & 0x10 == 0x10 {
+        self.cop2_command(instr);
+      } else {
+        panic!("unknown instruction received: {:b}", op_code)
+      }
     }
+  }
+
+  fn cfc2(&mut self, instr: Instruction) {
+    let value = self.cop2.read_control(instr.rd());
+
+    self.update_load(instr.rd(), value);
   }
 
   fn mfc2(&mut self, instr: Instruction) {
@@ -222,7 +232,9 @@ impl CPU {
   }
 
   fn cop2_command(&mut self, instr: Instruction) {
-    todo!("not implemented");
+    self.cop2.execute_command(instr);
+
+    self.execute_load_delay();
   }
 
   fn ctc2(&mut self, instr: Instruction) {
