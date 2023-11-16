@@ -141,6 +141,11 @@ impl DMA {
       }
     } else {
       let value = match channel.channel_id {
+        3 => {
+          let data = bus.cdrom.read_dma();
+
+          data
+        }
         6 => {
           if channel.word_count == 1 {
             0xffffff
@@ -148,7 +153,7 @@ impl DMA {
             channel.active_address.wrapping_sub(4) & 0x1fffff
           }
         }
-        _ => todo!("channel not supported yet")
+        _ => todo!("channel not supported yet: {channel_id}")
       };
 
       bus.mem_write_32(masked_address, value);

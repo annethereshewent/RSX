@@ -11,6 +11,12 @@ pub const LEAD_IN_SECTORS: u64 = 2 * SECTORS_PER_SECOND;
 const HEADER_START: usize = 12;
 const SUBHEADER_START: usize = 16;
 
+const DATA_ONLY: usize = 0x800;
+const WHOLE_SECTOR: usize = 0x924;
+
+const DATA_OFFSET: usize = 24;
+const ADDR_OFFSET: usize = 12;
+
 #[derive(PartialEq)]
 pub enum CdSubheaderMode {
   Video,
@@ -141,7 +147,10 @@ pub struct Cdrom {
   sector_buffer: Vec<u8>,
 
   drive_interrupt_pending: bool,
-  pending_stat: u8
+  pending_stat: u8,
+
+  data_buffer: Vec<u8>,
+  data_buffer_pointer: usize
 }
 
 impl Cdrom {
@@ -191,9 +200,11 @@ impl Cdrom {
         coding_info: 0,
         sub_mode: 0
       },
-      sector_buffer: Vec::new(),
+      sector_buffer: vec![0; 0x930],
       drive_interrupt_pending: false,
-      pending_stat: 0
+      pending_stat: 0,
+      data_buffer: vec![0; 0x930],
+      data_buffer_pointer: 0
     }
   }
 
@@ -315,7 +326,7 @@ impl Cdrom {
     let mut buf = [0u8; 24];
 
     self.game_file.seek(SeekFrom::Start(file_pointer)).unwrap();
-    let _ = self.game_file.read_exact(&mut buf);
+    self.game_file.read_exact(&mut buf).unwrap();
 
     let header = CdHeader::new(&mut buf);
     let subheader = CdSubheader::new(&mut buf);
@@ -336,8 +347,8 @@ impl Cdrom {
   }
 
   fn read_data(&mut self, file_pointer: u64) {
-    self.game_file.seek(SeekFrom::Start(file_pointer));
-    self.game_file.read_exact(&mut self.sector_buffer);
+    self.game_file.seek(SeekFrom::Start(file_pointer)).unwrap();
+    self.game_file.read_exact(&mut self.sector_buffer).unwrap();
 
     if self.interrupt_flags == 0 {
       self.interrupt_flags = 1;
@@ -486,6 +497,7 @@ impl Cdrom {
       0x01 => self.push_stat(),
       0x02 => self.setloc(),
       0x06 => self.readn(),
+      // 0x09 => self.pause(),
       0x0e => self.setmode(),
       0x15 | 0x16 => self.seek(),
       0x19 => {
@@ -533,6 +545,24 @@ impl Cdrom {
     self.report_interrupts = (param >> 2) & 0b1 == 1;
 
   }
+
+  // fn pause(&mut self) {
+  //   self.push_stat();
+
+  //   if self.drive_mode == DriveMode::Idle {
+  //     self.subresponse_cycles += 10;
+  //   } else {
+  //     self.subresponse_cycles += if self.double_speed {
+  //       1400
+  //     } else {
+  //       24800
+  //     };
+  //   }
+
+  //   self.next_drive_mode = DriveMode::Idle;
+
+  //   self.subresponse = SubResponse::GetStat;
+  // }
 
   fn readn(&mut self) {
     if self.processing_seek {
@@ -587,6 +617,30 @@ impl Cdrom {
     };
   }
 
+  fn read_data_buffer(&mut self) -> u8 {
+    let offset = if self.sector_size {
+      ADDR_OFFSET
+    } else {
+      DATA_OFFSET
+    };
+
+    let val = self.data_buffer[offset + self.data_buffer_pointer];
+
+    self.data_buffer_pointer += 1;
+
+    val
+  }
+
+  fn data_buffer_empty(&self) -> bool {
+    let max = if self.sector_size {
+      0x924
+    } else {
+      0x800
+    };
+
+    self.data_buffer_pointer >= max
+  }
+
   fn get_stat(&self) -> u8 {
     // bit 1 is for the "motor on" status, should always be 1 in our case
     let mut val = 0b10;
@@ -595,6 +649,15 @@ impl Cdrom {
     val |= ((self.drive_mode == DriveMode::Read) as u8) << 5;
 
     val
+  }
+
+  pub fn read_dma(&mut self) -> u32 {
+    let byte0 = self.read_data_buffer() as u32;
+    let byte1 = self.read_data_buffer() as u32;
+    let byte2 = self.read_data_buffer() as u32;
+    let byte3 = self.read_data_buffer() as u32;
+
+    byte0 | (byte1 << 8) | (byte2 << 16) | (byte3 << 24)
   }
 
   pub fn read(&mut self, address: u32) -> u8 {
@@ -639,6 +702,14 @@ impl Cdrom {
       }
       3 => {
         match self.index {
+          0 => {
+            if (value >> 7) & 0b1 == 0 {
+              self.data_buffer_pointer = 0x930;
+            } else if self.data_buffer_empty() {
+              self.data_buffer_pointer = 0;
+              self.data_buffer[..0x930].clone_from_slice(&self.sector_buffer[..0x930]);
+            }
+          }
           1 => {
             // writing 1 to these bits clears them
             self.interrupt_flags &= !(value & 0x1f);
