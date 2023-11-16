@@ -27,7 +27,11 @@ impl Timer {
   pub fn check_target_irq(&mut self) -> bool {
     self.mode.set_target_reached(true);
     if self.mode.reset_on_target() {
-      self.value %= self.target_value;
+      if self.target_value > 0 {
+        self.value %= self.target_value;
+      } else {
+        self.value = 0;
+      }
     }
     if self.mode.irq_on_target() && !self.irq_inhibit {
       if self.mode.one_shot_mode() {

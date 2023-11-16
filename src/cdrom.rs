@@ -150,7 +150,11 @@ pub struct Cdrom {
   pending_stat: u8,
 
   data_buffer: Vec<u8>,
-  data_buffer_pointer: usize
+  data_buffer_pointer: usize,
+
+  is_playing: bool,
+  is_seeking: bool,
+  is_reading: bool
 }
 
 impl Cdrom {
@@ -204,7 +208,10 @@ impl Cdrom {
       drive_interrupt_pending: false,
       pending_stat: 0,
       data_buffer: vec![0; 0x930],
-      data_buffer_pointer: 0
+      data_buffer_pointer: 0,
+      is_playing: false,
+      is_seeking: false,
+      is_reading: false
     }
   }
 
@@ -267,7 +274,6 @@ impl Cdrom {
   }
 
   fn subresponse_get_stat(&mut self) {
-    // this is supposed to get the table of contents, but apparently we can effectively just get stat again as the second byte and issue an interrupt
     if self.interrupt_flags == 0 {
       self.push_stat();
 
@@ -302,11 +308,24 @@ impl Cdrom {
     self.current_ss = self.ss;
     self.current_sect = self.sect;
 
+    self.is_playing = false;
+    self.is_seeking = false;
+    self.is_reading = false;
+
     match self.next_drive_mode {
-      DriveMode::Read | DriveMode::Play => {
+      DriveMode::Read => {
         let divisor = if self.double_speed { 150 } else { 75 };
 
         self.drive_cycles += 44100 / divisor;
+
+        self.is_reading = true;
+      }
+      DriveMode::Play => {
+        let divisor = if self.double_speed { 150 } else { 75 };
+
+        self.drive_cycles += 44100 / divisor;
+
+        self.is_playing = true;
       }
       _ => self.drive_cycles += 10
     }
@@ -319,6 +338,12 @@ impl Cdrom {
   }
 
   fn read_drive(&mut self) {
+    if !self.is_reading {
+      self.drive_mode = DriveMode::Idle;
+      self.drive_cycles += 1;
+
+      return;
+    }
     self.push_stat();
 
     let file_pointer = self.get_seek_pointer();
@@ -497,7 +522,7 @@ impl Cdrom {
       0x01 => self.push_stat(),
       0x02 => self.setloc(),
       0x06 => self.readn(),
-      // 0x09 => self.pause(),
+      0x09 => self.pause(),
       0x0e => self.setmode(),
       0x15 | 0x16 => self.seek(),
       0x19 => {
@@ -546,28 +571,34 @@ impl Cdrom {
 
   }
 
-  // fn pause(&mut self) {
-  //   self.push_stat();
+  fn pause(&mut self) {
+    self.push_stat();
 
-  //   if self.drive_mode == DriveMode::Idle {
-  //     self.subresponse_cycles += 10;
-  //   } else {
-  //     self.subresponse_cycles += if self.double_speed {
-  //       1400
-  //     } else {
-  //       24800
-  //     };
-  //   }
+    if !self.is_playing && !self.is_reading && !self.is_seeking {
+      self.subresponse_cycles += 10;
+    } else {
+      self.subresponse_cycles += if self.double_speed {
+        1400
+      } else {
+        24800
+      };
+    }
 
-  //   self.next_drive_mode = DriveMode::Idle;
+    self.is_playing = false;
+    self.is_reading = false;
+    self.is_seeking = false;
 
-  //   self.subresponse = SubResponse::GetStat;
-  // }
+    self.subresponse = SubResponse::GetStat;
+  }
 
   fn readn(&mut self) {
     if self.processing_seek {
       self.drive_mode = DriveMode::Seek;
       self.next_drive_mode = DriveMode::Read;
+
+      self.is_seeking = true;
+      self.is_reading = false;
+      self.is_playing = false;
 
       self.drive_cycles += if self.double_speed {
         140
@@ -576,6 +607,10 @@ impl Cdrom {
       };
     } else {
       self.drive_mode = DriveMode::Read;
+
+      self.is_reading = true;
+      self.is_playing = false;
+      self.is_seeking = false;
 
       let divisor = if self.double_speed {
         150
@@ -615,6 +650,10 @@ impl Cdrom {
     } else {
       14
     };
+
+    self.is_seeking = true;
+    self.is_playing = false;
+    self.is_reading = false;
   }
 
   fn read_data_buffer(&mut self) -> u8 {
@@ -644,9 +683,9 @@ impl Cdrom {
   fn get_stat(&self) -> u8 {
     // bit 1 is for the "motor on" status, should always be 1 in our case
     let mut val = 0b10;
-    val |= ((self.drive_mode == DriveMode::Play) as u8) << 7;
-    val |= ((self.drive_mode == DriveMode::Seek) as u8) << 6;
-    val |= ((self.drive_mode == DriveMode::Read) as u8) << 5;
+    val |= (self.is_playing as u8) << 7;
+    val |= (self.is_seeking as u8) << 6;
+    val |= (self.is_reading as u8) << 5;
 
     val
   }
@@ -666,6 +705,7 @@ impl Cdrom {
         let mut value = self.index & 0x3;
 
         value |= ((self.controller_mode != ControllerMode::Idle) as u8) << 7;
+        value |= (!self.data_buffer_empty() as u8) << 6;
         value |= (!self.response_buffer.is_empty() as u8) << 5;
         value |= ((self.param_buffer.len() < 16) as u8) << 4;
         value |= (self.param_buffer.is_empty() as u8) << 3;
