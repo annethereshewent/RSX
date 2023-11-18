@@ -12,7 +12,7 @@ const EXP2_READ_ADDR: u32 = 0x1f802023;
 // @TODO: Refactor all of the mem_read and mem_loads into one generic method
 pub struct Bus {
   bios: Vec<u8>,
-  ram: [u8; RAM_SIZE],
+  pub ram: [u8; RAM_SIZE],
   pub counter: Counter,
   pub gpu: GPU,
   pub spu: SPU,

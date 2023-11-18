@@ -11,7 +11,7 @@ extern crate rsx;
 pub fn main() {
   let args: Vec<String> = env::args().collect();
 
-  if args.len() != 2 {
+  if args.len() < 2 {
     panic!("please specify a file");
   }
 
@@ -40,6 +40,8 @@ pub fn main() {
 
   device.resume();
 
+  // println!("loading exe....");
+  // cpu.load_exe(&args[2]);
   loop {
     while !cpu.bus.gpu.frame_complete {
       cpu.step();
@@ -48,6 +50,6 @@ pub fn main() {
     cpu.bus.gpu.frame_complete = false;
 
     frontend.render(&mut cpu.bus.gpu);
-    frontend.handle_events();
+    frontend.handle_events(&mut cpu);
   }
 }

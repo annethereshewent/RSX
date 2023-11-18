@@ -1,4 +1,4 @@
-use std::{rc::Rc, cell::Cell, fs::File};
+use std::{rc::Rc, cell::Cell, fs::{File, self}};
 
 use crate::{cpu::instruction::Instruction, gpu::{CYCLES_PER_SCANLINE, NUM_SCANLINES_PER_FRAME, GPU_FREQUENCY}};
 
@@ -122,7 +122,9 @@ pub struct CPU {
   interrupts: Rc<Cell<InterruptRegisters>>,
   current_instruction: u32,
   isolated_cache: [IsolatedCacheLine; 256],
-  cop2: COP2
+  cop2: COP2,
+  pub debug_on: bool,
+  output: String
 }
 
 impl CPU {
@@ -151,7 +153,9 @@ impl CPU {
       interrupts,
       current_instruction: 0,
       isolated_cache: [IsolatedCacheLine::new(); 256],
-      cop2: COP2::new()
+      cop2: COP2::new(),
+      debug_on: false,
+      output: "".to_string()
     }
   }
 
@@ -235,7 +239,23 @@ impl CPU {
       return;
     }
 
-    // println!("executing instruction {:032b} at address {:08x}", instr, self.current_pc);
+    if self.debug_on {
+      // println!("executing instruction {:032b} at address {:08x}", instr, self.current_pc);
+      println!("{}", self.output);
+      self.debug_on = false;
+    }
+
+    if self.pc == 0xb0 && self.r[9] == 0x3d {
+      let mut buf: Vec<u8> = Vec::new();
+
+      buf.push(self.r[4] as u8);
+      buf.push((self.r[4] >> 8) as u8);
+      buf.push((self.r[4] >> 16) as u8);
+      buf.push((self.r[4] >> 24 ) as u8);
+
+
+      self.output += &String::from_utf8(buf).unwrap();
+    }
 
     self.pc = self.next_pc;
     self.next_pc = self.next_pc.wrapping_add(4);
@@ -250,6 +270,40 @@ impl CPU {
   pub fn set_reg(&mut self, rt: usize, val: u32) {
     if rt != 0 {
       self.r[rt] = val;
+    }
+  }
+
+  pub fn load_exe(&mut self, filename: &str) {
+    let bytes = fs::read(filename).unwrap();
+
+    let mut index = 0x10;
+
+    self.pc = (bytes[index] as u32) | (bytes[index + 1] as u32) << 8 | (bytes[index + 2] as u32) << 16 | (bytes[index + 3] as u32) << 24;
+    self.next_pc = self.pc + 4;
+
+    index += 4;
+
+    self.r[28] = (bytes[index] as u32) | (bytes[index + 1] as u32) << 8 | (bytes[index + 2] as u32) << 16 | (bytes[index + 3] as u32) << 24;
+
+    index += 4;
+
+    let file_dest = (bytes[index] as u32) | (bytes[index + 1] as u32) << 8 | (bytes[index + 2] as u32) << 16 | (bytes[index + 3] as u32) << 24;
+
+    index += 4;
+
+    let file_size = (bytes[index] as u32) | (bytes[index + 1] as u32) << 8 | (bytes[index + 2] as u32) << 16 | (bytes[index + 3] as u32) << 24;
+
+    index += 0x10 + 4;
+
+    self.r[29] = (bytes[index] as u32) | (bytes[index + 1] as u32) << 8 | (bytes[index + 2] as u32) << 16 | (bytes[index + 3] as u32) << 24;
+
+    self.r[30] = self.r[29];
+
+    index = 0x800;
+
+    for i in 0..file_size {
+      self.bus.ram[((file_dest + i) & 0x1fffff) as usize] = bytes[index];
+      index += 1;
     }
   }
 
@@ -364,7 +418,6 @@ impl CPU {
     if !self.cop0.is_cache_disabled() {
       return self.read_from_cache(address);
     }
-
 
     self.bus.tick(5);
 

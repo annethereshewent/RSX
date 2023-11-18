@@ -1,6 +1,10 @@
 pub struct Instruction(u32);
 
 impl Instruction {
+
+  pub fn to_u32(&self) -> u32 {
+    self.0
+  }
   pub fn new(instr: u32) -> Self {
     Self(instr)
   }

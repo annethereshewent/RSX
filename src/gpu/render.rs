@@ -210,7 +210,7 @@ impl GPU {
     }
   }
 
-  fn color_to_u16(color: (u8, u8, u8)) -> u16 {
+  pub fn color_to_u16(color: (u8, u8, u8)) -> u16 {
     let mut pixel = 0;
 
     pixel |= ((color.0 as u16) & 0xf8) >> 3;

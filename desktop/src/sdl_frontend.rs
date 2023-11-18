@@ -1,5 +1,5 @@
-use rsx::{gpu::GPU, spu::SPU};
-use sdl2::{video::Window, EventPump, event::Event, render::Canvas, pixels::PixelFormatEnum, audio::AudioCallback, Sdl};
+use rsx::{gpu::GPU, spu::SPU, cpu::CPU};
+use sdl2::{video::Window, EventPump, event::Event, render::Canvas, pixels::PixelFormatEnum, audio::AudioCallback, Sdl, sys::KeyCode, keyboard::Keycode};
 
 pub struct PsxAudioCallback<'a> {
   pub spu: &'a mut SPU
@@ -59,10 +59,15 @@ impl SdlFrontend {
     }
   }
 
-  pub fn handle_events(&mut self) {
+  pub fn handle_events(&mut self, cpu: &mut CPU) {
     for event in self.event_pump.poll_iter() {
       match event {
-        Event::KeyDown { keycode: Some(_k), .. } => (),
+        Event::KeyDown { keycode: Some(k), .. } => {
+          if k == Keycode::T {
+            println!("toggling debug on");
+            cpu.debug_on = !cpu.debug_on;
+          }
+        },
         Event::KeyUp { keycode: Some(_k), .. } => (),
         Event::Quit { .. } => std::process::exit(0),
         _ => {},

@@ -383,10 +383,8 @@ impl GPU {
     match op_code {
       0x00 => (), // NOP,
       0x01 => self.gp0_invalidate_cache(),
-      0x28 => self.gp0_monochrome_quadrilateral(),
-      0x2c => self.gp0_textured_quad_with_blending(),
-      0x30 => self.gp0_shaded_triangle(),
-      0x38 => self.gp0_shaded_quadrilateral(),
+      0x02 => self.gp0_fill_vram(),
+      0x20..=0x3f => self.gp0_draw_polygon(),
       0xa0 => self.gp0_image_transfer_to_vram(),
       0xc0 => self.gp0_image_transfer_to_cpu(),
       0xe1 => self.gp0_draw_mode(),
@@ -423,6 +421,30 @@ impl GPU {
 
   fn gp1_acknowledge_interrupt(&mut self) {
     self.stat.irq_enabled = false;
+  }
+
+  fn gp0_fill_vram(&mut self) {
+    let color = GPU::parse_color(self.command_buffer[0]);
+
+    let destination = self.command_buffer[1];
+    let dimensions = self.command_buffer[2];
+
+    let pixel = GPU::color_to_u16(color);
+
+    // clear out the lower 4 bits of x start per no&psx documents
+    let x_start = destination & 0x3f0;
+    let y_start = destination & 0x3ff;
+
+    let w = ((dimensions & 0x3ff) + 0xf) & !0xf;
+    let h = (dimensions >> 16) & 0x1ff;
+
+    for y in 0..h {
+      for x in 0..w {
+        let vram_address = self.get_vram_address(x_start + x, y_start + y);
+        self.vram[vram_address] = pixel as u8;
+        self.vram[vram_address + 1] = (pixel >> 8) as u8;
+      }
+    }
   }
 
   fn gp0_image_transfer_to_cpu(&mut self) {
@@ -481,84 +503,6 @@ impl GPU {
     }
 
     return value;
-}
-
-  fn gp0_shaded_quadrilateral(&mut self) {
-    let mut colors = [
-      GPU::parse_color(self.command_buffer[0]),
-      GPU::parse_color(self.command_buffer[2]),
-      GPU::parse_color(self.command_buffer[4]),
-      GPU::parse_color(self.command_buffer[6])
-    ];
-
-    let mut positions = [
-      self.parse_position(self.command_buffer[1]),
-      self.parse_position(self.command_buffer[3]),
-      self.parse_position(self.command_buffer[5]),
-      self.parse_position(self.command_buffer[7])
-    ];
-
-    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], None, None, true, false);
-    self.rasterize_triangle(&mut colors[1..4], &mut positions[1..4], None, None, true, false);
-  }
-
-  fn gp0_shaded_triangle(&mut self) {
-    let mut colors = [
-      GPU::parse_color(self.command_buffer[0]),
-      GPU::parse_color(self.command_buffer[2]),
-      GPU::parse_color(self.command_buffer[4])
-    ];
-
-    let mut positions = [
-      self.parse_position(self.command_buffer[1]),
-      self.parse_position(self.command_buffer[3]),
-      self.parse_position(self.command_buffer[5])
-    ];
-
-    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], None, None, true, false);
-  }
-
-  fn gp0_textured_quad_with_blending(&mut self) {
-    let color = GPU::parse_color(self.command_buffer[0]);
-    let mut colors = [
-      color,
-      color,
-      color,
-      color
-    ];
-
-    let mut positions = [
-      self.parse_position(self.command_buffer[1]),
-      self.parse_position(self.command_buffer[3]),
-      self.parse_position(self.command_buffer[5]),
-      self.parse_position(self.command_buffer[7])
-    ];
-
-    let mut texture_positions = [
-      GPU::parse_texture_coords(self.command_buffer[2]),
-      GPU::parse_texture_coords(self.command_buffer[4]),
-      GPU::parse_texture_coords(self.command_buffer[6]),
-      GPU::parse_texture_coords(self.command_buffer[8]),
-    ];
-
-    let clut = GPU::to_clut(self.command_buffer[2]);
-    self.parse_texture_data(self.command_buffer[4]);
-
-    if clut != self.current_clut ||
-      self.stat.texture_x_base != self.current_texture_x_base ||
-      self.stat.texture_y_base1 != self.current_texture_y_base ||
-      self.stat.texture_colors != self.current_texture_colors {
-        self.gp0_invalidate_cache();
-    }
-
-    self.current_texture_x_base = self.stat.texture_x_base;
-    self.current_texture_y_base = self.stat.texture_y_base1;
-    self.current_texture_colors = self.stat.texture_colors;
-    self.current_clut = clut;
-
-    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], Some(&mut texture_positions[0..3]), Some(clut), false, true);
-    self.rasterize_triangle(&mut colors[1..4], &mut positions[1..4], Some(&mut texture_positions[1..4]), Some(clut), false, true);
-
   }
 
   fn parse_texture_coords(command: u32) -> (i32, i32) {
@@ -624,18 +568,72 @@ impl GPU {
     self.stat.set_mask_attributes(val);
   }
 
-  fn gp0_monochrome_quadrilateral(&mut self) {
+  fn gp0_draw_polygon(&mut self) {
+    let command = self.command_buffer[0] >> 24;
+
+    let is_shaded = (command >> 4) & 0b1 == 1;
+    let num_vertices = if (command >> 3) & 0b1 == 1 {
+      4
+    } else {
+      3
+    };
+
+    let is_textured = (command >> 2) & 0b1 == 1;
+    let semi_transparent = (command >> 1) & 0b1 == 1;
+    let is_blended = command & 0b1 == 1;
+
     let color = GPU::parse_color(self.command_buffer[0]);
 
-    let mut positions = [
-      self.parse_position(self.command_buffer[1]),
-      self.parse_position(self.command_buffer[2]),
-      self.parse_position(self.command_buffer[3]),
-      self.parse_position(self.command_buffer[4])
-    ];
+    let mut colors = [color, color, color, color];
+    let mut positions: [(i32, i32); 4] = [(0,0); 4];
+    let mut tex_positions: [(i32, i32); 4] = [(0,0); 4];
 
-    self.rasterize_triangle(&mut [color, color, color][0..3], &mut positions[0..3], None, None, false, false);
-    self.rasterize_triangle(&mut [color, color, color][0..3], &mut positions[1..4], None, None, false, false);
+    let mut command_index = 0;
+
+    let mut clut = (0,0);
+
+
+    for i in 0..num_vertices {
+      if i == 0 || is_shaded {
+        colors[i] = GPU::parse_color(self.command_buffer[command_index]);
+        command_index += 1;
+      }
+
+      positions[i] = self.parse_position(self.command_buffer[command_index]);
+
+      command_index += 1;
+
+      if is_textured {
+        tex_positions[i] = GPU::parse_texture_coords(self.command_buffer[command_index]);
+
+        if i == 0 {
+          clut = GPU::to_clut(self.command_buffer[command_index]);
+        } else if i == 1 {
+          self.parse_texture_data(self.command_buffer[command_index]);
+        }
+
+        command_index += 1;
+      }
+    }
+
+    if is_textured && (clut != self.current_clut ||
+    self.stat.texture_x_base != self.current_texture_x_base ||
+    self.stat.texture_y_base1 != self.current_texture_y_base ||
+    self.stat.texture_colors != self.current_texture_colors) {
+      self.gp0_invalidate_cache();
+    }
+
+    let c = if is_textured { Some(clut) } else { None };
+    let t = if is_textured { Some(&mut tex_positions[0..3] ) } else { None };
+
+    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], t, c, is_shaded, is_blended);
+
+    if num_vertices == 4 {
+      let t = if is_textured { Some(&mut tex_positions[1..4])} else { None };
+      let c = if is_textured { Some(clut) } else { None };
+
+      self.rasterize_triangle(&mut colors[1..4], &mut positions[1..4], t, c, is_shaded, is_blended);
+    }
   }
 
   fn gp0_texture_window(&mut self) {

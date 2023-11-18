@@ -85,7 +85,7 @@ impl CPU {
   pub fn execute(&mut self, instr: Instruction) {
     let op_code = instr.op_code();
 
-    // if op_code != 0 && self.breakpoint_hit {
+    // if op_code != 0 && self.debug_on {
     //   println!("op: {}", PRIMARY_OPS[op_code as usize]);
     // }
 
@@ -105,7 +105,7 @@ impl CPU {
   fn secondary(&mut self, instr: Instruction) {
     let op_code = instr.op_code_secondary();
 
-    // if self.breakpoint_hit {
+    // if self.debug_on {
     //   println!("op: {}", SECONDARY_OPS[op_code as usize]);
     // }
 
@@ -212,7 +212,7 @@ impl CPU {
       _ => if op_code & 0x10 == 0x10 {
         self.cop2_command(instr);
       } else {
-        panic!("unknown instruction received: {:b}", op_code)
+        panic!("unknown instruction received: {:X}", op_code)
       }
     }
   }
@@ -220,21 +220,25 @@ impl CPU {
   fn cfc2(&mut self, instr: Instruction) {
     let value = self.cop2.read_control(instr.rd());
 
-    self.update_load(instr.rd(), value);
+    self.update_load(instr.rt(), value);
   }
 
   fn mfc2(&mut self, instr: Instruction) {
     let value = self.cop2.read_data(instr.rd());
 
-    self.update_load(instr.rd(), value);
+    self.update_load(instr.rt(), value);
   }
 
   fn mtc2(&mut self, instr: Instruction) {
-    todo!("not implemented");
+    let value = self.r[instr.rt()];
+
+    self.cop2.write_data(instr.rd(), value);
+
+    self.execute_load_delay();
   }
 
   fn cop2_command(&mut self, instr: Instruction) {
-    self.cop2.execute_command(instr);
+    self.cop2.execute_command(instr.cop2_command());
 
     self.execute_load_delay();
   }
@@ -266,11 +270,15 @@ impl CPU {
   fn lwc2(&mut self, instr: Instruction) {
     let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
+    self.execute_load_delay();
+
     if address & 0b11 == 0 {
       let value = self.load_32(address);
+
+      // println!("got value from mem address {:X}", address);
+
       self.cop2.write_data(instr.rt(), value);
     } else {
-      self.execute_load_delay();
       self.exception(Cause::LoadAddressError);
     }
   }
@@ -290,9 +298,14 @@ impl CPU {
     self.exception(Cause::CoprocessorError);
   }
 
-  fn swc2(&mut self, _instr: Instruction) {
+  fn swc2(&mut self, instr: Instruction) {
+    let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
+
+    let value = self.cop2.read_data(instr.rt());
+
     self.execute_load_delay();
-    todo!("store word to coprocessor 2 not implemented");
+
+    self.store_32(address, value);
   }
 
   fn swc3(&mut self, _instr: Instruction) {
