@@ -85,9 +85,9 @@ impl CPU {
   pub fn execute(&mut self, instr: Instruction) {
     let op_code = instr.op_code();
 
-    // if op_code != 0 && self.debug_on {
-    //   println!("op: {}", PRIMARY_OPS[op_code as usize]);
-    // }
+    if op_code != 0 && self.debug_on {
+      println!("op: {}", PRIMARY_OPS[op_code as usize]);
+    }
 
     let handler_fn = PRIMARY_HANDLERS[op_code as usize];
 
@@ -105,9 +105,9 @@ impl CPU {
   fn secondary(&mut self, instr: Instruction) {
     let op_code = instr.op_code_secondary();
 
-    // if self.debug_on {
-    //   println!("op: {}", SECONDARY_OPS[op_code as usize]);
-    // }
+    if self.debug_on {
+      println!("op: {}", SECONDARY_OPS[op_code as usize]);
+    }
 
     let handler_fn = SECONDARY_HANDLERS[op_code as usize];
 
@@ -238,7 +238,7 @@ impl CPU {
   }
 
   fn cop2_command(&mut self, instr: Instruction) {
-    self.cop2.execute_command(instr.cop2_command());
+    self.cop2.execute(instr.cop2_command());
 
     self.execute_load_delay();
   }
@@ -274,8 +274,6 @@ impl CPU {
 
     if address & 0b11 == 0 {
       let value = self.load_32(address);
-
-      // println!("got value from mem address {:X}", address);
 
       self.cop2.write_data(instr.rt(), value);
     } else {

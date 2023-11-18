@@ -240,22 +240,10 @@ impl CPU {
     }
 
     if self.debug_on {
-      // println!("executing instruction {:032b} at address {:08x}", instr, self.current_pc);
-      println!("{}", self.output);
-      self.debug_on = false;
+      println!("executing instruction {:032b} at address {:08x}", instr, self.current_pc);
     }
 
-    if self.pc == 0xb0 && self.r[9] == 0x3d {
-      let mut buf: Vec<u8> = Vec::new();
-
-      buf.push(self.r[4] as u8);
-      buf.push((self.r[4] >> 8) as u8);
-      buf.push((self.r[4] >> 16) as u8);
-      buf.push((self.r[4] >> 24 ) as u8);
-
-
-      self.output += &String::from_utf8(buf).unwrap();
-    }
+    self.update_tty();
 
     self.pc = self.next_pc;
     self.next_pc = self.next_pc.wrapping_add(4);
@@ -273,29 +261,48 @@ impl CPU {
     }
   }
 
+  fn update_tty(&mut self) {
+    if self.pc == 0xb0 && self.r[9] == 0x3d {
+      let mut buf: Vec<u8> = Vec::new();
+
+      buf.push(self.r[4] as u8);
+      buf.push((self.r[4] >> 8) as u8);
+      buf.push((self.r[4] >> 16) as u8);
+      buf.push((self.r[4] >> 24 ) as u8);
+
+
+      self.output += &String::from_utf8(buf).unwrap();
+
+      if self.output.contains("\n") {
+        print!("{}", self.output);
+        self.output = "".to_string();
+      }
+    }
+  }
+
   pub fn load_exe(&mut self, filename: &str) {
     let bytes = fs::read(filename).unwrap();
 
     let mut index = 0x10;
 
-    self.pc = (bytes[index] as u32) | (bytes[index + 1] as u32) << 8 | (bytes[index + 2] as u32) << 16 | (bytes[index + 3] as u32) << 24;
+    self.pc = CPU::read_word(&bytes, index);
     self.next_pc = self.pc + 4;
 
     index += 4;
 
-    self.r[28] = (bytes[index] as u32) | (bytes[index + 1] as u32) << 8 | (bytes[index + 2] as u32) << 16 | (bytes[index + 3] as u32) << 24;
+    self.r[28] = CPU::read_word(&bytes, index);
 
     index += 4;
 
-    let file_dest = (bytes[index] as u32) | (bytes[index + 1] as u32) << 8 | (bytes[index + 2] as u32) << 16 | (bytes[index + 3] as u32) << 24;
+    let file_dest = CPU::read_word(&bytes, index);
 
     index += 4;
 
-    let file_size = (bytes[index] as u32) | (bytes[index + 1] as u32) << 8 | (bytes[index + 2] as u32) << 16 | (bytes[index + 3] as u32) << 24;
+    let file_size = CPU::read_word(&bytes, index);
 
     index += 0x10 + 4;
 
-    self.r[29] = (bytes[index] as u32) | (bytes[index + 1] as u32) << 8 | (bytes[index + 2] as u32) << 16 | (bytes[index + 3] as u32) << 24;
+    self.r[29] = CPU::read_word(&bytes, index);
 
     self.r[30] = self.r[29];
 
@@ -305,6 +312,10 @@ impl CPU {
       self.bus.ram[((file_dest + i) & 0x1fffff) as usize] = bytes[index];
       index += 1;
     }
+  }
+
+  pub fn read_word(bytes: &Vec<u8>, index: usize) -> u32 {
+    (bytes[index] as u32) | (bytes[index + 1] as u32) << 8 | (bytes[index + 2] as u32) << 16 | (bytes[index + 3] as u32) << 24
   }
 
   fn write_to_cache(&mut self, address: u32, value: u32) {
@@ -428,7 +439,6 @@ impl CPU {
     if !self.cop0.is_cache_disabled() {
       return self.read_from_cache(address) as u16;
     }
-
 
     self.bus.tick(5);
 

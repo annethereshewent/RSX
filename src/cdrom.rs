@@ -363,12 +363,27 @@ impl Cdrom {
     self.sector_header = header;
     self.sector_subheader = subheader;
 
+    self.current_sect += 1;
+
+    if self.current_sect >= 75 {
+      self.current_sect = 0;
+      self.current_ss += 1;
+
+      if self.current_ss >= 60 {
+        self.current_ss = 0;
+        self.current_mm += 1;
+      }
+    }
+
     match subheader.mode() {
       CdSubheaderMode::Audio => todo!("not implemented yet"),
       CdSubheaderMode::Data => self.read_data(file_pointer),
       CdSubheaderMode::Video => panic!("video not implemented"),
       CdSubheaderMode::Error => panic!("an error occurred parsing subheader")
     }
+
+    let divisor = if self.double_speed { 150 } else { 75 };
+    self.drive_cycles += 44100 / divisor;
   }
 
   fn read_data(&mut self, file_pointer: u64) {
