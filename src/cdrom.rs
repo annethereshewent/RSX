@@ -252,7 +252,7 @@ impl Cdrom {
       5th-8th byte: SCEx region (eg. ASCII "SCEE" = Europe) (0,0,0,0 = Unlicensed)
       */
 
-      if self.interrupt_flags == 0 {
+    if self.interrupt_flags == 0 {
       self.controller_response_buffer.push_back(0x2);
       self.controller_response_buffer.push_back(0x0);
       self.controller_response_buffer.push_back(0x20);
