@@ -40,8 +40,9 @@ pub fn main() {
 
   device.resume();
 
-  // println!("loading exe....");
-  // cpu.load_exe(&args[2]);
+  if args.len() == 3 {
+    cpu.load_exe(&args[2]);
+  }
   loop {
     while !cpu.bus.gpu.frame_complete {
       cpu.step();
