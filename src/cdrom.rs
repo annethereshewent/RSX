@@ -37,19 +37,11 @@ impl CdHeader {
   pub fn new(buf: &mut [u8]) -> Self {
     let offset = HEADER_START;
     Self {
-      mm: Self::bcd_to_u8(buf[offset]),
-      ss: Self::bcd_to_u8(buf[offset + 1]),
-      sect: Self::bcd_to_u8(buf[offset + 2]),
-      mode: Self::bcd_to_u8(buf[offset + 3])
+      mm: Cdrom::bcd_to_u8(buf[offset]),
+      ss: Cdrom::bcd_to_u8(buf[offset + 1]),
+      sect: Cdrom::bcd_to_u8(buf[offset + 2]),
+      mode: buf[offset + 3]
     }
-  }
-
-  pub fn bcd_to_u8(value: u8) -> u8 {
-    ((value >> 4) * 10) + (value & 0xf)
-  }
-
-  pub fn u8_to_bcd(value: u8) -> u8 {
-    ((value / 10) << 4) | (value % 10)
   }
 }
 
@@ -360,6 +352,10 @@ impl Cdrom {
       panic!("mismatched sector info between header and controller");
     }
 
+    if header.mode != 2 {
+      panic!("unsupported mode found: {}", header.mode);
+    }
+
     self.sector_header = header;
     self.sector_subheader = subheader;
 
@@ -436,6 +432,14 @@ impl Cdrom {
         DriveMode::GetStat => self.drive_get_stat()
       }
     }
+  }
+
+  pub fn bcd_to_u8(value: u8) -> u8 {
+    ((value >> 4) * 10) + (value & 0xf)
+  }
+
+  pub fn u8_to_bcd(value: u8) -> u8 {
+    ((value / 10) << 4) | (value % 10)
   }
 
   fn controller_check_commands(&mut self, cycles: i32) {
@@ -664,9 +668,9 @@ impl Cdrom {
   fn setloc(&mut self) {
     self.push_stat();
 
-    self.mm = CdHeader::bcd_to_u8(self.controller_param_buffer.pop_front().unwrap());
-    self.ss = CdHeader::bcd_to_u8(self.controller_param_buffer.pop_front().unwrap());
-    self.sect = CdHeader::bcd_to_u8(self.controller_param_buffer.pop_front().unwrap());
+    self.mm = Self::bcd_to_u8(self.controller_param_buffer.pop_front().unwrap());
+    self.ss = Self::bcd_to_u8(self.controller_param_buffer.pop_front().unwrap());
+    self.sect = Self::bcd_to_u8(self.controller_param_buffer.pop_front().unwrap());
 
     self.processing_seek = true;
   }

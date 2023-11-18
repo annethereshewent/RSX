@@ -12,7 +12,7 @@ const EXP2_READ_ADDR: u32 = 0x1f802023;
 // @TODO: Refactor all of the mem_read and mem_loads into one generic method
 pub struct Bus {
   bios: Vec<u8>,
-  pub ram: [u8; RAM_SIZE],
+  pub ram: Box<[u8]>,
   pub counter: Counter,
   pub gpu: GPU,
   pub spu: SPU,
@@ -29,7 +29,7 @@ impl Bus {
   pub fn new(bios: Vec<u8>, interrupts: Rc<Cell<InterruptRegisters>>, dma: Rc<Cell<DMA>>, game_file: File) -> Self {
     Self {
       bios,
-      ram: [0; RAM_SIZE],
+      ram: vec![0; RAM_SIZE].into_boxed_slice(),
       gpu: GPU::new(interrupts.clone()),
       spu: SPU::new(),
       timers: Timers::new(interrupts.clone()),
