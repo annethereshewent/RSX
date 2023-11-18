@@ -538,6 +538,8 @@ impl Cdrom {
       0x02 => self.setloc(),
       0x06 => self.readn(),
       0x09 => self.pause(),
+      0x0a => self.init(),
+      0x0b | 0x0c => self.push_stat(),
       0x0e => self.setmode(),
       0x15 | 0x16 => self.seek(),
       0x19 => {
@@ -570,6 +572,21 @@ impl Cdrom {
     }
 
     self.controller_interrupt_flags = interrupt;
+  }
+
+  fn init(&mut self) {
+    self.push_stat();
+
+    self.double_speed = false;
+    self.sector_size = false;
+
+    self.is_playing = false;
+    self.is_reading = false;
+    self.is_seeking = false;
+
+    self.subresponse = SubResponse::GetStat;
+    self.subresponse_cycles += 10;
+
   }
 
   fn setmode(&mut self) {
@@ -647,9 +664,9 @@ impl Cdrom {
   fn setloc(&mut self) {
     self.push_stat();
 
-    self.mm = self.controller_param_buffer.pop_front().unwrap();
-    self.ss = self.controller_param_buffer.pop_front().unwrap();
-    self.sect = self.controller_param_buffer.pop_front().unwrap();
+    self.mm = CdHeader::bcd_to_u8(self.controller_param_buffer.pop_front().unwrap());
+    self.ss = CdHeader::bcd_to_u8(self.controller_param_buffer.pop_front().unwrap());
+    self.sect = CdHeader::bcd_to_u8(self.controller_param_buffer.pop_front().unwrap());
 
     self.processing_seek = true;
   }
@@ -745,6 +762,7 @@ impl Cdrom {
       1 => {
         match self.index {
           0 => self.command = Some(value),
+          3 => (), // cd audio to spu, unimplemented
           _ => panic!("offset 1 with index {} not implemented", self.index)
         }
       }
@@ -752,6 +770,8 @@ impl Cdrom {
         match self.index {
           0 => self.param_buffer.push_back(value),
           1 => self.interrupt_enable = value & 0x1f,
+          2 => (), // left cd audio to spu, not implemented
+          3 => (), // right cd audio to spu, not implemented
           _ => panic!("offset 2 with index {} not implemented yet", {self.index})
         }
       }
@@ -769,12 +789,19 @@ impl Cdrom {
             // writing 1 to these bits clears them
             self.interrupt_flags &= !(value & 0x1f);
 
+            if self.interrupt_flags == 0 && self.drive_interrupt_pending {
+              self.interrupt_flags = 1;
+              self.drive_interrupt_pending = false;
+              self.response_buffer.push_back(self.pending_stat);
+            }
+
             self.response_buffer.clear();
 
             if (value >> 6) & 0b1 == 1 {
               self.param_buffer.clear();
             }
           }
+          2 | 3 => (), // more CD audio stuff
           _ => panic!("offset 3 with index {} not implemented yet", self.index)
         }
       }

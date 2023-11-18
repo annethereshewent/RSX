@@ -85,6 +85,7 @@ impl Bus {
         let offset = (address - 0x1fc0_0000) as usize;
         (self.bios[offset] as u32) | ((self.bios[offset + 1] as u32) << 8) | ((self.bios[offset + 2] as u32) << 16) | ((self.bios[offset + 3] as u32) << 24)
       }
+      0x1f80_1060 => 0xb88,
       0x1f80_1070 => {
         self.interrupts.get().status.read()
       }

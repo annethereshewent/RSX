@@ -113,7 +113,11 @@ pub struct GPU {
   current_texture_y_base: u8,
   current_clut: (i32, i32),
   current_texture_colors: TextureColors,
-
+  gpuread: u32,
+  texture_window: u32,
+  drawing_area_top_left: u32,
+  drawing_area_bottom_right: u32,
+  draw_offset: u32
 }
 
 impl GPU {
@@ -161,7 +165,12 @@ impl GPU {
       current_clut: (0,0),
       current_texture_colors: TextureColors::FourBit,
       current_texture_x_base: 0,
-      current_texture_y_base: 0
+      current_texture_y_base: 0,
+      gpuread: 0,
+      texture_window: 0,
+      drawing_area_top_left: 0,
+      drawing_area_bottom_right: 0,
+      draw_offset: 0
     }
   }
 
@@ -173,7 +182,7 @@ impl GPU {
       return (lower as u32) | (upper as u32) << 16;
     }
 
-    0
+    self.gpuread
   }
 
   pub fn cap_fps(&mut self) {
@@ -410,7 +419,18 @@ impl GPU {
       0x06 => self.gp1_display_horizontal_range(val),
       0x07 => self.gp1_display_vertical_range(val),
       0x08 => self.gp1_display_mode(val),
+      0x10..=0x1f => self.gp1_set_gpuread(val),
       _ => todo!("Invalid or unsupported GP1 command: {:02x}", op_code)
+    }
+  }
+
+  fn gp1_set_gpuread(&mut self, val: u32) {
+    self.gpuread = match val & 0x7 {
+      0x02 => self.texture_window,
+      0x03 => self.drawing_area_top_left,
+      0x04 => self.drawing_area_bottom_right,
+      0x05 => self.draw_offset,
+      _ => self.gpuread
     }
   }
 
@@ -643,6 +663,7 @@ impl GPU {
     self.texture_window_y_mask = ((val >> 5) & 0x1f) as u8;
     self.texture_window_x_offset = ((val >> 10) & 0x1f) as u8;
     self.texture_window_y_offset = ((val >> 15) & 0x1f) as u8;
+    self.texture_window = val & 0xf_ffff;
   }
 
   fn gp0_draw_mode(&mut self) {
@@ -657,6 +678,7 @@ impl GPU {
   fn gp0_draw_area_top_left(&mut self) {
     let val = self.command_buffer[0];
 
+    self.drawing_area_top_left = val & 0x7_ffff;
     self.drawing_area_left = (val & 0x3ff) as u16;
     self.drawing_area_top = ((val >> 10) & 0x3ff) as u16;
   }
@@ -664,6 +686,7 @@ impl GPU {
   fn gp0_draw_area_bottom_right(&mut self) {
     let val = self.command_buffer[0];
 
+    self.drawing_area_bottom_right = val & 0x7_ffff;
     self.drawing_area_right = (val & 0x3ff) as u16;
     self.drawing_area_bottom = ((val >> 10) & 0x3ff) as u16;
   }
@@ -673,6 +696,8 @@ impl GPU {
 
     let x = (val & 0x7ff) as u16;
     let y = ((val >> 11) & 0x7ff) as u16;
+
+    self.draw_offset = val & 0x3f_ffff;
 
     self.drawing_x_offset = ((x << 5) as i16) >> 5;
     self.drawing_y_offset = ((y << 5) as i16) >> 5;
