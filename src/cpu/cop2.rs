@@ -127,6 +127,7 @@ impl COP2 {
 
     match op_code {
       0x06 => self.nclip(),
+      0x13 => self.ncds(),
       0x2d => self.avsz3(),
       0x30 => self.rtpt(),
       _ => println!("unimplemented op code for gte: {:x}", op_code)
@@ -154,6 +155,135 @@ impl COP2 {
     self.set_mac0_flags(value);
 
     self.mac[0] = value as i32;
+  }
+
+  fn ncds(&mut self) {
+    self.ncd(0);
+  }
+
+  fn ncd(&mut self, index: usize) {
+    let l11 = self.light[0][0] as i64;
+    let l12 = self.light[0][1] as i64;
+    let l13 = self.light[0][2] as i64;
+
+    let l21 = self.light[1][0] as i64;
+    let l22 = self.light[1][1] as i64;
+    let l23 = self.light[1][2] as i64;
+
+    let l31 = self.light[2][0] as i64;
+    let l32 = self.light[2][1] as i64;
+    let l33 = self.light[2][2] as i64;
+
+    let vx = self.v[index].0 as i64;
+    let vy = self.v[index].1 as i64;
+    let vz = self.v[index].2 as i64;
+
+    let temp0 = self.set_mac_flags(l11 * vx + l12 * vy + l13 * vz, 0);
+    let temp1 = self.set_mac_flags(l21 * vx + l22 * vy + l23 * vz, 1);
+    let temp2 = self.set_mac_flags(l31 * vx + l32 * vy + l33 * vz, 2);
+
+    self.mac[1] = (temp0 >> self.sf) as i32;
+    self.mac[2] = (temp1 >> self.sf) as i32;
+    self.mac[3] = (temp2 >> self.sf) as i32;
+
+
+    self.ir[1] = self.set_ir_flags(self.mac[1], 1, self.lm);
+    self.ir[2] = self.set_ir_flags(self.mac[2], 2, self.lm);
+    self.ir[3] = self.set_ir_flags(self.mac[3], 3, self.lm);
+
+    let rbk = (self.bk.0 as i64) * 0x1000;
+    let gbk = (self.bk.1 as i64) * 0x1000;
+    let bbk = (self.bk.2 as i64) * 0x1000;
+
+    let c11 = self.color[0][0] as i64;
+    let c12 = self.color[0][1] as i64;
+    let c13 = self.color[0][2] as i64;
+    let c21 = self.color[1][0] as i64;
+    let c22 = self.color[1][1] as i64;
+    let c23 = self.color[1][2] as i64;
+    let c31 = self.color[2][0] as i64;
+    let c32 = self.color[2][1] as i64;
+    let c33 = self.color[2][2] as i64;
+
+    let ir1 = self.ir[1] as i64;
+    let ir2 = self.ir[2] as i64;
+    let ir3 = self.ir[3] as i64;
+
+    let temp0 = self.set_mac_flags(rbk + c11 * ir1 + c12 * ir2 + c13 * ir3, 1);
+    let temp1 = self.set_mac_flags(bbk + c21 * ir1 + c22 * ir2 + c23 * ir3, 2);
+    let temp2 = self.set_mac_flags(gbk + c31 * ir1 + c32 * ir2 + c33 * ir3, 3);
+
+    self.mac[1] = (temp0 >> self.sf) as i32;
+    self.mac[2] = (temp1 >> self.sf) as i32;
+    self.mac[3] = (temp2 >> self.sf) as i32;
+
+    self.ir[1] = self.set_ir_flags(self.mac[1], 1, self.lm);
+    self.ir[2] = self.set_ir_flags(self.mac[2], 2, self.lm);
+    self.ir[3] = self.set_ir_flags(self.mac[3], 3, self.lm);
+
+    let r = (self.rgbc.r as i64) << 4;
+    let g = (self.rgbc.g as i64) << 4;
+    let b = (self.rgbc.b as i64) << 4;
+
+    let fcx = (self.fc.0 as i64) << 12;
+    let fcy = (self.fc.1 as i64) << 12;
+    let fcz = (self.fc.2 as i64) << 12;
+
+    self.mac[1] = (self.set_mac_flags(fcx - r * self.ir[1] as i64, 1) >> self.sf) as i32;
+    self.mac[2] = (self.set_mac_flags(fcy - g * self.ir[2] as i64, 2) >> self.sf) as i32;
+    self.mac[3] = (self.set_mac_flags(fcz - b * self.ir[3] as i64, 3) >> self.sf) as i32;
+
+    let previous_ir1 = self.ir[1] as i64;
+    let previous_ir2 = self.ir[2] as i64;
+    let previous_ir3 = self.ir[3] as i64;
+
+    self.ir[1] = self.set_ir_flags(self.mac[1], 1, false);
+    self.ir[2] = self.set_ir_flags(self.mac[2], 2, false);
+    self.ir[3] = self.set_ir_flags(self.mac[3], 3, false);
+
+    let ir0 = self.ir[0] as i64;
+    let ir1 = self.ir[1] as i64;
+    let ir2 = self.ir[2] as i64;
+    let ir3 = self.ir[3] as i64;
+
+    self.mac[1] = (self.set_mac_flags((r * previous_ir1) + ir0 * ir1, 1) >> self.sf) as i32;
+    self.mac[2] = (self.set_mac_flags((g * previous_ir2) + ir0 * ir2, 2) >> self.sf) as i32;
+    self.mac[3] = (self.set_mac_flags((b * previous_ir3) + ir0 * ir3, 3) >> self.sf) as i32;
+
+    self.ir[1] = self.set_ir_flags(self.mac[1], 1, self.lm);
+    self.ir[2] = self.set_ir_flags(self.mac[2], 2, self.lm);
+    self.ir[3] = self.set_ir_flags(self.mac[3], 3, self.lm);
+
+    let r = self.set_color_fifo_flags(self.mac[1] / 16, 1);
+    let g = self.set_color_fifo_flags(self.mac[2] / 16, 2);
+    let b = self.set_color_fifo_flags(self.mac[3] / 16, 3);
+    let c = self.rgbc.c;
+
+    self.push_rgb(r,g,b,c);
+  }
+
+  fn push_rgb(&mut self, r: u8, g: u8, b: u8, c: u8) {
+    self.rgb_fifo[0] = self.rgb_fifo[1];
+    self.rgb_fifo[1] = self.rgb_fifo[2];
+
+    self.rgb_fifo[2].r = r;
+    self.rgb_fifo[2].g = g;
+    self.rgb_fifo[2].b = b;
+    self.rgb_fifo[2].c = c;
+  }
+
+  fn set_color_fifo_flags(&mut self, value: i32, index: usize) -> u8 {
+    if value < 0 {
+      self.flags |= 1 << (21 - (index - 1));
+      return 0;
+    }
+
+    if value > 0xff {
+      self.flags |= 1 << (21 - (index - 1));
+      return 0xff;
+    }
+
+    return value as u8
   }
 
   fn set_mac_flags(&mut self, value: i64, index: usize) -> i64 {
@@ -203,8 +333,8 @@ impl COP2 {
     self.mac[2] = (ssy >> self.sf) as i32;
     self.mac[3] = (ssz >> self.sf) as i32;
 
-    self.ir[1] = self.set_ir_flags(self.mac[1], 1);
-    self.ir[2] = self.set_ir_flags(self.mac[2], 2);
+    self.ir[1] = self.set_ir_flags(self.mac[1], 1, self.lm);
+    self.ir[2] = self.set_ir_flags(self.mac[2], 2, self.lm);
     // self.ir[3] = self.set_ir_flags(self.mac[3], 3);
     // not sure why ir3 checks the old value instead of the current like ir1 and 2, but this seems to work ok.
     self.ir[3] = self.set_ir_flag3(zs, self.mac[3]);
@@ -291,12 +421,12 @@ impl COP2 {
     value as i16
   }
 
-  fn set_ir_flags(&mut self, value: i32, index: usize) -> i16 {
+  fn set_ir_flags(&mut self, value: i32, index: usize, lm: bool) -> i16 {
     let flag_set = 1 << (24 - (index - 1));
-    if self.lm && value < 0 {
+    if lm && value < 0 {
       self.flags |= flag_set;
       return 0;
-    } else if !self.lm && value < -0x8000 {
+    } else if !lm && value < -0x8000 {
       self.flags |= flag_set;
       return -0x8000;
     }
