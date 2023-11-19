@@ -238,7 +238,7 @@ impl CPU {
   }
 
   fn cop2_command(&mut self, instr: Instruction) {
-    self.cop2.execute(instr.cop2_command());
+    self.cop2.execute_command(instr);
 
     self.execute_load_delay();
   }
