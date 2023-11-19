@@ -291,6 +291,13 @@ impl SPU {
     }
   }
 
+  pub fn dma_write(&mut self, value: u32) {
+    self.sound_ram.write_16(self.data_transfer.current_address, value as u16);
+    self.sound_ram.write_16(self.data_transfer.current_address + 2, (value >> 16) as u16);
+
+    self.data_transfer.current_address = (self.data_transfer.current_address + 4) & 0x7_ffff
+  }
+
   pub fn read_32(&self, address: u32) -> u32 {
     (self.read_16(address) as u32) | (self.read_16(address) as u32) << 16
   }
@@ -320,6 +327,7 @@ impl SPU {
       0x1f80_1d9c => self.endx as u16,
       0x1f80_1d9e => (self.endx >> 16) as u16,
       0x1f80_1da2 => (self.reverb.mbase / 8) as u16,
+      0x1f80_1da6 => (self.data_transfer.transfer_address / 8) as u16,
       0x1f80_1daa => self.control.read(),
       0x1f80_1dac => self.data_transfer.control,
       0x1f80_1dae => {

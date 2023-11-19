@@ -86,8 +86,8 @@ impl GPU {
   }
 
   pub fn rasterize_rectangle(&mut self, color: (u8, u8, u8), vertex: (i32, i32), tex_vertex: (i32, i32), clut: (i32, i32), size_vector: (u32, u32), textured: bool, blended: bool, semi_transparent: bool) {
-    for y in 0..size_vector.1 {
-      for x in 0..size_vector.0 {
+    for x in 0..size_vector.0 {
+      for y in 0..size_vector.1 {
         let curr_x = vertex.0 + x as i32;
         let curr_y = vertex.1 + y as i32;
 

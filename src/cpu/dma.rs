@@ -77,6 +77,7 @@ impl DMA {
       match channel.channel_id {
         0 => bus.mdec.write_command(word),
         2 => bus.gpu.gp0(word),
+        4 => bus.spu.dma_write(word),
         _ => panic!("unhandled transfer from ram to channel {}", channel.channel_id)
       }
     } else {
