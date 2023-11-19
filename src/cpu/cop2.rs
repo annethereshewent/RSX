@@ -127,9 +127,20 @@ impl COP2 {
 
     match op_code {
       0x06 => self.nclip(),
+      0x2d => self.avsz3(),
       0x30 => self.rtpt(),
       _ => println!("unimplemented op code for gte: {:x}", op_code)
     }
+  }
+
+  fn avsz3(&mut self) {
+    let value = self.zsf3 as i64 * (self.sz_fifo[1] as i64 + self.sz_fifo[2] as i64 + self.sz_fifo[3] as i64);
+
+    self.set_mac0_flags(value);
+
+    self.mac[0] = value as i32;
+
+    self.otz = self.set_sz3_or_otz_flags(value / 0x1000);
   }
 
   fn nclip(&mut self) {
@@ -198,7 +209,7 @@ impl COP2 {
     // not sure why ir3 checks the old value instead of the current like ir1 and 2, but this seems to work ok.
     self.ir[3] = self.set_ir_flag3(zs, self.mac[3]);
 
-    let sz3 = self.set_sz3_flags(zs);
+    let sz3 = self.set_sz3_or_otz_flags(zs);
 
     self.push_sz(sz3);
 
@@ -319,7 +330,7 @@ impl COP2 {
     value as i16
   }
 
-  fn set_sz3_flags(&mut self, value: i64) -> u16 {
+  fn set_sz3_or_otz_flags(&mut self, value: i64) -> u16 {
     if value < 0 {
       self.flags |= 1 << 18;
       return 0;
