@@ -12,6 +12,7 @@ pub mod counter;
 pub mod interrupt;
 pub mod timers;
 pub mod cop2;
+pub mod mdec;
 
 // 33.868MHZ
 pub const CPU_FREQUENCY: f64 = 33_868_800.0;

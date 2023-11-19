@@ -2,7 +2,7 @@ use std::{rc::Rc, cell::Cell, fs::File};
 
 use crate::{gpu::GPU, spu::SPU, cdrom::Cdrom};
 
-use super::{counter::Counter, interrupt::interrupt_registers::InterruptRegisters, timers::timers::Timers, dma::DMA};
+use super::{counter::Counter, interrupt::interrupt_registers::InterruptRegisters, timers::timers::Timers, dma::DMA, mdec::Mdec};
 
 const RAM_SIZE: usize = 2 * 1024 * 1024;
 
@@ -20,6 +20,7 @@ pub struct Bus {
   pub interrupts: Rc<Cell<InterruptRegisters>>,
   timers: Timers,
   dma: Rc<Cell<DMA>>,
+  pub mdec: Mdec,
   pub cycles: i32,
   pub cache_control: u32,
   exp2_buffer: Vec<u8>
@@ -40,6 +41,7 @@ impl Bus {
       cycles: 0,
       cache_control: 0,
       exp2_buffer: Vec::new(),
+      mdec: Mdec::new()
     }
   }
 
@@ -107,6 +109,7 @@ impl Bus {
           _ => todo!("GPU read register not implemented yet: {offset}")
         }
       }
+      0x1f80_1824 => self.mdec.read_status(),
       0x1f80_1c00..=0x1f80_1e7f => {
         self.spu.read_32(address)
       }
@@ -263,6 +266,8 @@ impl Bus {
           _ => panic!("GPU write register not implemented yet: {offset}")
         }
       }
+      0x1f80_1820 => self.mdec.write_command(value),
+      0x1f80_1824 => self.mdec.write_control(value),
       0xfffe_0130 => self.cache_control = value,
       _ => panic!("write to unsupported address: {:06x}", address)
     }
