@@ -85,16 +85,38 @@ impl GPU {
     self.vram[vram_address + 1] = (value >> 8) as u8;
   }
 
-  pub fn rasterize_triangle(&mut self, c: &mut [(u8, u8, u8)], p: &mut [(i32, i32)], t: Option<&mut [(i32,i32)]>, clut: Option<(i32, i32)>, is_shaded: bool, is_blended: bool) {
+  pub fn rasterize_rectangle(&mut self, color: (u8, u8, u8), vertex: (i32, i32), tex_vertex: (i32, i32), clut: (i32, i32), size_vector: (u32, u32), textured: bool, blended: bool, semi_transparent: bool) {
+    for y in 0..size_vector.1 {
+      for x in 0..size_vector.0 {
+        let curr_x = vertex.0 + x as i32;
+        let curr_y = vertex.1 + y as i32;
+
+        if curr_x < self.drawing_area_left as i32 || curr_y < self.drawing_area_top as i32 || curr_x >= self.drawing_area_right as i32 || curr_y >= self.drawing_area_bottom as i32 {
+          continue;
+        }
+
+        let mut output = color;
+
+        if textured {
+          let mut uv = (tex_vertex.0 + (x & 0xff) as i32, tex_vertex.1 + (y & 0xff) as i32);
+          uv = self.mask_texture_coordinates(uv);
+
+          if let Some(mut texture) = self.get_texture(uv, clut) {
+            if blended {
+              texture.0 = (((texture.0 as u32) * (color.0 as u32)) >> 7) as u8;
+              texture.1 = (((texture.1 as u32) * (color.1 as u32)) >> 7) as u8;
+              texture.2 = (((texture.2 as u32) * (color.2 as u32)) >> 7) as u8;
+            }
+            output = texture;
+          }
+        }
+        self.render_pixel((curr_x, curr_y), output);
+      }
+    }
+  }
+
+  pub fn rasterize_triangle(&mut self, c: &mut [(u8, u8, u8)], p: &mut [(i32, i32)], t: &mut [(i32,i32)], clut: (i32, i32), is_textured: bool, is_shaded: bool, is_blended: bool) {
     let mut area = GPU::get_2d_area(p[0], p[1], p[2]);
-
-    let mut no_textures = [(0,0), (0,0), (0,0)];
-
-    let t = if t.is_some() {
-      t.unwrap()
-    } else {
-      &mut no_textures
-    };
 
     if area == 0 {
       return;
@@ -172,7 +194,7 @@ impl GPU {
             output = GPU::interpolate_color(area as i32, vec_3d, c[0], c[1], c[2]);
           }
 
-          if let Some(clut) = clut {
+          if is_textured {
             let mut uv = GPU::interpolate_texture_coordinates(area, vec_3d, t[0], t[1], t[2]);
             uv = self.mask_texture_coordinates(uv);
 

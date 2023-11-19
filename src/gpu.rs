@@ -29,6 +29,7 @@ pub const CYCLES_IN_HSYNC: i32 = 200;
 
 pub const FPS_INTERVAL: u128 = 1000 / 60;
 
+const VRAM_SIZE: usize = 2 * 1024 * 512;
 
 #[derive(Clone, Copy)]
 struct TextureCache {
@@ -157,7 +158,7 @@ impl GPU {
       previous_time: 0,
       image_transfer: Transfer::new(),
       cpu_transfer: Transfer::new(),
-      vram: vec![0; 0x100000].into_boxed_slice(),
+      vram: vec![0; VRAM_SIZE].into_boxed_slice(),
       picture: vec![0; 1024 * 512 * 3].into_boxed_slice(),
       texture_cache: [TextureCache::new(); 256],
       clut_tag: -1,
@@ -394,6 +395,7 @@ impl GPU {
       0x01 => self.gp0_invalidate_cache(),
       0x02 => self.gp0_fill_vram(),
       0x20..=0x3f => self.gp0_draw_polygon(),
+      0x60..=0x7f => self.gp0_draw_rectangle(),
       0xa0 => self.gp0_image_transfer_to_vram(),
       0xc0 => self.gp0_image_transfer_to_cpu(),
       0xe1 => self.gp0_draw_mode(),
@@ -588,6 +590,57 @@ impl GPU {
     self.stat.set_mask_attributes(val);
   }
 
+  fn gp0_draw_rectangle(&mut self) {
+    let word = self.command_buffer[0];
+
+    let rectangle_size = (word >> 27) & 0x3;
+
+    let textured = (word >> 26) & 0b1 == 1;
+    let semi_transparent = (word >> 25) & 0b1 == 1;
+    let blended = (word >> 24) & 0b1 == 1;
+
+    let color = GPU::parse_color(self.command_buffer[0]);
+
+    let mut tex_vertex: (i32, i32) = (0,0);
+
+    let vertex = self.parse_position(self.command_buffer[1]);
+
+    let mut command_pos = 2;
+
+    let mut clut = (0,0);
+
+    let mut size_vector = (1,1);
+
+    if textured {
+      tex_vertex = GPU::parse_texture_coords(self.command_buffer[command_pos]);
+
+      clut = GPU::to_clut(self.command_buffer[command_pos]);
+
+      if textured && (clut != self.current_clut ||
+        self.stat.texture_x_base != self.current_texture_x_base ||
+        self.stat.texture_y_base1 != self.current_texture_y_base ||
+        self.stat.texture_colors != self.current_texture_colors) {
+        self.gp0_invalidate_cache();
+      }
+
+      command_pos += 1;
+    }
+
+    size_vector = match rectangle_size {
+      0 => {
+        let dimensions = self.command_buffer[command_pos];
+
+        ((dimensions & 0x3ff), ((dimensions >> 16) & 0x1ff))
+      },
+      1 => (1,1),
+      2 => (8,8),
+      3 => (16,16),
+      _ => unreachable!("can't happen")
+    };
+
+    self.rasterize_rectangle(color, vertex, tex_vertex, clut, size_vector, textured, blended, semi_transparent);
+  }
+
   fn gp0_draw_polygon(&mut self) {
     let command = self.command_buffer[0] >> 24;
 
@@ -643,16 +696,10 @@ impl GPU {
       self.gp0_invalidate_cache();
     }
 
-    let c = if is_textured { Some(clut) } else { None };
-    let t = if is_textured { Some(&mut tex_positions[0..3] ) } else { None };
-
-    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], t, c, is_shaded, is_blended);
+    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], &mut tex_positions[0..3], clut, is_textured, is_shaded, is_blended);
 
     if num_vertices == 4 {
-      let t = if is_textured { Some(&mut tex_positions[1..4])} else { None };
-      let c = if is_textured { Some(clut) } else { None };
-
-      self.rasterize_triangle(&mut colors[1..4], &mut positions[1..4], t, c, is_shaded, is_blended);
+      self.rasterize_triangle(&mut colors[1..4], &mut positions[1..4], &mut tex_positions[1..4], clut, is_textured, is_shaded, is_blended);
     }
   }
 
