@@ -12,6 +12,14 @@ pub enum Field {
 }
 
 #[derive(Clone, Copy)]
+pub enum SemiTransparency {
+  Half,
+  Add,
+  Subtract,
+  AddQuarter,
+}
+
+#[derive(Clone, Copy)]
 pub enum VideoMode {
   Ntsc = 0,
   Pal = 1
@@ -36,7 +44,7 @@ pub struct GpuStatRegister {
   pub texture_y_base1: u8,
   pub texture_y_base2: u8,
 
-  pub semi_transparency: u8,
+  pub semi_transparency: SemiTransparency,
   pub texture_colors: TextureColors,
   pub dither_enabled: bool,
   pub draw_to_display: bool,
@@ -67,7 +75,7 @@ impl GpuStatRegister {
       texture_x_base: 0,
       texture_y_base1: 0,
       texture_y_base2: 0,
-      semi_transparency: 0,
+      semi_transparency: SemiTransparency::Half,
       texture_colors: TextureColors::FourBit,
       dither_enabled: false,
       draw_to_display: false,
@@ -96,7 +104,13 @@ impl GpuStatRegister {
   pub fn update_draw_mode(&mut self, val: u32) {
     self.texture_x_base = (val & 0xf) as u8;
     self.texture_y_base1 = ((val >> 4) & 0b1) as u8;
-    self.semi_transparency = ((val >> 5) & 0b11) as u8;
+    self.semi_transparency = match (val >> 5) & 0b11 {
+      0 => SemiTransparency::Half,
+      1 => SemiTransparency::Add,
+      2 => SemiTransparency::Subtract,
+      3 => SemiTransparency::AddQuarter,
+      _ => unreachable!("can't happen")
+    };
 
     self.texture_colors = match (val >> 7) & 0b11 {
       0 => TextureColors::FourBit,
@@ -172,7 +186,7 @@ impl GpuStatRegister {
 
     self.texture_x_base = 0;
     self.texture_y_base1 = 0;
-    self.semi_transparency = 0;
+    self.semi_transparency = SemiTransparency::Half;
     self.texture_colors = TextureColors::FourBit;
     self.dither_enabled = false;
     self.draw_to_display = false;

@@ -2,7 +2,7 @@ use std::{rc::Rc, cell::Cell, time::{UNIX_EPOCH, SystemTime, Duration}, thread::
 
 use crate::cpu::{CPU_FREQUENCY, interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}, timers::timers::Timers};
 
-use self::gpu_stat_register::{GpuStatRegister, VideoMode, TextureColors};
+use self::gpu_stat_register::{GpuStatRegister, VideoMode, TextureColors, SemiTransparency};
 
 pub mod gpu_stat_register;
 pub mod render;
@@ -30,6 +30,15 @@ pub const CYCLES_IN_HSYNC: i32 = 200;
 pub const FPS_INTERVAL: u128 = 1000 / 60;
 
 const VRAM_SIZE: usize = 2 * 1024 * 512;
+
+
+#[derive(Copy, Clone)]
+pub struct RgbColor {
+  pub r: u8,
+  pub g: u8,
+  pub b: u8,
+  pub a: bool
+}
 
 #[derive(Clone, Copy)]
 struct TextureCache {
@@ -493,12 +502,17 @@ impl GPU {
     self.cpu_transfer.is_active = true;
   }
 
-  pub fn parse_color(val: u32) -> (u8,u8,u8) {
+  pub fn parse_color(val: u32) -> RgbColor {
     let r = val as u8;
     let g = (val >> 8) as u8;
     let b = (val >> 16) as u8;
 
-    (r, g, b)
+    RgbColor {
+      r,
+      g,
+      b,
+      a: false
+    }
   }
 
   pub fn parse_position(&self, val: u32) -> (i32, i32) {
@@ -550,7 +564,13 @@ impl GPU {
       n => panic!("invalid value received: {n}")
     };
 
-    self.stat.semi_transparency = ((texture_data >> 5) & 0b11) as u8;
+    self.stat.semi_transparency = match ((texture_data >> 5) & 0b11) {
+      0 => SemiTransparency::Half,
+      1 => SemiTransparency::Add,
+      2 => SemiTransparency::Subtract,
+      3 => SemiTransparency::AddQuarter,
+      _ => unreachable!("can't happen")
+    };
     self.stat.texture_x_base = (texture_data & 0xf) as u8;
     self.stat.texture_y_base1 = ((texture_data >> 4) & 0b1) as u8;
   }
@@ -696,10 +716,10 @@ impl GPU {
       self.gp0_invalidate_cache();
     }
 
-    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], &mut tex_positions[0..3], clut, is_textured, is_shaded, is_blended);
+    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], &mut tex_positions[0..3], clut, is_textured, is_shaded, is_blended, semi_transparent);
 
     if num_vertices == 4 {
-      self.rasterize_triangle(&mut colors[1..4], &mut positions[1..4], &mut tex_positions[1..4], clut, is_textured, is_shaded, is_blended);
+      self.rasterize_triangle(&mut colors[1..4], &mut positions[1..4], &mut tex_positions[1..4], clut, is_textured, is_shaded, is_blended, semi_transparent);
     }
   }
 

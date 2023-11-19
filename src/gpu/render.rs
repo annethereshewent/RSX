@@ -1,6 +1,6 @@
 use std::cmp;
 
-use super::{GPU, gpu_stat_register::{ColorDepth, TextureColors}};
+use super::{GPU, gpu_stat_register::{ColorDepth, TextureColors, SemiTransparency}, RgbColor};
 
 impl GPU {
   fn get_2d_area(pos1: (i32, i32), pos2: (i32, i32), pos3: (i32, i32)) -> i32 {
@@ -26,11 +26,11 @@ impl GPU {
 
             let color = (self.vram[vram_address] as u16) | (self.vram[vram_address + 1] as u16) << 8;
 
-            let (r, g, b) = self.translate_15bit_to_24(color);
+            let color = self.translate_15bit_to_24(color);
 
-            self.picture[i] = r;
-            self.picture[i + 1] = g;
-            self.picture[i + 2] = b;
+            self.picture[i] = color.r;
+            self.picture[i + 1] = color.g;
+            self.picture[i + 2] = color.b;
 
           }
           ColorDepth::TwentyFourBit => {
@@ -46,16 +46,22 @@ impl GPU {
     }
   }
 
-  fn translate_15bit_to_24(&self, val: u16) -> (u8, u8, u8) {
+  fn translate_15bit_to_24(&self, val: u16) -> RgbColor {
     let mut r = (val & 0x1f) as u8;
     let mut g = ((val >> 5) & 0x1f) as u8;
     let mut b = ((val >> 10) & 0x1f) as u8;
+    let a = (val >> 15) & 0b1 == 1;
 
     r = (r << 3) | (r >> 2);
     g = (g << 3) | (g >> 2);
     b = (b << 3) | (b >> 2);
 
-    (r, g, b)
+    RgbColor {
+      r,
+      g,
+      b,
+      a
+    }
   }
 
   pub fn get_dimensions(&self) -> (u32, u32) {
@@ -76,8 +82,58 @@ impl GPU {
     (w, h)
   }
 
-  pub fn render_pixel(&mut self, position: (i32, i32), color: (u8, u8, u8)) {
+  pub fn render_pixel(&mut self, position: (i32, i32), color: RgbColor, textured: bool, semi_transparent: bool) {
     let vram_address = self.get_vram_address(position.0 as u32, position.1 as u32);
+
+    let mut color = color;
+
+    if self.stat.preserved_masked_pixels && color.a {
+      return;
+    }
+
+    if self.stat.force_mask_bit {
+      color.a = true;
+    }
+
+    if (!textured || color.a) && semi_transparent {
+      let val = (self.vram[vram_address] as u16) | (self.vram[vram_address + 1] as u16) << 8;
+      let prev_color = self.translate_15bit_to_24(val);
+
+      let (r,g, b): (u8, u8, u8) = match self.stat.semi_transparency {
+        SemiTransparency::Half => {
+          (
+            GPU::add_half_semitransparency(prev_color.r, color.r),
+            GPU::add_half_semitransparency(prev_color.g, color.g),
+            GPU::add_half_semitransparency(prev_color.b, color.b)
+          )
+        }
+        SemiTransparency::Add => {
+          (
+            GPU::add_semitransparency(prev_color.r, color.r),
+            GPU::add_semitransparency(prev_color.g, color.g),
+            GPU::add_semitransparency(prev_color.b, color.b)
+          )
+        }
+        SemiTransparency::Subtract => {
+          (
+            GPU::subtract_semitransparency(prev_color.r, color.r),
+            GPU::subtract_semitransparency(prev_color.g, color.g),
+            GPU::subtract_semitransparency(prev_color.b, color.b)
+          )
+        }
+        SemiTransparency::AddQuarter => {
+          (
+            GPU::add_quarter_semitransparency(prev_color.r, color.r),
+            GPU::add_quarter_semitransparency(prev_color.g, color.g),
+            GPU::add_quarter_semitransparency(prev_color.b, color.b),
+          )
+        }
+      };
+
+      color.r = r;
+      color.g = g;
+      color.b = b;
+    }
 
     let value = GPU::color_to_u16(color);
 
@@ -85,7 +141,30 @@ impl GPU {
     self.vram[vram_address + 1] = (value >> 8) as u8;
   }
 
-  pub fn rasterize_rectangle(&mut self, color: (u8, u8, u8), vertex: (i32, i32), tex_vertex: (i32, i32), clut: (i32, i32), size_vector: (u32, u32), textured: bool, blended: bool, semi_transparent: bool) {
+
+  fn add_half_semitransparency(x: u8, y: u8) -> u8 {
+    cmp::min(255,(x as u32 + y as u32) / 2) as u8
+  }
+
+  fn add_semitransparency(x: u8, y: u8) -> u8 {
+    cmp::min(255, x as u32 + y as u32) as u8
+  }
+
+  fn subtract_semitransparency(x: u8, y: u8) -> u8 {
+    let result = x as i32 - y as i32;
+
+    if result < 0 {
+      return 0;
+    }
+
+    result as u8
+  }
+
+  fn add_quarter_semitransparency(x: u8, y: u8) -> u8 {
+    cmp::min(255, (x as u32 + y as u32) / 4) as u8
+  }
+
+  pub fn rasterize_rectangle(&mut self, color: RgbColor, vertex: (i32, i32), tex_vertex: (i32, i32), clut: (i32, i32), size_vector: (u32, u32), textured: bool, blended: bool, semi_transparent: bool) {
     for x in 0..size_vector.0 {
       for y in 0..size_vector.1 {
         let curr_x = vertex.0 + x as i32;
@@ -103,19 +182,17 @@ impl GPU {
 
           if let Some(mut texture) = self.get_texture(uv, clut) {
             if blended {
-              texture.0 = (((texture.0 as u32) * (color.0 as u32)) >> 7) as u8;
-              texture.1 = (((texture.1 as u32) * (color.1 as u32)) >> 7) as u8;
-              texture.2 = (((texture.2 as u32) * (color.2 as u32)) >> 7) as u8;
+              GPU::blend_colors(&mut texture, &color);
             }
             output = texture;
           }
         }
-        self.render_pixel((curr_x, curr_y), output);
+        self.render_pixel((curr_x, curr_y), output, textured, semi_transparent);
       }
     }
   }
 
-  pub fn rasterize_triangle(&mut self, c: &mut [(u8, u8, u8)], p: &mut [(i32, i32)], t: &mut [(i32,i32)], clut: (i32, i32), is_textured: bool, is_shaded: bool, is_blended: bool) {
+  pub fn rasterize_triangle(&mut self, c: &mut [RgbColor], p: &mut [(i32, i32)], t: &mut [(i32,i32)], clut: (i32, i32), is_textured: bool, is_shaded: bool, is_blended: bool, semi_transparent: bool) {
     let mut area = GPU::get_2d_area(p[0], p[1], p[2]);
 
     if area == 0 {
@@ -200,9 +277,7 @@ impl GPU {
 
             if let Some(mut texture) = self.get_texture(uv, clut) {
               if is_blended {
-                texture.0 = (((texture.0 as u32) * (blend_color.0 as u32)) >> 7) as u8;
-                texture.1 = (((texture.1 as u32) * (blend_color.1 as u32)) >> 7) as u8;
-                texture.2 = (((texture.2 as u32) * (blend_color.2 as u32)) >> 7) as u8;
+                GPU::blend_colors(&mut texture, &blend_color);
               }
 
               output = texture;
@@ -216,7 +291,7 @@ impl GPU {
             }
           }
 
-          self.render_pixel(curr_p, output);
+          self.render_pixel(curr_p, output, is_textured, semi_transparent);
         }
         w0 += a12;
         w1 += a20;
@@ -232,12 +307,18 @@ impl GPU {
     }
   }
 
-  pub fn color_to_u16(color: (u8, u8, u8)) -> u16 {
+  fn blend_colors(texture: &mut RgbColor, color: &RgbColor) {
+    texture.r = (((texture.r as u32) * (color.r as u32)) >> 7) as u8;
+    texture.g = (((texture.g as u32) * (color.g as u32)) >> 7) as u8;
+    texture.b = (((texture.b as u32) * (color.b as u32)) >> 7) as u8;
+  }
+
+  pub fn color_to_u16(color: RgbColor) -> u16 {
     let mut pixel = 0;
 
-    pixel |= ((color.0 as u16) & 0xf8) >> 3;
-    pixel |= ((color.1 as u16) & 0xf8) << 2;
-    pixel |= ((color.2 as u16) & 0xf8) << 7;
+    pixel |= ((color.r as u16) & 0xf8) >> 3;
+    pixel |= ((color.g as u16) & 0xf8) << 2;
+    pixel |= ((color.b as u16) & 0xf8) << 7;
 
     pixel
   }
@@ -246,25 +327,30 @@ impl GPU {
     (y < 0) || ((x < 0) && (y == 0))
   }
 
-  fn interpolate_color(area: i32, vec_3d: (i32,i32,i32), color0: (u8,u8,u8), color1: (u8,u8,u8), color2: (u8,u8,u8)) -> (u8, u8, u8) {
-    let color0_r = color0.0 as i32;
-    let color1_r = color1.0 as i32;
-    let color2_r = color2.0 as i32;
+  fn interpolate_color(area: i32, vec_3d: (i32,i32,i32), color0: RgbColor, color1: RgbColor, color2: RgbColor) -> RgbColor {
+    let color0_r = color0.r as i32;
+    let color1_r = color1.r as i32;
+    let color2_r = color2.r as i32;
 
-    let color0_g = color0.1 as i32;
-    let color1_g = color1.1 as i32;
-    let color2_g = color2.1 as i32;
+    let color0_g = color0.g as i32;
+    let color1_g = color1.g as i32;
+    let color2_g = color2.g as i32;
 
-    let color0_b = color0.2 as i32;
-    let color1_b = color1.2 as i32;
-    let color2_b = color2.2 as i32;
+    let color0_b = color0.b as i32;
+    let color1_b = color1.b as i32;
+    let color2_b = color2.b as i32;
 
 
     let r = ((vec_3d.0 * color0_r + vec_3d.1 * color1_r + vec_3d.2 * color2_r) / area) as u8;
     let g = ((vec_3d.0 * color0_g + vec_3d.1 * color1_g + vec_3d.2 * color2_g) / area) as u8;
     let b = ((vec_3d.0 * color0_b + vec_3d.1 * color1_b + vec_3d.2 * color2_b) / area) as u8;
 
-    (r,g,b)
+    RgbColor {
+      r,
+      g,
+      b,
+      a: false
+    }
   }
 
   fn interpolate_texture_coordinates(area: i32, w: (i32, i32, i32),
@@ -290,7 +376,7 @@ impl GPU {
     uv
   }
 
-  fn get_texture(&mut self, uv: (i32, i32), clut: (i32, i32)) -> Option<(u8,u8,u8)> {
+  fn get_texture(&mut self, uv: (i32, i32), clut: (i32, i32)) -> Option<RgbColor> {
     match self.stat.texture_colors {
       TextureColors::FourBit => self.read_4bit_clut(uv, clut),
       TextureColors::EightBit => self.read_8bit_clut(uv, clut),
@@ -298,7 +384,7 @@ impl GPU {
     }
   }
 
-  fn read_4bit_clut(&mut self, uv: (i32, i32), clut: (i32, i32)) -> Option<(u8,u8,u8)> {
+  fn read_4bit_clut(&mut self, uv: (i32, i32), clut: (i32, i32)) -> Option<RgbColor> {
     let tex_x_base = (self.stat.texture_x_base as i32) * 64;
     let tex_y_base = (self.stat.texture_y_base1 as i32) * 16;
 
@@ -350,11 +436,11 @@ impl GPU {
     }
   }
 
-  fn read_8bit_clut(&self, _uv: (i32, i32), _clut: (i32, i32)) -> Option<(u8,u8,u8)> {
-    Some((0,0,0))
+  fn read_8bit_clut(&self, _uv: (i32, i32), _clut: (i32, i32)) -> Option<RgbColor> {
+    todo!("not ready");
   }
 
-  fn read_texture(&self, _uv: (i32, i32)) -> Option<(u8,u8,u8)> {
-    Some((0,0,0))
+  fn read_texture(&self, _uv: (i32, i32)) -> Option<RgbColor> {
+    todo!("not ready");
   }
 }
