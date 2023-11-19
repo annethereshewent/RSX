@@ -12,7 +12,9 @@ pub struct Mdec {
   current_block: usize,
   processing: bool,
   command: u32,
-  luminance_and_color: bool
+  luminance_and_color: bool,
+  luminance_quant_table: [u8; 64],
+  color_quant_table: [u8; 64]
 }
 
 impl Mdec {
@@ -29,7 +31,9 @@ impl Mdec {
       current_block: 0,
       processing: false,
       command: 0,
-      luminance_and_color: false
+      luminance_and_color: false,
+      luminance_quant_table: [0; 64],
+      color_quant_table: [0; 64]
     }
   }
 
@@ -51,7 +55,7 @@ impl Mdec {
 
   pub fn write_command(&mut self, value: u32) {
     if self.processing {
-      self.process_command();
+      self.process_command(value);
 
       return;
     }
@@ -86,8 +90,43 @@ impl Mdec {
 
   }
 
-  fn process_command(&mut self) {
-    todo!("still not implemented");
+  fn process_command(&mut self, value: u32) {
+    self.data_in.push_back(value as u16);
+    self.data_in.push_back((value >> 16) as u16);
+
+    self.words_remaining -= 1;
+
+    if self.words_remaining == 0 {
+      match self.command {
+        1 => {
+
+        }
+        2 => {
+          for i in 0..32 {
+            let halfword = self.data_in.pop_front().unwrap();
+
+            self.luminance_quant_table[i * 2] = halfword as u8;
+            self.luminance_quant_table[i * 2 + 1] = (halfword >> 8) as u8;
+          }
+
+          if self.luminance_and_color {
+            for i in 0..32 {
+              let halfword = self.data_in.pop_front().unwrap();
+
+              self.color_quant_table[i * 2] = halfword as u8;
+              self.color_quant_table[i * 2 + 1] = (halfword >> 8) as u8;
+            }
+          }
+
+          self.processing = false;
+        }
+        3 => {
+
+        }
+        _ => panic!("invalid command received: {}", self.command)
+      }
+    }
+
   }
 
   pub fn write_control(&mut self, value: u32) {

@@ -74,10 +74,10 @@ impl DMA {
     if channel.control.is_from_ram() {
       let word = bus.mem_read_32(masked_address);
 
-      if channel.channel_id == 2 {
-        bus.gpu.gp0(word);
-      } else {
-        panic!("unhandled transfer from ram to channel {}", channel.channel_id);
+      match channel.channel_id {
+        0 => bus.mdec.write_command(word),
+        2 => bus.gpu.gp0(word),
+        _ => panic!("unhandled transfer from ram to channel {}", channel.channel_id)
       }
     } else {
       todo!("tick request to RAM not implemented yet");
