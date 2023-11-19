@@ -130,7 +130,7 @@ impl COP2 {
       0x13 => self.ncds(),
       0x2d => self.avsz3(),
       0x30 => self.rtpt(),
-      _ => println!("unimplemented op code for gte: {:x}", op_code)
+      _ => panic!("unimplemented op code for gte: {:x}", op_code)
     }
   }
 
@@ -343,7 +343,6 @@ impl COP2 {
 
     self.push_sz(sz3);
 
-
     // per https://psx-spx.consoledev.net/geometrytransformationenginegte/#gte-division-inaccuracy
     let h_divided_by_sz: u32 = if self.h < sz3 * 2 {
       let leading_zeros = sz3.leading_zeros();
@@ -354,11 +353,10 @@ impl COP2 {
       d = (0x2000080 - (d * u)) >> 8;
       d = (0x80 + (d * u)) >> 8;
 
-      cmp::min(0x1fff, (((n * d) + 0x8000) >> 16) as u32)
-
+      cmp::min(0x1_ffff, (((n * d) + 0x8000) >> 16) as u32)
     } else {
       self.flags |= 1 << 17;
-      0x1fff
+      0x1_ffff
     };
 
     let mut sx2 = (self.ofx as i64) + (self.ir[1] as i64) * h_divided_by_sz as i64;
@@ -383,7 +381,6 @@ impl COP2 {
       self.mac[0] = p as i32;
       self.ir[0] = self.set_ir0_flags(p / 0x1000);
     }
-
   }
 
   fn set_ir0_flags(&mut self, value: i64) -> i16 {
@@ -540,7 +537,7 @@ impl COP2 {
         self.v[2].0 = value as i16;
         self.v[2].1 = (value >> 16) as i16;
       }
-      5 => self.v[1].2 = value as i16,
+      5 => self.v[2].2 = value as i16,
       6 => {
         self.rgbc.r = value as u8;
         self.rgbc.g = (value >> 8) as u8;
