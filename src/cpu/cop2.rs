@@ -178,9 +178,9 @@ impl COP2 {
     let vy = self.v[index].1 as i64;
     let vz = self.v[index].2 as i64;
 
-    let temp0 = self.set_mac_flags(l11 * vx + l12 * vy + l13 * vz, 0);
-    let temp1 = self.set_mac_flags(l21 * vx + l22 * vy + l23 * vz, 1);
-    let temp2 = self.set_mac_flags(l31 * vx + l32 * vy + l33 * vz, 2);
+    let temp0 = self.set_mac_flags(l11 * vx + l12 * vy + l13 * vz, 1);
+    let temp1 = self.set_mac_flags(l21 * vx + l22 * vy + l23 * vz, 2);
+    let temp2 = self.set_mac_flags(l31 * vx + l32 * vy + l33 * vz, 3);
 
     self.mac[1] = (temp0 >> self.sf) as i32;
     self.mac[2] = (temp1 >> self.sf) as i32;
