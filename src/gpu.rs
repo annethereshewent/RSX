@@ -572,7 +572,7 @@ impl GPU {
       _ => unreachable!("can't happen")
     };
     self.stat.texture_x_base = (texture_data & 0xf) as u8;
-    self.stat.texture_y_base1 = ((texture_data >> 4) & 0b1) as u8;
+    self.stat.texture_y_base1 = ((texture_data & 0x10)) as u8;
   }
 
   fn to_clut(command: u32) -> (i32, i32) {
@@ -684,7 +684,6 @@ impl GPU {
     let mut command_index = 0;
 
     let mut clut = (0,0);
-
 
     for i in 0..num_vertices {
       if i == 0 || is_shaded {

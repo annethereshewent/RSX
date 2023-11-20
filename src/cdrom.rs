@@ -11,9 +11,6 @@ pub const LEAD_IN_SECTORS: u64 = 2 * SECTORS_PER_SECOND;
 const HEADER_START: usize = 12;
 const SUBHEADER_START: usize = 16;
 
-const DATA_ONLY: usize = 0x800;
-const WHOLE_SECTOR: usize = 0x924;
-
 const DATA_OFFSET: usize = 24;
 const ADDR_OFFSET: usize = 12;
 

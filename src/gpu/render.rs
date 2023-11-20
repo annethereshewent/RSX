@@ -403,7 +403,7 @@ impl GPU {
 
     // see the diagram here for a good visual example:
     // https://psx-spx.consoledev.net/graphicsprocessingunitgpu/#gpu-texture-caching
-    let entry = (((uv.1 * 4) | ((uv.0 / 16) & 3)) & 0xff) as usize;
+    let entry = (((uv.1 * 4) | ((uv.0 / 16) & 0x3)) & 0xff) as usize;
 
     // each cache entry is 8 bytes wide
     let index = ((uv.0 / 2) & 7) as usize;
@@ -459,8 +459,8 @@ impl GPU {
 
     // in this case, each cache line is organized in blocks of 8 * 32 cache lines,
     // and each cache entry is 8 8bb pixels wide (half as many as 4bb mode)
-    let entry = ((8 * offset_y + (offset_x / 8) & 0x7) & 0xff) as usize;
-    let block = ((offset_x / 32) + (offset_y / 64) * 8) as isize;
+    let entry = ((8 * uv.1 + ((uv.0 / 8) & 0x7)) & 0xff) as usize;
+    let block = ((uv.0 / 32) + (uv.1 / 64) * 8) as isize;
 
     let cache_entry = &mut self.texture_cache[entry];
 
@@ -499,6 +499,7 @@ impl GPU {
 
 
   fn read_texture(&mut self, uv: (i32, i32)) -> Option<RgbColor> {
+    panic!("it's trying to read a full texture");
     let tex_x_base = (self.stat.texture_x_base as i32) * 64;
     let tex_y_base = (self.stat.texture_y_base1 as i32) * 16;
 
@@ -508,7 +509,7 @@ impl GPU {
     let texture_address = 2 * (offset_x + offset_y * 1024) as usize;
 
     // for this case, each cache entry is 8 * 32 cache lines, and each cache entry is 4 16bpp pixels wide
-    let entry = (((uv.1 * 8) + (uv.0 / 4 ) & 0x7) & 0xff) as usize;
+    let entry = (((uv.1 * 8) + ((uv.0 / 4 ) & 0x7)) & 0xff) as usize;
     let block = ((offset_x / 32) + (offset_y / 32) * 8) as isize;
 
     let cache_entry = &mut self.texture_cache[entry];

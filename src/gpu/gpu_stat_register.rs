@@ -103,7 +103,7 @@ impl GpuStatRegister {
 
   pub fn update_draw_mode(&mut self, val: u32) {
     self.texture_x_base = (val & 0xf) as u8;
-    self.texture_y_base1 = ((val >> 4) & 0b1) as u8;
+    self.texture_y_base1 = (val & 0x10) as u8;
     self.semi_transparency = match (val >> 5) & 0b11 {
       0 => SemiTransparency::Half,
       1 => SemiTransparency::Add,
