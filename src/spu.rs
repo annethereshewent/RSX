@@ -155,6 +155,8 @@ impl SPU {
         self.voices[i].update_key_off();
       }
     }
+
+    self.key_off = 0;
   }
 
   fn update_key_on(&mut self) {
@@ -163,6 +165,8 @@ impl SPU {
         self.voices[i].update_key_on();
       }
     }
+
+    self.key_on = 0;
   }
 
   fn update_noise(&mut self) {
@@ -216,6 +220,8 @@ impl SPU {
     let mut right_reverb = 0.0;
 
     self.update_endx();
+    self.update_key_off();
+    self.update_key_on();
 
     self.tick_noise();
 
@@ -295,7 +301,7 @@ impl SPU {
     self.sound_ram.write_16(self.data_transfer.current_address, value as u16);
     self.sound_ram.write_16(self.data_transfer.current_address + 2, (value >> 16) as u16);
 
-    self.data_transfer.current_address = (self.data_transfer.current_address + 4) & 0x7_ffff
+    self.data_transfer.current_address = (self.data_transfer.current_address + 4) & 0x7_ffff;
   }
 
   pub fn read_32(&self, address: u32) -> u32 {
@@ -364,26 +370,18 @@ impl SPU {
       0x1f80_1d88 => {
         self.key_on &= 0xffff0000;
         self.key_on |= val as u32;
-
-        self.update_key_on();
       }
       0x1f80_1d8a => {
         self.key_on &= 0xffff;
         self.key_on |= (val as u32) << 16;
-
-        self.update_key_on();
       }
       0x1f80_1d8c => {
         self.key_off &= 0xffff0000;
         self.key_off |= val as u32;
-
-        self.update_key_off();
       }
       0x1f80_1d8e => {
         self.key_off &= 0xffff;
         self.key_off |= (val as u32) << 16;
-
-        self.update_key_off();
       }
       0x1f80_1d90 => {
         self.modulate_on &= 0xffff0000;
@@ -440,7 +438,7 @@ impl SPU {
 
             self.sound_ram.write_16(address, sample);
 
-            self.data_transfer.current_address = (self.data_transfer.current_address + 2) & 0x7ffff;
+            self.data_transfer.current_address = (self.data_transfer.current_address + 2) & 0x7_ffff;
           }
         }
       }
