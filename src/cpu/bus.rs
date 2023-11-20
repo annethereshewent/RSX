@@ -1,6 +1,6 @@
 use std::{rc::Rc, cell::Cell, fs::File};
 
-use crate::{gpu::GPU, spu::SPU, cdrom::Cdrom};
+use crate::{gpu::GPU, spu::SPU, cdrom::Cdrom, controllers::Controllers};
 
 use super::{counter::Counter, interrupt::interrupt_registers::InterruptRegisters, timers::timers::Timers, dma::DMA, mdec::Mdec};
 
@@ -21,6 +21,7 @@ pub struct Bus {
   timers: Timers,
   dma: Rc<Cell<DMA>>,
   pub mdec: Mdec,
+  pub controllers: Controllers,
   pub cycles: i32,
   pub cache_control: u32,
   exp2_buffer: Vec<u8>
@@ -35,6 +36,7 @@ impl Bus {
       spu: SPU::new(),
       timers: Timers::new(interrupts.clone()),
       cdrom: Cdrom::new(interrupts.clone(), game_file),
+      controllers: Controllers::new(interrupts.clone()),
       counter: Counter::new(),
       interrupts,
       dma,
@@ -60,6 +62,7 @@ impl Bus {
 
     match address {
       0x1f00_0000..=0x1f08_0000 => 0xff,
+      0x1f80_1040 => self.controllers.read_byte(),
       0x1f80_1800..=0x1f80_1803 => self.cdrom.read(address),
       0x1fc0_0000..=0x1fc7_ffff => self.bios[(address - 0x1fc0_0000) as usize],
       0x0000_0000..=0x001f_ffff => {
@@ -143,6 +146,8 @@ impl Bus {
       0x1f80_1c00..=0x1f80_1e7f => {
         self.spu.read_16(address)
       }
+      0x1f80_1044 => self.controllers.read_stat() as u16,
+      0x1f80_104a => self.controllers.read_control(),
       0x1f80_1070 => {
 
         self.interrupts.get().status.read() as u16
@@ -161,6 +166,7 @@ impl Bus {
     match address {
       0x0000_0000..=0x001f_ffff => self.ram[address as usize] = value,
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
+      0x1f80_1040 => self.controllers.queue_byte(value),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070..=0x1f80_1074 => panic!("unimplemented writes to interrupt registers"),
       0x1f80_1800..=0x1f80_1803 => self.cdrom.write(address, value),
@@ -190,6 +196,9 @@ impl Bus {
       }
       0x1f80_1c00..=0x1f80_1e80 => self.spu.write_16(address, value),
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
+      0x1f80_1048 => self.controllers.write_joy_mode(value),
+      0x1f80_104a => self.controllers.write_joy_control(value),
+      0x1f80_104e => self.controllers.write_reload_value(value),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070 => {
         let mut interrupts = self.interrupts.get();
@@ -280,6 +289,7 @@ impl Bus {
     self.timers.tick(cycles);
     self.gpu.tick(cycles, &mut self.timers);
     self.cdrom.tick_counter(cycles, &mut self.spu);
+    self.controllers.tick(cycles);
 
     let mut interrupts = self.interrupts.get();
 
