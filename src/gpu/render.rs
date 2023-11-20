@@ -22,11 +22,11 @@ impl GPU {
       for x in x_start..x_start + w {
         match self.stat.display_color_depth {
           ColorDepth::FifteenBit => {
-            let vram_address = self.get_vram_address(x as u32, y as u32);
+            let vram_address = GPU::get_vram_address(x as u32, y as u32);
 
             let color = (self.vram[vram_address] as u16) | (self.vram[vram_address + 1] as u16) << 8;
 
-            let color = self.translate_15bit_to_24(color);
+            let color = GPU::translate_15bit_to_24(color);
 
             self.picture[i] = color.r;
             self.picture[i + 1] = color.g;
@@ -34,7 +34,7 @@ impl GPU {
 
           }
           ColorDepth::TwentyFourBit => {
-            let vram_address = self.get_vram_address_24(x as u32, y as u32);
+            let vram_address = GPU::get_vram_address_24(x as u32, y as u32);
 
             self.picture[i] = self.vram[vram_address];
             self.picture[i + 1] = self.vram[vram_address + 1];
@@ -46,7 +46,7 @@ impl GPU {
     }
   }
 
-  fn translate_15bit_to_24(&self, val: u16) -> RgbColor {
+  fn translate_15bit_to_24(val: u16) -> RgbColor {
     let mut r = (val & 0x1f) as u8;
     let mut g = ((val >> 5) & 0x1f) as u8;
     let mut b = ((val >> 10) & 0x1f) as u8;
@@ -83,7 +83,7 @@ impl GPU {
   }
 
   pub fn render_pixel(&mut self, position: (i32, i32), color: RgbColor, textured: bool, semi_transparent: bool) {
-    let vram_address = self.get_vram_address(position.0 as u32, position.1 as u32);
+    let vram_address = GPU::get_vram_address(position.0 as u32, position.1 as u32);
 
     let mut color = color;
 
@@ -97,7 +97,7 @@ impl GPU {
 
     if (!textured || color.a) && semi_transparent {
       let val = (self.vram[vram_address] as u16) | (self.vram[vram_address + 1] as u16) << 8;
-      let prev_color = self.translate_15bit_to_24(val);
+      let prev_color = GPU::translate_15bit_to_24(val);
 
       let (r,g, b): (u8, u8, u8) = match self.stat.semi_transparency {
         SemiTransparency::Half => {
@@ -388,21 +388,32 @@ impl GPU {
     let tex_x_base = (self.stat.texture_x_base as i32) * 64;
     let tex_y_base = (self.stat.texture_y_base1 as i32) * 16;
 
-    let offset_x = (2 * tex_x_base + ((uv.0 / 2) & 0xff)) as u32;
-    let offset_y = (tex_y_base + (uv.1 & 0xff)) as u32;
+    // since each pixel is 4 bits wide, we divide x offset by 2
+    let offset_x = (2 * tex_x_base + (uv.0 / 2)) as u32;
+    let offset_y = (tex_y_base + uv.1) as u32;
 
     let texture_address = (offset_x + 2048 * offset_y) as usize;
 
-    let block = (((uv.1 >> 6) << 2) + (uv.0 >> 6)) as isize;
-    let entry = (((uv.1 & 0x3f) << 2) + ((uv.0 & 0x3f) >> 4)) as usize;
+    let block = (((uv.1 / 64) * 4) + (uv.0 / 64)) as isize;
 
-    let index = ((uv.0 >> 1) & 0x7) as usize;
+    // each cacheline is organized in blocks of 4 * 64 cache lines.
+    // each line is thus made up of 4 blocks,
+    // this is why we multiply y by 4. since each cache entry is 16 4bpp pixels wide,
+    // divide x by 16 to get the entry number, then add to y * 4 as described above.
+
+    // see the diagram here for a good visual example:
+    // https://psx-spx.consoledev.net/graphicsprocessingunitgpu/#gpu-texture-caching
+    let entry = (((uv.1 * 4) | ((uv.0 / 16) & 3)) & 0xff) as usize;
+
+    // each cache entry is 8 bytes wide
+    let index = ((uv.0 / 2) & 7) as usize;
 
     let cache_entry = &mut self.texture_cache[entry];
 
+    // a cache entry can only have one block cached at a time
     if cache_entry.tag != block {
       for i in 0..8 {
-        cache_entry.data[i] = self.vram[(texture_address & !0b111) + i];
+        cache_entry.data[i] = self.vram[(texture_address & !0x7) + i];
       }
 
       cache_entry.tag = block;
@@ -410,6 +421,7 @@ impl GPU {
 
     let mut clut_entry = cache_entry.data[index] as usize;
 
+    // each pixel is 4 bits, if x is odd, then get the upper 4 bits, otherwise get the lower ones
     if (uv.0 & 0b1) != 0 {
       clut_entry >>= 4;
     } else {
@@ -430,17 +442,91 @@ impl GPU {
     let texture = self.clut_cache[clut_entry];
 
     if texture != 0 {
-      Some(self.translate_15bit_to_24(texture))
+      Some(GPU::translate_15bit_to_24(texture))
     } else {
       None
     }
   }
 
-  fn read_8bit_clut(&self, _uv: (i32, i32), _clut: (i32, i32)) -> Option<RgbColor> {
-    todo!("not ready");
+  fn read_8bit_clut(&mut self, uv: (i32, i32), clut: (i32, i32)) -> Option<RgbColor> {
+    let tex_x_base = (self.stat.texture_x_base as i32) * 64;
+    let tex_y_base = (self.stat.texture_y_base1 as i32) * 16;
+
+    let offset_x = (2 * tex_x_base + uv.0) as u32;
+    let offset_y = (tex_y_base + uv.1) as u32;
+
+    let texture_address = (offset_x + offset_y * 2048) as usize;
+
+    // in this case, each cache line is organized in blocks of 8 * 32 cache lines,
+    // and each cache entry is 8 8bb pixels wide (half as many as 4bb mode)
+    let entry = ((8 * offset_y + (offset_x / 8) & 0x7) & 0xff) as usize;
+    let block = ((offset_x / 32) + (offset_y / 64) * 8) as isize;
+
+    let cache_entry = &mut self.texture_cache[entry];
+
+    if cache_entry.tag != block {
+      for i in 0..8 {
+        cache_entry.data[i] = self.vram[(texture_address & !0x7) + i];
+      }
+
+      cache_entry.tag = block;
+    }
+
+    let index = (uv.0 & 0x7) as usize;
+
+    let clut_entry = cache_entry.data[index];
+
+    let clut_address = (2 * clut.0 + clut.1 * 2048) as usize;
+
+    if self.clut_tag != clut_address as isize {
+      for i in 0..256 {
+        let address = clut_address + 2 * i;
+
+        self.clut_cache[i] = (self.vram[address] as u16) | (self.vram[address + 1] as u16) << 8;
+      }
+
+      self.clut_tag = clut_address as isize;
+    }
+
+    let texture = self.clut_cache[clut_entry as usize];
+
+    if texture != 0 {
+      Some(GPU::translate_15bit_to_24(texture))
+    } else {
+      None
+    }
   }
 
-  fn read_texture(&self, _uv: (i32, i32)) -> Option<RgbColor> {
-    todo!("not ready");
+
+  fn read_texture(&mut self, uv: (i32, i32)) -> Option<RgbColor> {
+    let tex_x_base = (self.stat.texture_x_base as i32) * 64;
+    let tex_y_base = (self.stat.texture_y_base1 as i32) * 16;
+
+    let offset_x = tex_x_base + uv.0;
+    let offset_y = tex_y_base + uv.1;
+
+    let texture_address = 2 * (offset_x + offset_y * 1024) as usize;
+
+    // for this case, each cache entry is 8 * 32 cache lines, and each cache entry is 4 16bpp pixels wide
+    let entry = (((uv.1 * 8) + (uv.0 / 4 ) & 0x7) & 0xff) as usize;
+    let block = ((offset_x / 32) + (offset_y / 32) * 8) as isize;
+
+    let cache_entry = &mut self.texture_cache[entry];
+
+    if cache_entry.tag != block {
+      for i in 0..8 {
+        cache_entry.data[i] = self.vram[(texture_address & !0x7) + i];
+      }
+    }
+
+    let index = ((uv.0 * 2) & 0x7) as usize;
+
+    let texture = (cache_entry.data[index] as u16) | (cache_entry.data[index + 1] as u16) << 8;
+
+    if texture != 0 {
+      Some(GPU::translate_15bit_to_24(texture))
+    } else {
+      None
+    }
   }
 }

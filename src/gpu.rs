@@ -295,7 +295,7 @@ impl GPU {
 
     self.image_transfer.read_x += 1;
 
-    let vram_address = self.get_vram_address(curr_x & 0x3ff, curr_y & 0x1ff);
+    let vram_address = GPU::get_vram_address(curr_x & 0x3ff, curr_y & 0x1ff);
 
     if self.image_transfer.read_x == self.image_transfer.w {
       self.image_transfer.read_x = 0;
@@ -327,16 +327,16 @@ impl GPU {
       }
     }
 
-    let vram_address = self.get_vram_address(x, y);
+    let vram_address = GPU::get_vram_address(x, y);
 
     (self.vram[vram_address] as u16) | (self.vram[vram_address + 1] as u16) << 8
   }
 
-  pub fn get_vram_address(&mut self, x: u32, y: u32) -> usize {
+  pub fn get_vram_address(x: u32, y: u32) -> usize {
     2 * (((x & 0x3ff) + 1024 * (y & 0x1ff))) as usize
   }
 
-  pub fn get_vram_address_24(&mut self, x: u32, y: u32) -> usize {
+  pub fn get_vram_address_24(x: u32, y: u32) -> usize {
     3 * (((x & 0x3ff) + 2048 * (y & 0x1ff))) as usize
   }
 
@@ -471,7 +471,7 @@ impl GPU {
 
     for y in 0..h {
       for x in 0..w {
-        let vram_address = self.get_vram_address(x_start + x, y_start + y);
+        let vram_address = GPU::get_vram_address(x_start + x, y_start + y);
         self.vram[vram_address] = pixel as u8;
         self.vram[vram_address + 1] = (pixel >> 8) as u8;
       }
@@ -564,7 +564,7 @@ impl GPU {
       n => panic!("invalid value received: {n}")
     };
 
-    self.stat.semi_transparency = match ((texture_data >> 5) & 0b11) {
+    self.stat.semi_transparency = match (texture_data >> 5) & 0b11 {
       0 => SemiTransparency::Half,
       1 => SemiTransparency::Add,
       2 => SemiTransparency::Subtract,
@@ -576,8 +576,10 @@ impl GPU {
   }
 
   fn to_clut(command: u32) -> (i32, i32) {
-    let x = ((command >> 16) & 0x3f) << 4;
-    let y = ((command >> 16) & 0x7fc0) >> 6;
+    let clut = command >> 16;
+
+    let x = (clut & 0x3f) * 16;
+    let y = ((clut >> 6)) & 0x1ff;
 
     (x as i32, y as i32)
   }
@@ -629,8 +631,6 @@ impl GPU {
 
     let mut clut = (0,0);
 
-    let mut size_vector = (1,1);
-
     if textured {
       tex_vertex = GPU::parse_texture_coords(self.command_buffer[command_pos]);
 
@@ -646,7 +646,7 @@ impl GPU {
       command_pos += 1;
     }
 
-    size_vector = match rectangle_size {
+    let size_vector = match rectangle_size {
       0 => {
         let dimensions = self.command_buffer[command_pos];
 
