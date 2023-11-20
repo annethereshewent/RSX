@@ -172,7 +172,7 @@ impl Voice {
     if sample_index >= MAX_SAMPLES {
       let new_index = sample_index - MAX_SAMPLES;
 
-      // clear out the upper 12 bits (which are the sample index)
+      // clear out the upper 20 bits (which are the sample index)
       self.counter &= 0xfff;
       self.counter |= new_index << 12;
 
@@ -197,6 +197,10 @@ impl Voice {
 
     if shift > 12 {
       shift = 8;
+    }
+
+    if (flags >> 2) & 0b1 == 1 {
+      self.repeat_address = self.current_address;
     }
 
     self.current_address += 2;
