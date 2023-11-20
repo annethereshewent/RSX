@@ -464,7 +464,7 @@ impl GPU {
 
     // clear out the lower 4 bits of x start per no&psx documents
     let x_start = destination & 0x3f0;
-    let y_start = destination & 0x3ff;
+    let y_start = (destination >> 16) & 0x3ff;
 
     let w = ((dimensions & 0x3ff) + 0xf) & !0xf;
     let h = (dimensions >> 16) & 0x1ff;
