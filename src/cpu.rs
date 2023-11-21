@@ -352,7 +352,7 @@ impl CPU {
     let tag = self.pc & 0x7ffff000;
 
     let line = ((self.pc >> 4) & 0xff) as usize;
-    let index = ((self.pc >> 2) & 0b11) as usize;
+    let index = ((self.pc >> 2) & 0x3) as usize;
 
     let address = Bus::translate_address(self.pc);
 
@@ -360,7 +360,7 @@ impl CPU {
 
     if (cache_line.tag != tag) || (cache_line.valid > index) {
       // invalidate the cache
-      let mut address = (address & !0xf) + (0x4 * index as u32);
+      let mut address = (address & !0xf) + (4 * index as u32);
 
       for i in index..4 {
         let value = self.bus.mem_read_32(address);

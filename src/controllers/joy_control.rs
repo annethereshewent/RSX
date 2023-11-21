@@ -14,20 +14,8 @@ impl JoyControl {
     self.value
   }
 
-  pub fn write(&mut self, val: u16) -> bool {
+  pub fn write(&mut self, val: u16) {
     self.value = val;
-
-    if (val >> 4) & 0b1 == 1 {
-      // reset joystat bits 3 and 9
-    }
-
-    if (val >> 6) & 0b1 == 1 {
-      // reset most joy registers in this case
-
-      return true
-    }
-
-    false
   }
 
   pub fn tx_enable(&self) -> bool {

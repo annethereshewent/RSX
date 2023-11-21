@@ -209,6 +209,12 @@ impl SPU {
     }
   }
 
+  fn update_voices(&mut self) {
+    self.update_endx();
+    self.update_key_off();
+    self.update_key_on();
+  }
+
   // tick for one APU cycle
   fn tick(&mut self, interrupts: &mut InterruptRegisters) {
     let mut output_left = 0.0;
@@ -219,10 +225,8 @@ impl SPU {
     let mut left_reverb = 0.0;
     let mut right_reverb = 0.0;
 
-    self.update_endx();
-    self.update_key_off();
-    self.update_key_on();
-
+    self.update_voices()
+;
     self.tick_noise();
 
     for i in 0..self.voices.len() {
