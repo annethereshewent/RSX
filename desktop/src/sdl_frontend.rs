@@ -1,5 +1,7 @@
-use rsx::{gpu::GPU, spu::SPU, cpu::CPU};
-use sdl2::{video::Window, EventPump, event::Event, render::Canvas, pixels::PixelFormatEnum, audio::AudioCallback, Sdl, sys::KeyCode, keyboard::Keycode};
+use std::collections::HashMap;
+
+use rsx::{gpu::GPU, spu::SPU, cpu::CPU, controllers::joypad::{LowInput, HighInput}};
+use sdl2::{video::Window, EventPump, event::Event, render::Canvas, pixels::PixelFormatEnum, audio::AudioCallback, Sdl, sys::KeyCode, keyboard::Keycode, controller::{GameController, Button}};
 
 pub struct PsxAudioCallback<'a> {
   pub spu: &'a mut SPU
@@ -35,7 +37,9 @@ impl AudioCallback for PsxAudioCallback<'_> {
 
 pub struct SdlFrontend {
   event_pump: EventPump,
-  canvas: Canvas<Window>
+  canvas: Canvas<Window>,
+  _controller: Option<GameController>,
+  button_map: HashMap<Button, (bool, u8)>
 }
 
 impl SdlFrontend {
@@ -53,13 +57,57 @@ impl SdlFrontend {
 
     let event_pump = sdl_context.event_pump().unwrap();
 
+    let game_controller_subsystem = sdl_context.game_controller().unwrap();
+
+    let available = game_controller_subsystem
+        .num_joysticks()
+        .map_err(|e| format!("can't enumerate joysticks: {}", e)).unwrap();
+
+    let _controller = (0..available)
+      .find_map(|id| {
+        match game_controller_subsystem.open(id) {
+          Ok(c) => {
+            Some(c)
+          }
+          Err(_) => {
+            None
+          }
+        }
+      });
+
+    let mut button_map = HashMap::new();
+
+    button_map.insert(Button::A, (false, LowInput::ButtonCross as u8));
+    button_map.insert(Button::B, (false, LowInput::ButtonCircle as u8));
+    button_map.insert(Button::X, (false, LowInput::ButtonSquare as u8));
+    button_map.insert(Button::Y, (false, LowInput::ButtonTriangle as u8));
+
+    button_map.insert(Button::DPadUp, (true, HighInput::ButtonUp as u8));
+    button_map.insert(Button::DPadDown, (true, HighInput::ButtonDown as u8));
+    button_map.insert(Button::DPadLeft, (true, HighInput::ButtonLeft as u8));
+    button_map.insert(Button::DPadRight, (true, HighInput::ButtonRight as u8));
+
+    button_map.insert(Button::Back, (true, HighInput::ButtonSelect as u8));
+    button_map.insert(Button::Start, (true, HighInput::ButtonStart as u8));
+
+    button_map.insert(Button::LeftShoulder, (false, LowInput::ButtonL1 as u8));
+    button_map.insert(Button::RightShoulder, (false, LowInput::ButtonR1 as u8));
+
+    button_map.insert(Button::LeftStick, (true, HighInput::ButtonL3 as u8));
+    button_map.insert(Button::RightStick, (true, HighInput::ButtonR3 as u8));
+
+
     Self {
       event_pump,
-      canvas
+      canvas,
+      _controller,
+      button_map
     }
   }
 
   pub fn handle_events(&mut self, cpu: &mut CPU) {
+    let joypad = &mut cpu.bus.controllers.joypad;
+
     for event in self.event_pump.poll_iter() {
       match event {
         Event::KeyDown { keycode: Some(k), .. } => {
@@ -70,6 +118,32 @@ impl SdlFrontend {
         },
         Event::KeyUp { keycode: Some(_k), .. } => (),
         Event::Quit { .. } => std::process::exit(0),
+        Event::ControllerButtonDown { button, ..} => {
+          if button == Button::Touchpad {
+            println!("setting digital mode to {}", !joypad.digital_mode);
+            joypad.digital_mode = !joypad.digital_mode;
+          } else if let Some(input) = self.button_map.get(&button) {
+            let (is_high_input, input) = *input;
+            if !is_high_input {
+              joypad.set_low_input(input, true);
+            } else {
+              joypad.set_high_input(input, true);
+            }
+          }
+        }
+        Event::ControllerButtonUp { button, .. } => {
+          if let Some(input) = self.button_map.get(&button) {
+            let (is_high_input, input) = *input;
+            if !is_high_input {
+              joypad.set_low_input(input, false);
+            } else {
+              joypad.set_high_input(input, false);
+            }
+          }
+        }
+        Event::ControllerAxisMotion { axis, value, .. } => {
+          println!("you pressed {:?} with a value of {value}", axis);
+        }
         _ => {},
     };
     }

@@ -1,3 +1,27 @@
+#[derive(Clone, Copy)]
+pub enum LowInput {
+  ButtonL2 = 0,
+  ButtonR2 = 1,
+  ButtonL1 = 2,
+  ButtonR1 = 3,
+  ButtonTriangle = 4,
+  ButtonCircle = 5,
+  ButtonCross = 6,
+  ButtonSquare = 7
+}
+
+#[derive(Clone, Copy)]
+pub enum HighInput {
+  ButtonSelect = 0,
+  ButtonL3 = 1,
+  ButtonR3 = 2,
+  ButtonStart = 3,
+  ButtonUp = 4,
+  ButtonRight = 5,
+  ButtonDown = 6,
+  ButtonLeft = 7
+}
+
 pub struct Joypad {
   pub state: usize,
   pub digital_mode: bool,
@@ -5,22 +29,24 @@ pub struct Joypad {
   pub lx_axis: u8,
   pub ry_axis: u8,
   pub ly_axis: u8,
-  pub button_square: bool,
-  pub button_cross: bool,
-  pub button_circle: bool,
-  pub button_triangle: bool,
-  pub button_up: bool,
-  pub button_down: bool,
-  pub button_left: bool,
-  pub button_right: bool,
-  pub button_select: bool,
-  pub button_start: bool,
-  pub button_l1: bool,
-  pub button_r1: bool,
-  pub button_l2: bool,
-  pub button_r2: bool,
-  pub button_l3: bool,
-  pub button_r3: bool
+  // pub button_square: bool,
+  // pub button_cross: bool,
+  // pub button_circle: bool,
+  // pub button_triangle: bool,
+  // pub button_up: bool,
+  // pub button_down: bool,
+  // pub button_left: bool,
+  // pub button_right: bool,
+  // pub button_select: bool,
+  // pub button_start: bool,
+  // pub button_l1: bool,
+  // pub button_r1: bool,
+  // pub button_l2: bool,
+  // pub button_r2: bool,
+  // pub button_l3: bool,
+  // pub button_r3: bool
+  pub low_input: u8,
+  pub high_input: u8
 }
 
 impl Joypad {
@@ -32,27 +58,29 @@ impl Joypad {
       ry_axis: 128,
       lx_axis: 128,
       ly_axis: 128,
-      button_square: false,
-      button_cross: false,
-      button_circle: false,
-      button_triangle: false,
-      button_up: false,
-      button_down: false,
-      button_left: false,
-      button_right: false,
-      button_select: false,
-      button_start: false,
-      button_l1: false,
-      button_r1: false,
-      button_l2: false,
-      button_r2: false,
-      button_l3: false,
-      button_r3: false
+      low_input: 0xff,
+      high_input: 0xff
     }
   }
 
   pub fn ack(&self) -> bool {
     self.state != 0
+  }
+
+  pub fn set_low_input(&mut self, input: u8, val: bool) {
+    if val {
+      self.low_input &= !(1 << input);
+    } else {
+      self.low_input |= 1 << input;
+    }
+  }
+
+  pub fn set_high_input(&mut self, input: u8, val: bool) {
+    if val {
+      self.high_input &= !(1 << input);
+    } else {
+      self.high_input |= 1 << input;
+    }
   }
 
   pub fn reply(&mut self, command: u8) -> u8 {
@@ -69,8 +97,8 @@ impl Joypad {
         }
       }
       2 => 0x5a,
-      3 => self.get_low_input(),
-      4 => self.get_high_input(),
+      3 => self.low_input,
+      4 => self.high_input,
       5 => self.rx_axis,
       6 => self.ry_axis,
       7 => self.lx_axis,
@@ -84,33 +112,5 @@ impl Joypad {
     self.state = if reset_state { 0 } else { self.state + 1 };
 
     reply
-  }
-
-  pub fn get_low_input(&self) -> u8 {
-    let mut value = self.button_l2 as u8;
-
-    value |= (self.button_r2 as u8) << 1;
-    value |= (self.button_l1 as u8) << 2;
-    value |= (self.button_r1 as u8) << 3;
-    value |= (self.button_triangle as u8) << 4;
-    value |= (self.button_circle as u8) << 5;
-    value |= (self.button_cross as u8) << 6;
-    value |= (self.button_square as u8) << 7;
-
-    value
-  }
-
-  pub fn get_high_input(&self) -> u8 {
-    let mut value = self.button_select as u8;
-
-    value |= (self.button_l3 as u8) << 1;
-    value |= (self.button_r3 as u8) << 2;
-    value |= (self.button_start as u8) << 3;
-    value |= (self.button_up as u8) << 4;
-    value |= (self.button_right as u8) << 5;
-    value |= (self.button_down as u8) << 6;
-    value |= (self.button_left as u8) << 7;
-
-    value
   }
 }
