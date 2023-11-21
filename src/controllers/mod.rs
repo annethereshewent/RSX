@@ -62,6 +62,14 @@ impl Controllers {
   pub fn write_joy_control(&mut self, value: u16) {
     self.ctrl.write(value);
 
+
+    if !self.ctrl.joy_select() {
+      self.currently_transferring = false;
+      self.active_device = ControllerDevice::None;
+      self.in_acknowledge = false;
+      self.joypad.state = 0;
+    }
+
     if self.ctrl.reset() {
       // reset most joy registers to 0
       self.write_joy_mode(0);
@@ -69,19 +77,16 @@ impl Controllers {
       self.write_reload_value(0);
 
       self.rx_fifo.clear();
+      self.tx_fifo.clear();
 
       self.tx_ready_1 = true;
       self.tx_ready_2 = true;
     }
 
-    if self.ctrl.acknowledge() {
+    if self.ctrl.acknowledge() && !self.ack_input {
       // reset bits 3,9 of joystat
       self.rx_parity_error = false;
       self.interrupt = false;
-    }
-
-    if self.ctrl.joy_select() {
-      // do something with either joypad1 or 2
     }
   }
 
@@ -102,6 +107,8 @@ impl Controllers {
         let mut interrupts = self.interrupts.get();
 
         interrupts.status.set_interrupt(Interrupt::Controller);
+
+        self.interrupts.set(interrupts);
       }
     }
   }
@@ -127,7 +134,9 @@ impl Controllers {
   }
 
   pub fn queue_byte(&mut self, value: u8) {
-    self.tx_fifo.push_back(value);
+    if self.tx_fifo.len() < 1 {
+      self.tx_fifo.push_back(value);
+    }
 
     self.tx_ready_1 = true;
     self.tx_ready_2 = false;
@@ -138,13 +147,12 @@ impl Controllers {
   }
 
   pub fn transfer_byte(&mut self) {
-    if !self.ctrl.tx_enable() || self.tx_fifo.is_empty() {
-      return;
-    }
-
     self.currently_transferring = false;
+    // if self.tx_fifo.is_empty() {
+    //   return;
+    // }
 
-    // controller 2 is currently unsupported, return back whatever
+    // controller 2 is currently unsupported, return back dummy value
     if self.ctrl.desired_slot() == 1 {
       self.rx_fifo.push_back(0xff);
       return;
@@ -197,6 +205,7 @@ impl Controllers {
     value |= (!self.rx_fifo.is_empty() as u32) << 1;
     value |= (self.tx_ready_2 as u32) << 2;
     value |= (self.rx_parity_error as u32) << 3;
+    value |= (self.ack_input as u32) << 7;
     value |= (self.interrupt as u32) << 9;
     value |= (self.baudrate_timer as u32) << 11;
 

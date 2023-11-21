@@ -1,5 +1,5 @@
 pub struct Joypad {
-  state: usize,
+  pub state: usize,
   pub digital_mode: bool,
   pub rx_axis: u8,
   pub lx_axis: u8,
