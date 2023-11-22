@@ -99,7 +99,7 @@ impl GPU {
       let val = (self.vram[vram_address] as u16) | (self.vram[vram_address + 1] as u16) << 8;
       let prev_color = GPU::translate_15bit_to_24(val);
 
-      let (r,g, b): (u8, u8, u8) = match self.stat.semi_transparency {
+      let (r,g, b) = match self.stat.semi_transparency {
         SemiTransparency::Half => {
           (
             GPU::add_half_semitransparency(prev_color.r, color.r),

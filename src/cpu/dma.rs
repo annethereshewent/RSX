@@ -70,7 +70,6 @@ impl DMA {
 
     let masked_address = channel.active_address & 0x1ffffc;
 
-
     if channel.control.is_from_ram() {
       let word = bus.mem_read_32(masked_address);
 
@@ -81,7 +80,12 @@ impl DMA {
         _ => panic!("unhandled transfer from ram to channel {}", channel.channel_id)
       }
     } else {
-      todo!("tick request to RAM not implemented yet");
+      let value = match channel.channel_id {
+        2 => bus.gpu.gpuread(),
+        _ => panic!("unhandled tranfer to ram from DMA channel {}", channel.channel_id)
+      };
+
+      bus.mem_write_32(masked_address, value);
     }
 
     if is_increment {

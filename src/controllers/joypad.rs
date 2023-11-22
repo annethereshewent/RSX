@@ -1,5 +1,5 @@
 #[derive(Clone, Copy)]
-pub enum LowInput {
+pub enum HighInput {
   ButtonL2 = 0,
   ButtonR2 = 1,
   ButtonL1 = 2,
@@ -11,7 +11,7 @@ pub enum LowInput {
 }
 
 #[derive(Clone, Copy)]
-pub enum HighInput {
+pub enum LowInput {
   ButtonSelect = 0,
   ButtonL3 = 1,
   ButtonR3 = 2,
@@ -29,22 +29,6 @@ pub struct Joypad {
   pub lx_axis: u8,
   pub ry_axis: u8,
   pub ly_axis: u8,
-  // pub button_square: bool,
-  // pub button_cross: bool,
-  // pub button_circle: bool,
-  // pub button_triangle: bool,
-  // pub button_up: bool,
-  // pub button_down: bool,
-  // pub button_left: bool,
-  // pub button_right: bool,
-  // pub button_select: bool,
-  // pub button_start: bool,
-  // pub button_l1: bool,
-  // pub button_r1: bool,
-  // pub button_l2: bool,
-  // pub button_r2: bool,
-  // pub button_l3: bool,
-  // pub button_r3: bool
   pub low_input: u8,
   pub high_input: u8
 }

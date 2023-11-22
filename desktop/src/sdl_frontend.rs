@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use rsx::{gpu::GPU, spu::SPU, cpu::CPU, controllers::joypad::{LowInput, HighInput}};
-use sdl2::{video::Window, EventPump, event::Event, render::Canvas, pixels::PixelFormatEnum, audio::AudioCallback, Sdl, sys::KeyCode, keyboard::Keycode, controller::{GameController, Button}};
+use sdl2::{video::Window, EventPump, event::Event, render::Canvas, pixels::PixelFormatEnum, audio::AudioCallback, Sdl, keyboard::Keycode, controller::{GameController, Button}};
 
 pub struct PsxAudioCallback<'a> {
   pub spu: &'a mut SPU
@@ -77,24 +77,24 @@ impl SdlFrontend {
 
     let mut button_map = HashMap::new();
 
-    button_map.insert(Button::A, (false, LowInput::ButtonCross as u8));
-    button_map.insert(Button::B, (false, LowInput::ButtonCircle as u8));
-    button_map.insert(Button::X, (false, LowInput::ButtonSquare as u8));
-    button_map.insert(Button::Y, (false, LowInput::ButtonTriangle as u8));
+    button_map.insert(Button::A, (true, HighInput::ButtonCross as u8));
+    button_map.insert(Button::B, (true, HighInput::ButtonCircle as u8));
+    button_map.insert(Button::X, (true, HighInput::ButtonSquare as u8));
+    button_map.insert(Button::Y, (true, HighInput::ButtonTriangle as u8));
 
-    button_map.insert(Button::DPadUp, (true, HighInput::ButtonUp as u8));
-    button_map.insert(Button::DPadDown, (true, HighInput::ButtonDown as u8));
-    button_map.insert(Button::DPadLeft, (true, HighInput::ButtonLeft as u8));
-    button_map.insert(Button::DPadRight, (true, HighInput::ButtonRight as u8));
+    button_map.insert(Button::DPadUp, (false, LowInput::ButtonUp as u8));
+    button_map.insert(Button::DPadDown, (false, LowInput::ButtonDown as u8));
+    button_map.insert(Button::DPadLeft, (false, LowInput::ButtonLeft as u8));
+    button_map.insert(Button::DPadRight, (false, LowInput::ButtonRight as u8));
 
-    button_map.insert(Button::Back, (true, HighInput::ButtonSelect as u8));
-    button_map.insert(Button::Start, (true, HighInput::ButtonStart as u8));
+    button_map.insert(Button::Back, (false, LowInput::ButtonSelect as u8));
+    button_map.insert(Button::Start, (false, LowInput::ButtonStart as u8));
 
-    button_map.insert(Button::LeftShoulder, (false, LowInput::ButtonL1 as u8));
-    button_map.insert(Button::RightShoulder, (false, LowInput::ButtonR1 as u8));
+    button_map.insert(Button::LeftShoulder, (true, HighInput::ButtonL1 as u8));
+    button_map.insert(Button::RightShoulder, (true, HighInput::ButtonR1 as u8));
 
-    button_map.insert(Button::LeftStick, (true, HighInput::ButtonL3 as u8));
-    button_map.insert(Button::RightStick, (true, HighInput::ButtonR3 as u8));
+    button_map.insert(Button::LeftStick, (false, LowInput::ButtonL3 as u8));
+    button_map.insert(Button::RightStick, (false, LowInput::ButtonR3 as u8));
 
 
     Self {
@@ -142,7 +142,7 @@ impl SdlFrontend {
           }
         }
         Event::ControllerAxisMotion { axis, value, .. } => {
-          println!("you pressed {:?} with a value of {value}", axis);
+
         }
         _ => {},
     };

@@ -99,7 +99,7 @@ impl Bus {
         self.interrupts.get().mask.read()
       }
       0x1f80_1080..=0x1f80_10ff => self.dma.get().read(address),
-      0x1f80_1100..=0x1f80_1126 => {
+      0x1f80_1100..=0x1f80_112b => {
 
         self.timers.read(address) as u32
       }
@@ -135,7 +135,7 @@ impl Bus {
         (self.ram[offset] as u16) | ((self.ram[offset + 1] as u16) << 8)
       }
       // 0x1f00_0000..=0x1f08_0000 => 0xffffffff,
-      0x1f80_1100..=0x1f80_1126 => {
+      0x1f80_1100..=0x1f80_112b => {
         self.timers.read(address) as u16
       }
       0x1fc0_0000..=0x1fc7_ffff => {
@@ -261,7 +261,7 @@ impl Bus {
 
         self.dma.set(dma);
       }
-      0x1f80_1100..=0x1f80_1126 => {
+      0x1f80_1100..=0x1f80_112b => {
         self.timers.write(address, value);
       }
       0x1f80_1800..=0x1f80_1803 => {
