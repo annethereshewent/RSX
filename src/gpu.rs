@@ -407,6 +407,7 @@ impl GPU {
       0x02 => self.gp0_fill_vram(),
       0x20..=0x3f => self.gp0_draw_polygon(),
       0x60..=0x7f => self.gp0_draw_rectangle(),
+      0x80..=0x9f => self.gp0_vram_to_vram_transfer(),
       0xa0 => self.gp0_image_transfer_to_vram(),
       0xc0 => self.gp0_image_transfer_to_cpu(),
       0xe1 => self.gp0_draw_mode(),
@@ -454,6 +455,52 @@ impl GPU {
 
   fn gp1_acknowledge_interrupt(&mut self) {
     self.stat.irq_enabled = false;
+  }
+
+  fn gp0_vram_to_vram_transfer(&mut self) {
+    let src = self.command_buffer[1];
+    let dest = self.command_buffer[2];
+    let dimensions = self.command_buffer[3];
+
+    let src_x = src & 0x3ff;
+    let src_y = (src >> 16) & 0x3ff;
+
+    let dest_x = dest & 0x3ff;
+    let dest_y = (dest >> 16) & 0x3ff;
+
+    let mut w = dimensions & 0x3ff;
+    let mut h = (dimensions >> 16) & 0x1ff;
+
+    if w <= 0 {
+      w = 0x400
+    }
+    if h <= 0 {
+      h = 0x200;
+    }
+
+    for x in 0..w {
+      for y in 0..h {
+        let src_curr_x = src_x + x;
+        let dest_curr_x = dest_x + x;
+
+        let src_curr_y = src_y + y;
+        let dest_curr_y = dest_y + y;
+
+        let destination_address = GPU::get_vram_address(dest_curr_x, dest_curr_y);
+        let source_address = GPU::get_vram_address(src_curr_x, src_curr_y);
+
+        if self.stat.preserved_masked_pixels {
+          let prev_color_upper_bits = self.vram[destination_address+1];
+
+          if (prev_color_upper_bits >> 7) & 0b1 != 0 {
+            continue;
+          }
+        }
+
+        self.vram[destination_address] = self.vram[source_address];
+        self.vram[destination_address + 1] = self.vram[source_address + 1];
+      }
+    }
   }
 
   fn gp0_fill_vram(&mut self) {
