@@ -127,7 +127,8 @@ pub struct GPU {
   texture_window: u32,
   drawing_area_top_left: u32,
   drawing_area_bottom_right: u32,
-  draw_offset: u32
+  draw_offset: u32,
+  pub debug_on: bool
 }
 
 impl GPU {
@@ -180,7 +181,8 @@ impl GPU {
       texture_window: 0,
       drawing_area_top_left: 0,
       drawing_area_bottom_right: 0,
-      draw_offset: 0
+      draw_offset: 0,
+      debug_on: false
     }
   }
 
@@ -619,20 +621,20 @@ impl GPU {
 
     let textured = (word >> 26) & 0b1 == 1;
     let semi_transparent = (word >> 25) & 0b1 == 1;
-    let blended = (word >> 24) & 0b1 == 1;
+    let blended = (word >> 24) & 0b1 == 0;
 
     let color = GPU::parse_color(self.command_buffer[0]);
 
-    let mut tex_vertex: (i32, i32) = (0,0);
+    let mut tex_coordinates: (i32, i32) = (0,0);
 
-    let vertex = self.parse_position(self.command_buffer[1]);
+    let coordinates = self.parse_position(self.command_buffer[1]);
 
     let mut command_pos = 2;
 
     let mut clut = (0,0);
 
     if textured {
-      tex_vertex = GPU::parse_texture_coords(self.command_buffer[command_pos]);
+      tex_coordinates = GPU::parse_texture_coords(self.command_buffer[command_pos]);
 
       clut = GPU::to_clut(self.command_buffer[command_pos]);
 
@@ -646,7 +648,7 @@ impl GPU {
       command_pos += 1;
     }
 
-    let size_vector = match rectangle_size {
+    let dimensions = match rectangle_size {
       0 => {
         let dimensions = self.command_buffer[command_pos];
 
@@ -658,7 +660,7 @@ impl GPU {
       _ => unreachable!("can't happen")
     };
 
-    self.rasterize_rectangle(color, vertex, tex_vertex, clut, size_vector, textured, blended, semi_transparent);
+    self.rasterize_rectangle(color, coordinates, tex_coordinates, clut, dimensions, textured, blended, semi_transparent);
   }
 
   fn gp0_draw_polygon(&mut self) {

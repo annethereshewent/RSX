@@ -112,8 +112,11 @@ impl SdlFrontend {
       match event {
         Event::KeyDown { keycode: Some(k), .. } => {
           if k == Keycode::T {
-            println!("toggling debug on");
+            println!("toggling cpu debug");
             cpu.debug_on = !cpu.debug_on;
+          } else if k ==  Keycode::G {
+            println!("toggling gpu debug");
+            cpu.bus.gpu.debug_on = !cpu.bus.gpu.debug_on;
           }
         },
         Event::KeyUp { keycode: Some(_k), .. } => (),

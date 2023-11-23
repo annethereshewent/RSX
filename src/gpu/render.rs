@@ -91,10 +91,6 @@ impl GPU {
       return;
     }
 
-    if self.stat.force_mask_bit {
-      color.a = true;
-    }
-
     if (!textured || color.a) && semi_transparent {
       let val = (self.vram[vram_address] as u16) | (self.vram[vram_address + 1] as u16) << 8;
       let prev_color = GPU::translate_15bit_to_24(val);
@@ -135,6 +131,10 @@ impl GPU {
       color.b = b;
     }
 
+    if self.stat.force_mask_bit {
+      color.a = true;
+    }
+
     let value = GPU::color_to_u16(color);
 
     self.vram[vram_address] = value as u8;
@@ -164,11 +164,11 @@ impl GPU {
     cmp::min(255, (x as u32 + y as u32) / 4) as u8
   }
 
-  pub fn rasterize_rectangle(&mut self, color: RgbColor, vertex: (i32, i32), tex_vertex: (i32, i32), clut: (i32, i32), size_vector: (u32, u32), textured: bool, blended: bool, semi_transparent: bool) {
-    for x in 0..size_vector.0 {
-      for y in 0..size_vector.1 {
-        let curr_x = vertex.0 + x as i32;
-        let curr_y = vertex.1 + y as i32;
+  pub fn rasterize_rectangle(&mut self, color: RgbColor, coordinates: (i32, i32), tex_coordinates: (i32, i32), clut: (i32, i32), dimensions: (u32, u32), textured: bool, blended: bool, semi_transparent: bool) {
+    for x in 0..dimensions.0 {
+      for y in 0..dimensions.1 {
+        let curr_x = coordinates.0 + x as i32;
+        let curr_y = coordinates.1 + y as i32;
 
         if curr_x < self.drawing_area_left as i32 || curr_y < self.drawing_area_top as i32 || curr_x >= self.drawing_area_right as i32 || curr_y >= self.drawing_area_bottom as i32 {
           continue;
@@ -177,7 +177,7 @@ impl GPU {
         let mut output = color;
 
         if textured {
-          let mut uv = (tex_vertex.0 + (x & 0xff) as i32, tex_vertex.1 + (y & 0xff) as i32);
+          let mut uv = (tex_coordinates.0 + (x & 0xff) as i32, tex_coordinates.1 + (y & 0xff) as i32);
           uv = self.mask_texture_coordinates(uv);
 
           if let Some(mut texture) = self.get_texture(uv, clut) {
@@ -185,6 +185,8 @@ impl GPU {
               GPU::blend_colors(&mut texture, &color);
             }
             output = texture;
+          } else {
+            continue;
           }
         }
         self.render_pixel((curr_x, curr_y), output, textured, semi_transparent);
@@ -308,9 +310,9 @@ impl GPU {
   }
 
   fn blend_colors(texture: &mut RgbColor, color: &RgbColor) {
-    texture.r = (((texture.r as u32) * (color.r as u32)) >> 7) as u8;
-    texture.g = (((texture.g as u32) * (color.g as u32)) >> 7) as u8;
-    texture.b = (((texture.b as u32) * (color.b as u32)) >> 7) as u8;
+    texture.r = cmp::min(255,((texture.r as u32) * (color.r as u32)) >> 7) as u8;
+    texture.g = cmp::min(255, ((texture.g as u32) * (color.g as u32)) >> 7) as u8;
+    texture.b = cmp::min(255, ((texture.b as u32) * (color.b as u32)) >> 7) as u8;
   }
 
   pub fn color_to_u16(color: RgbColor) -> u16 {
@@ -458,8 +460,8 @@ impl GPU {
     let texture_address = (offset_x + offset_y * 2048) as usize;
 
     // in this case, each cache line is organized in blocks of 8 * 32 cache lines,
-    // and each cache entry is 8 8bb pixels wide (half as many as 4bb mode)
-    let entry = ((8 * uv.1 + ((uv.0 / 8) & 0x7)) & 0xff) as usize;
+    // and each cache entry is 8 8bpp pixels wide (half as many as 4bb mode)
+    let entry = ((4 * uv.1 + ((uv.0 / 8) & 0x7)) & 0xff) as usize;
     let block = ((uv.0 / 32) + (uv.1 / 64) * 8) as isize;
 
     let cache_entry = &mut self.texture_cache[entry];
