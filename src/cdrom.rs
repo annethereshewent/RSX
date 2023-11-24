@@ -1,6 +1,6 @@
 use std::{rc::Rc, cell::Cell, collections::VecDeque, fs::File, io::{SeekFrom, Read, Seek}};
 
-use crate::{cpu::interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}, spu::SPU};
+use crate::{cpu::interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}, spu::{SPU, voices::{POS_ADPCM_TABLE, NEG_ADPCM_TABLE}}};
 
 const CDROM_CYCLES: i32 = 768;
 pub const SECTORS_PER_SECOND: u64 = 75;
@@ -13,6 +13,17 @@ const SUBHEADER_START: usize = 16;
 
 const DATA_OFFSET: usize = 24;
 const ADDR_OFFSET: usize = 12;
+
+// per https://psx-spx.consoledev.net/cdromdrive/#25-point-zigzag-interpolation
+pub const ZIGZAG_INTERPOLATION_TABLE: [[i32; 29]; 7] = [
+  [0, 0, 0, 0, 0, -0x2, 0xa, -0x22, 0x41, -0x54, 0x34, 0x9, -0x10a, 0x400, -0xa78, 0x234c, 0x6794, -0x1780, 0xbcd, -0x623, 0x350, -0x16d, 0x6b, 0xa, -0x10, 0x11, -0x8, 0x3, -0x1],
+  [0, 0, 0, -0x2, 0, 0x3, -0x13, 0x3c, -0x4b, 0xa2, -0xe3, 0x132, -0x43, -0x267, 0xc9d, 0x74bb, -0x11b4, 0x9b8, -0x5bf, 0x372, -0x1a8, 0xa6, -0x1b, 0x5, 0x6, -0x8, 0x3, -0x1, 0],
+  [0, 0, -0x1, 0x3, -0x2, -0x5, 0x1f, -0x4a, 0xb3, -0x192, 0x2b1, -0x39e, 0x4f8, -0x5a6, 0x7939, -0x5a6, 0x4f8, -0x39e, 0x2b1, -0x192, 0xb3, -0x4a, 0x1f, -0x5, -0x2, 0x3, -0x1, 0, 0],
+  [0, -0x1, 0x3, -0x8, 0x6, 0x5, -0x1b, 0xa6, -0x1a8, 0x372, -0x5bf, 0x9b8, -0x11b4, 0x74bb, 0xc9d, -0x267, -0x43, 0x132, -0xe3, 0xa2, -0x4b, 0x3c, -0x13, 0x3, 0, -0x2, 0, 0, 0],
+  [-0x1, 0x3, -0x8, 0x11, -0x10, 0xa, 0x6b, -0x16d, 0x350, -0x623, 0xbcd, -0x1780, 0x6794, 0x234c, -0xa78, 0x400, -0x10a, 0x9, 0x34, -0x54, 0x41, -0x22, 0xa, -0x1, 0, 0x1, 0, 0, 0],
+  [0x2, -0x8, 0x10, -0x23, 0x2b, 0x1a, -0xeb, 0x27b, -0x548, 0xafa, -0x16fa, 0x53e0, 0x3c07, -0x1249, 0x80e, -0x347, 0x15b, -0x44, -0x17, 0x46, -0x23, 0x11, -0x5, 0, 0, 0, 0, 0, 0],
+  [-0x5, 0x11, -0x23, 0x46, -0x17, -0x44, 0x15b, -0x347, 0x80e, -0x1249, 0x3c07, 0x53e0, -0x16fa, 0xafa, -0x548, 0x27b, -0xeb, 0x1a, 0x2b, -0x23, 0x10, -0x8, 0x2, 0, 0, 0, 0, 0, 0],
+];
 
 #[derive(PartialEq)]
 pub enum CdSubheaderMode {
@@ -61,6 +72,34 @@ impl CdSubheader {
     }
   }
 
+  pub fn realtime(&self) -> bool {
+    (self.sub_mode >> 6) & 0b1 == 1
+  }
+
+  pub fn sample_rate(&self) -> usize {
+    match (self.coding_info >> 2) & 0x3 {
+      0 => 37800,
+      1 => 18900,
+      n => panic!("reserved value for sample rate given: {n}")
+    }
+  }
+
+  pub fn bits_per_sample(&self) -> usize {
+    match (self.coding_info >> 4) & 0x3  {
+      0 => 4,
+      1 => 8,
+      n => panic!("reserved value given for bits per sample: {n}")
+    }
+  }
+
+  pub fn channels(&self) -> usize {
+    match self.coding_info & 0x3 {
+      0 => 1,
+      1 => 2,
+      _ => panic!("invalid value specified for channels: {}", self.coding_info)
+    }
+  }
+
   pub fn mode(&self) -> CdSubheaderMode {
     match self.sub_mode & 0xe {
       2 => CdSubheaderMode::Video,
@@ -97,6 +136,14 @@ pub enum DriveMode {
   Play,
   GetStat
 }
+
+#[derive(PartialEq)]
+pub enum CdReadMode {
+  Data,
+  Audio,
+  Skip
+}
+
 
 pub struct Cdrom {
   interrupts: Rc<Cell<InterruptRegisters>>,
@@ -143,7 +190,16 @@ pub struct Cdrom {
 
   is_playing: bool,
   is_seeking: bool,
-  is_reading: bool
+  is_reading: bool,
+
+  filter_channel: u8,
+  filter_file: u8,
+
+  previous_samples: [[i16; 2]; 2],
+  sample_buffer: [Vec<i16>; 2],
+
+  sixstep: usize,
+  ringbuf: [[i16; 0x20]; 2]
 }
 
 impl Cdrom {
@@ -200,7 +256,16 @@ impl Cdrom {
       data_buffer_pointer: 0,
       is_playing: false,
       is_seeking: false,
-      is_reading: false
+      is_reading: false,
+      filter_channel: 0,
+      filter_file: 0,
+      previous_samples: [[0; 2]; 2],
+      sample_buffer: [
+        Vec::new(),
+        Vec::new()
+      ],
+      sixstep: 6,
+      ringbuf: [[0; 0x20]; 2]
     }
   }
 
@@ -326,7 +391,7 @@ impl Cdrom {
     todo!("play_drive not implemented");
   }
 
-  fn read_drive(&mut self) {
+  fn read_drive(&mut self, spu: &mut SPU) {
     if !self.is_reading {
       self.drive_mode = DriveMode::Idle;
       self.drive_cycles += 1;
@@ -368,15 +433,150 @@ impl Cdrom {
       }
     }
 
-    match subheader.mode() {
-      CdSubheaderMode::Audio => todo!("not implemented yet"),
-      CdSubheaderMode::Data => self.read_data(file_pointer),
-      CdSubheaderMode::Video => panic!("video not implemented"),
-      CdSubheaderMode::Error => panic!("an error occurred parsing subheader")
+    // TODO: see if subheader.realtime() is needed here
+    let mut mode = if subheader.mode() == CdSubheaderMode::Audio && self.send_adpcm_sectors && subheader.realtime() {
+      CdReadMode::Audio
+    } else {
+      CdReadMode::Data
+    };
+
+    if mode == CdReadMode::Audio && self.xa_filter && (subheader.file != self.filter_file || subheader.channel != self.filter_channel) {
+      mode = CdReadMode::Skip
+    }
+
+
+    match mode {
+      CdReadMode::Audio => self.read_audio(file_pointer, spu),
+      CdReadMode::Data => self.read_data(file_pointer),
+      CdReadMode::Skip => ()
     }
 
     let divisor = if self.double_speed { 150 } else { 75 };
     self.drive_cycles += 44100 / divisor;
+  }
+
+  fn read_audio(&mut self, file_pointer: u64, spu: &mut SPU) {
+    if self.sector_subheader.bits_per_sample() != 4 {
+      todo!("unimplemented bits per sample given")
+    }
+
+    let mut buffer = [0u8; 0x914];
+    self.game_file.seek(SeekFrom::Start(file_pointer)).unwrap();
+    self.game_file.read_exact(&mut buffer).unwrap();
+
+    let channels = self.sector_subheader.channels();
+
+    // per docs, "Each sector consists of 12h 128-byte portions (=900h bytes)
+    // (the remaining 14h bytes of the sectors 914h-byte data region are 00h filled)."
+    for i in 0..0x12 {
+      self.decode_blocks(&buffer[(i * 128)..], channels);
+    }
+
+    let repeat = match self.sector_subheader.sample_rate() {
+      18900 => 2,
+      37800 => 1,
+      _ => unreachable!()
+    };
+
+    for channel in 0..channels {
+      for _ in 0..repeat {
+        for i in 0..self.sample_buffer.len() {
+          self.ringbuf[channel][i & 0x1f] = self.sample_buffer[channel][i];
+
+          self.sixstep -= 1;
+
+          if self.sixstep == 0 {
+            self.sixstep = 6;
+
+            for j in 0..7 {
+              let sample = self.zigzag_interpolate(self.ringbuf[channel], ZIGZAG_INTERPOLATION_TABLE[j], i);
+
+              if channels == 1 {
+                spu.cd_left_buffer.push_back(sample);
+                spu.cd_right_buffer.push_back(sample);
+              } else {
+                if channel == 0 {
+                  spu.cd_left_buffer.push_back(sample)
+                } else {
+                  spu.cd_right_buffer.push_back(sample);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    self.sample_buffer[0].clear();
+    self.sample_buffer[1].clear();
+  }
+
+  fn zigzag_interpolate(&mut self, buffer: [i16; 32], table: [i32; 29], index: usize) -> i16 {
+    // https://psx-spx.consoledev.net/cdromdrive/#25-point-zigzag-interpolation
+    let mut sum = 0;
+    for i in 1..30 {
+      sum += ((buffer[(index - (i-1)) & 0x1f] as i32) * table[i - 1]) / 0x8000;
+    }
+
+    if sum < -0x8000 {
+      sum = -0x8000
+    } else if sum > 0x7fff {
+      sum = 0x7fff
+    }
+
+    sum as i16
+  }
+
+  fn decode_blocks(&mut self, buffer: &[u8], channels: usize) {
+    for i in 0..8 {
+      let channel = if channels > 1 { i & 0b1 } else { 0 };
+
+      self.decode_sample_block(buffer, i, channel)
+    }
+  }
+
+  fn decode_sample_block(&mut self, buffer: &[u8], block: usize, channel: usize) {
+    // per docs, "The separate 128-byte portions consist of a 16-byte header,
+    // followed by twentyeight data words (4x28-bytes),"
+    //  00h..03h  Copy of below 4 bytes (at 04h..07h)
+    let header = buffer[0x4 + block];
+
+    let mut shift = header & 0xf;
+    let filter = ((header >> 4) & 0x3) as usize;
+
+    if shift > 12 {
+      shift = 9;
+    }
+
+    let f0 = POS_ADPCM_TABLE[filter];
+    let f1 = NEG_ADPCM_TABLE[filter];
+
+    for i in 0..28 {
+      let mut sample = buffer[0x10 + (block/2) + (i * 4)];
+
+      if block & 0b1 == 1 {
+        sample >>= 4;
+      }
+
+      sample &= 0xf;
+
+      let mut sample = ((sample as u16) << 12) as i16 as i32;
+
+      let filter = (32 + self.previous_samples[channel][0] as i32 * f0 + self.previous_samples[channel][1] as i32 * f1) / 64;
+
+      sample += filter;
+
+      if sample > 0x7fff {
+        sample = 0x7fff;
+      } else if sample < -0x8000 {
+        sample = -0x8000;
+      }
+
+      self.sample_buffer[channel].push(sample as i16);
+      self.previous_samples[channel][1] = self.previous_samples[channel][0];
+      self.previous_samples[channel][0] = sample as i16;
+
+    }
   }
 
   fn read_data(&mut self, file_pointer: u64) {
@@ -384,7 +584,7 @@ impl Cdrom {
     self.game_file.read_exact(&mut self.sector_buffer).unwrap();
 
     if self.interrupt_flags == 0 {
-      self.interrupt_flags = 1;
+      self.interrupt_flags = 0x1;
       self.response_buffer.push_back(self.get_stat());
     } else {
       self.drive_interrupt_pending = true;
@@ -425,7 +625,7 @@ impl Cdrom {
         DriveMode::Idle => self.drive_cycles += cycles,
         DriveMode::Seek => self.seek_drive(),
         DriveMode::Play => self.play_drive(),
-        DriveMode::Read => self.read_drive(),
+        DriveMode::Read => self.read_drive(spu),
         DriveMode::GetStat => self.drive_get_stat()
       }
     }

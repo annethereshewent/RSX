@@ -49,8 +49,8 @@ pub const GAUSS_TABLE: [i32; 512] = [
   0x5997, 0x599E, 0x59A4, 0x59A9, 0x59AD, 0x59B0, 0x59B2, 0x59B3,
 ];
 
-const POS_ADPCM_TABLE: [i32; 5] = [0, 60, 115, 98, 122];
-const NEG_ADPCM_TABLE: [i32; 5] = [0, 0, -52, -55, -60];
+pub const POS_ADPCM_TABLE: [i32; 5] = [0, 60, 115, 98, 122];
+pub const NEG_ADPCM_TABLE: [i32; 5] = [0, 0, -52, -55, -60];
 
 
 #[derive(Copy, Clone)]
@@ -214,7 +214,9 @@ impl Voice {
 
       // each sample is 4 bits long, 16 / 4 = 4
       for j in 0..4 {
-        // not sure why the shift by 12, but this is from another source (possibly to sign extend?)
+        // per the no$ docs, "Note: The 4bit (or 8bit) samples are expanded to 16bit by
+        // left-shifting them by 12 (or 8), that 16bit value is then right-shifted by the
+        // selected 'shift' amount.
         let mut sample = (samples << 12) as i16 as i32;
 
         sample >>= shift;

@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use crate::cpu::interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt};
 use self::{voices::Voice, spu_control::{SpuControlRegister, RamTransferMode}, reverb::Reverb};
 
@@ -91,7 +93,9 @@ pub struct SPU {
   reverb: Reverb,
   endx: u32,
   noise_level: i16,
-  noise_timer: isize
+  noise_timer: isize,
+  pub cd_left_buffer: VecDeque<i16>,
+  pub cd_right_buffer: VecDeque<i16>
 }
 
 pub const CPU_TO_APU_CYCLES: i32 = 768;
@@ -127,7 +131,9 @@ impl SPU {
       buffer_index: 0,
       previous_value: 0,
       noise_level: 1,
-      noise_timer: 0
+      noise_timer: 0,
+      cd_left_buffer: VecDeque::new(),
+      cd_right_buffer: VecDeque::new()
     }
   }
 
