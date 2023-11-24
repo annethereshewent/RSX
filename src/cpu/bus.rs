@@ -24,7 +24,8 @@ pub struct Bus {
   pub controllers: Controllers,
   pub cycles: i32,
   pub cache_control: u32,
-  exp2_buffer: Vec<u8>
+  exp2_buffer: Vec<u8>,
+  scratchpad: Box<[u8]>
 }
 
 impl Bus {
@@ -43,7 +44,8 @@ impl Bus {
       cycles: 0,
       cache_control: 0,
       exp2_buffer: Vec::new(),
-      mdec: Mdec::new()
+      mdec: Mdec::new(),
+      scratchpad: vec![0; 0x400].into_boxed_slice()
     }
   }
 
@@ -90,6 +92,11 @@ impl Bus {
         let offset = (address - 0x1fc0_0000) as usize;
         (self.bios[offset] as u32) | ((self.bios[offset + 1] as u32) << 8) | ((self.bios[offset + 2] as u32) << 16) | ((self.bios[offset + 3] as u32) << 24)
       }
+      0x1f80_0000..=0x1f80_03ff => {
+        let offset = (address - 0x1f80_0000) as usize;
+
+        (self.scratchpad[offset] as u32) | (self.scratchpad[offset + 1] as u32) << 8 | (self.scratchpad[offset + 2] as u32) << 16 | (self.scratchpad[offset + 3] as u32) << 24
+      }
       0x1f80_1014 => 0x2009_31e1,
       0x1f80_1060 => 0xb88,
       0x1f80_1070 => {
@@ -135,6 +142,11 @@ impl Bus {
         (self.ram[offset] as u16) | ((self.ram[offset + 1] as u16) << 8)
       }
       // 0x1f00_0000..=0x1f08_0000 => 0xffffffff,
+      0x1f80_0000..=0x1f80_03ff => {
+        let offset = (address - 0x1f80_0000) as usize;
+
+        (self.scratchpad[offset] as u16) | (self.scratchpad[offset + 1] as u16) << 8
+      }
       0x1f80_1100..=0x1f80_112b => {
         self.timers.read(address) as u16
       }
@@ -194,6 +206,12 @@ impl Bus {
         self.ram[offset] = (value & 0xff) as u8;
         self.ram[offset + 1] = ((value >> 8) & 0xff) as u8;
       }
+      0x1f80_0000..=0x1f80_03ff => {
+        let offset = (address - 0x1f80_0000) as usize;
+
+        self.scratchpad[offset] = value as u8;
+        self.scratchpad[offset + 1] = (value >> 8) as u8;
+      }
       0x1f80_1c00..=0x1f80_1e80 => self.spu.write_16(address, value),
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1048 => self.controllers.write_joy_mode(value),
@@ -238,6 +256,14 @@ impl Bus {
         self.ram[offset + 2] = ((value >> 16) & 0xff) as u8;
         self.ram[offset + 3] = ((value >> 24)) as u8;
       }
+      0x1f80_0000..=0x1f80_03ff => {
+        let offset = (address - 0x1f80_0000) as usize;
+
+        self.scratchpad[offset] = value as u8;
+        self.scratchpad[offset + 1] = (value >> 8) as u8;
+        self.scratchpad[offset + 2] = (value >> 16) as u8;
+        self.scratchpad[offset + 3] = (value >> 24) as u8;
+      }
       0x1f80_1c00..=0x1f80_1e80 => panic!("32 bit writes to SPU not supported"),
       0x1f80_1000..=0x1f80_1023 => (), // println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1060 => (), // println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
@@ -263,9 +289,6 @@ impl Bus {
       }
       0x1f80_1100..=0x1f80_112b => {
         self.timers.write(address, value);
-      }
-      0x1f80_1800..=0x1f80_1803 => {
-
       }
       0x1f80_1810..=0x1f80_1817 => {
         let offset = address - 0x1f80_1810;
