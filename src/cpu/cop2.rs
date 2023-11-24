@@ -127,6 +127,7 @@ impl COP2 {
 
     match op_code {
       0x06 => self.nclip(),
+      0x12 => self.mvmva(),
       0x13 => self.ncds(),
       0x2d => self.avsz3(),
       0x30 => self.rtpt(),
@@ -159,6 +160,67 @@ impl COP2 {
 
   fn ncds(&mut self) {
     self.ncd(0);
+  }
+
+  fn mvmva(&mut self) {
+    let mx = match self.mx {
+      0 => self.rotation,
+      1 => self.light,
+      2 => self.color,
+      _ => panic!("unsupported or unreachable value for mx: {}", self.mx)
+    };
+
+    let vx = match self.sv {
+      0 => self.v[0],
+      1 => self.v[1],
+      2 => self.v[2],
+      3 => (self.ir[0], self.ir[1], self.ir[2]),
+      _ => unreachable!("can't happen")
+    };
+
+    let tx = match self.cv {
+      0 => self.tr,
+      1 => self.bk,
+      2 => self.fc,
+      3 => (0, 0, 0),
+      _ => unreachable!("can't happen")
+    };
+
+    let mx_m11 = mx[0][0] as i64;
+    let mx_m12 = mx[0][1] as i64;
+    let mx_m13 = mx[0][2] as i64;
+
+    let mx_m21 = mx[1][0] as i64;
+    let mx_m22 = mx[1][1] as i64;
+    let mx_m23 = mx[1][2] as i64;
+
+    let mx_m31 = mx[2][1] as i64;
+    let mx_m32 = mx[2][1] as i64;
+    let mx_m33 = mx[2][2] as i64;
+
+    let vx_x = vx.0 as i64;
+    let vx_y = vx.1 as i64;
+    let vx_z = vx.2 as i64;
+
+    let tx_x = tx.0 as i64;
+    let tx_y = tx.1 as i64;
+    let tx_z = tx.2 as i64;
+
+    let mac1 = self.set_mac_flags(tx_x * 0x1000 + mx_m11 * vx_x + mx_m12 * vx_y + mx_m13 * vx_z, 1);
+    let mac2 = self.set_mac_flags(tx_y * 0x1000 + mx_m21 * vx_x + mx_m22 * vx_y + mx_m23 * vx_z, 2);
+    let mac3 = self.set_mac_flags(tx_z * 0x1000 + mx_m31 * vx_x + mx_m32 * vx_y + mx_m33 * vx_z, 3);
+
+    if self.cv == 2 {
+      todo!("bugged cv mode 2 not implemented yet");
+    }
+
+    self.mac[1] = (mac1 >> self.sf) as i32;
+    self.mac[2] = (mac2 >> self.sf) as i32;
+    self.mac[3] = (mac3 >> self.sf) as i32;
+
+    self.ir[1] = self.set_ir_flags(self.mac[1], 1, self.lm);
+    self.ir[2] = self.set_ir_flags(self.mac[2], 2, self.lm);
+    self.ir[3] = self.set_ir_flags(self.mac[3], 3, self.lm);
   }
 
   fn ncd(&mut self, index: usize) {

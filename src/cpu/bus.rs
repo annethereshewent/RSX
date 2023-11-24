@@ -64,6 +64,11 @@ impl Bus {
 
     match address {
       0x1f00_0000..=0x1f08_0000 => 0xff,
+      0x1f80_0000..=0x1f80_03ff => {
+        let offset = (address - 0x1f80_0000) as usize;
+
+        self.scratchpad[offset]
+      }
       0x1f80_1040 => self.controllers.read_byte(),
       0x1f80_1800..=0x1f80_1803 => self.cdrom.read(address),
       0x1fc0_0000..=0x1fc7_ffff => self.bios[(address - 0x1fc0_0000) as usize],
@@ -177,6 +182,11 @@ impl Bus {
 
     match address {
       0x0000_0000..=0x001f_ffff => self.ram[address as usize] = value,
+      0x1f80_0000..=0x1f80_03ff => {
+        let offset = (address - 0x1f80_0000) as usize;
+
+        self.scratchpad[offset] = value;
+      }
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
       0x1f80_1040 => self.controllers.queue_byte(value),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
