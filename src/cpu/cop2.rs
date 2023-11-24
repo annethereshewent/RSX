@@ -131,8 +131,69 @@ impl COP2 {
       0x13 => self.ncds(),
       0x2d => self.avsz3(),
       0x30 => self.rtpt(),
+      0x3d => self.gpf(),
+      0x3e => self.gpl(),
       _ => panic!("unimplemented op code for gte: {:x}", op_code)
     }
+  }
+
+  fn gpf(&mut self) {
+    let ir1 = self.ir[1] as i64;
+    let ir2 = self.ir[2] as i64;
+    let ir3 = self.ir[3] as i64;
+
+    let ir0 = self.ir[0] as i64;
+
+    let temp1 = self.set_mac_flags(ir1 * ir0, 1);
+    let temp2 = self.set_mac_flags(ir2 * ir0, 2);
+    let temp3 = self.set_mac_flags(ir3 * ir0, 3);
+
+    self.mac[1] = (temp1 >> self.sv) as i32;
+    self.mac[2] = (temp2 >> self.sv) as i32;
+    self.mac[3] = (temp3 >> self.sv) as i32;
+
+    let r = self.set_color_fifo_flags(self.mac[1] / 16, 1);
+    let g = self.set_color_fifo_flags(self.mac[2] / 16 ,2);
+    let b = self.set_color_fifo_flags(self.mac[3] / 16, 3);
+    let c = self.rgbc.c;
+
+    self.push_rgb(r, g, b, c);
+
+    self.ir[1] = self.set_ir_flags(self.mac[1], 1, self.lm);
+    self.ir[2] = self.set_ir_flags(self.mac[2], 2, self.lm);
+    self.ir[3] = self.set_ir_flags(self.mac[3], 3, self.lm);
+  }
+
+  fn gpl(&mut self) {
+    let mac1 = (self.mac[1] as i64) << self.sf;
+    let mac2 = (self.mac[2] as i64) << self.sf;
+    let mac3 = (self.mac[3] as i64) << self.sf;
+
+    let ir1 = self.ir[1] as i64;
+    let ir2 = self.ir[2] as i64;
+    let ir3 = self.ir[3] as i64;
+
+    let ir0 = self.ir[0] as i64;
+
+    let temp1 = self.set_mac_flags(ir1 * ir0 + mac1, 1);
+    let temp2 = self.set_mac_flags(ir2 * ir0 + mac2, 2);
+    let temp3 = self.set_mac_flags(ir3 * ir0 + mac3, 3);
+
+    self.mac[1] = (temp1 >> self.sv) as i32;
+    self.mac[2] = (temp2 >> self.sv) as i32;
+    self.mac[3] = (temp3 >> self.sv) as i32;
+
+    let r = self.set_color_fifo_flags(self.mac[1] / 16, 1);
+    let g = self.set_color_fifo_flags(self.mac[2] / 16 ,2);
+    let b = self.set_color_fifo_flags(self.mac[3] / 16, 3);
+    let c = self.rgbc.c;
+
+    self.push_rgb(r, g, b, c);
+
+    self.ir[1] = self.set_ir_flags(self.mac[1], 1, self.lm);
+    self.ir[2] = self.set_ir_flags(self.mac[2], 2, self.lm);
+    self.ir[3] = self.set_ir_flags(self.mac[3], 3, self.lm);
+
   }
 
   fn avsz3(&mut self) {
