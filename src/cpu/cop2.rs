@@ -126,42 +126,109 @@ impl COP2 {
     self.flags = 0;
 
     match op_code {
+      0x01 => self.rtps(),
       0x06 => self.nclip(),
       0x12 => self.mvmva(),
       0x13 => self.ncds(),
+      0x1b => self.nccs(),
       0x2d => self.avsz3(),
       0x30 => self.rtpt(),
       0x3d => self.gpf(),
       0x3e => self.gpl(),
+      0x3f => self.ncct(),
       _ => panic!("unimplemented op code for gte: {:x}", op_code)
     }
   }
 
-  fn gpf(&mut self) {
+  fn nccs(&mut self) {
+    self.ncc(0);
+  }
+
+  fn ncct(&mut self) {
+    self.ncc(0);
+    self.ncc(1);
+    self.ncc(2);
+  }
+
+  fn ncc(&mut self, index: usize) {
+    let light_m11 = self.light[0][0] as i64;
+    let light_m12 = self.light[0][1] as i64;
+    let light_m13 = self.light[0][2] as i64;
+
+    let light_m21 = self.light[1][0] as i64;
+    let light_m22 = self.light[1][1] as i64;
+    let light_m23 = self.light[1][2] as i64;
+
+    let light_m31 = self.light[2][0] as i64;
+    let light_m32 = self.light[2][1] as i64;
+    let light_m33 = self.light[2][2] as i64;
+
+    let vx = self.v[index].0 as i64;
+    let vy = self.v[index].1 as i64;
+    let vz = self.v[index].2 as i64;
+
+    self.mac[1] = (self.set_mac_flags(light_m11 * vx + light_m12 * vy + light_m13 * vz, 1) >> self.sf) as i32;
+    self.mac[2] = (self.set_mac_flags(light_m21 * vx + light_m22 * vy + light_m23 * vz, 2) >> self.sf) as i32;
+    self.mac[3] = (self.set_mac_flags(light_m31 * vx + light_m32 * vy + light_m33 * vz, 3) >> self.sf) as i32;
+
+    for i in 1..4 {
+      self.ir[i] = self.set_ir_flags(self.mac[i], i, self.lm);
+    }
+
+    let color_m11 = self.color[0][0] as i64;
+    let color_m12 = self.color[0][1] as i64;
+    let color_m13 = self.color[0][2] as i64;
+
+    let color_m21 = self.color[1][0] as i64;
+    let color_m22 = self.color[1][1] as i64;
+    let color_m23 = self.color[1][2] as i64;
+
+    let color_m31 = self.color[2][0] as i64;
+    let color_m32 = self.color[2][1] as i64;
+    let color_m33 = self.color[2][2] as i64;
+
+    let bk_x = self.bk.0 as i64;
+    let bk_y = self.bk.1 as i64;
+    let bk_z = self.bk.2 as i64;
+
     let ir1 = self.ir[1] as i64;
     let ir2 = self.ir[2] as i64;
     let ir3 = self.ir[3] as i64;
 
-    let ir0 = self.ir[0] as i64;
-
-    let temp1 = self.set_mac_flags(ir1 * ir0, 1);
-    let temp2 = self.set_mac_flags(ir2 * ir0, 2);
-    let temp3 = self.set_mac_flags(ir3 * ir0, 3);
-
-    self.mac[1] = (temp1 >> self.sv) as i32;
-    self.mac[2] = (temp2 >> self.sv) as i32;
-    self.mac[3] = (temp3 >> self.sv) as i32;
-
-    let r = self.set_color_fifo_flags(self.mac[1] / 16, 1);
-    let g = self.set_color_fifo_flags(self.mac[2] / 16 ,2);
-    let b = self.set_color_fifo_flags(self.mac[3] / 16, 3);
-    let c = self.rgbc.c;
-
-    self.push_rgb(r, g, b, c);
+    self.mac[1] = (self.set_mac_flags(bk_x * 0x1000 + color_m11 * ir1 + color_m12 * ir2 + color_m13 * ir3, 1) >> self.sf) as i32;
+    self.mac[2] = (self.set_mac_flags(bk_y * 0x1000 + color_m21 * ir1 + color_m22 * ir2 + color_m23 * ir3, 1) >> self.sf) as i32;
+    self.mac[3] = (self.set_mac_flags(bk_z * 0x1000 + color_m31 * ir1 + color_m32 * ir2 + color_m33 * ir3, 1) >> self.sf) as i32;
 
     self.ir[1] = self.set_ir_flags(self.mac[1], 1, self.lm);
     self.ir[2] = self.set_ir_flags(self.mac[2], 2, self.lm);
     self.ir[3] = self.set_ir_flags(self.mac[3], 3, self.lm);
+
+    let r = self.rgbc.r as i64;
+    let g = self.rgbc.g as i64;
+    let b = self.rgbc.b as i64;
+
+    let ir1 = self.ir[1] as i64;
+    let ir2 = self.ir[2] as i64;
+    let ir3 = self.ir[3] as i64;
+
+    self.mac[1] = (self.set_mac_flags((r * ir1) << 4, 1) >> self.sf) as i32;
+    self.mac[2] = (self.set_mac_flags((g * ir2) << 4, 2) >> self.sf) as i32;
+    self.mac[3] = (self.set_mac_flags((b * ir3) << 4, 3) >> self.sf) as i32;
+
+    for i in 1..4 {
+      self.ir[i] = self.set_ir_flags(self.mac[i], i, self.lm);
+    }
+
+    let r = self.set_color_fifo_flags(self.mac[1] / 16, 1);
+    let g = self.set_color_fifo_flags(self.mac[2] / 16, 2);
+    let b = self.set_color_fifo_flags(self.mac[3] / 16, 3);
+    let c = self.rgbc.c;
+
+    self.push_rgb(r, g, b, c);
+  }
+
+  fn gpf(&mut self) {
+    self.interpolate(0, 0, 0);
   }
 
   fn gpl(&mut self) {
@@ -169,6 +236,10 @@ impl COP2 {
     let mac2 = (self.mac[2] as i64) << self.sf;
     let mac3 = (self.mac[3] as i64) << self.sf;
 
+    self.interpolate(mac1, mac2, mac3);
+  }
+
+  fn interpolate(&mut self, mac1: i64, mac2: i64, mac3: i64) {
     let ir1 = self.ir[1] as i64;
     let ir2 = self.ir[2] as i64;
     let ir3 = self.ir[3] as i64;
@@ -179,12 +250,12 @@ impl COP2 {
     let temp2 = self.set_mac_flags(ir2 * ir0 + mac2, 2);
     let temp3 = self.set_mac_flags(ir3 * ir0 + mac3, 3);
 
-    self.mac[1] = (temp1 >> self.sv) as i32;
-    self.mac[2] = (temp2 >> self.sv) as i32;
-    self.mac[3] = (temp3 >> self.sv) as i32;
+    self.mac[1] = (temp1 >> self.sf) as i32;
+    self.mac[2] = (temp2 >> self.sf) as i32;
+    self.mac[3] = (temp3 >> self.sf) as i32;
 
     let r = self.set_color_fifo_flags(self.mac[1] / 16, 1);
-    let g = self.set_color_fifo_flags(self.mac[2] / 16 ,2);
+    let g = self.set_color_fifo_flags(self.mac[2] / 16, 2);
     let b = self.set_color_fifo_flags(self.mac[3] / 16, 3);
     let c = self.rgbc.c;
 
@@ -193,7 +264,6 @@ impl COP2 {
     self.ir[1] = self.set_ir_flags(self.mac[1], 1, self.lm);
     self.ir[2] = self.set_ir_flags(self.mac[2], 2, self.lm);
     self.ir[3] = self.set_ir_flags(self.mac[3], 3, self.lm);
-
   }
 
   fn avsz3(&mut self) {
@@ -598,6 +668,10 @@ impl COP2 {
     self.rtp(0);
     self.rtp(1);
     self.rtp(2);
+  }
+
+  fn rtps(&mut self) {
+    self.rtp(0);
   }
 
   fn push_sx(&mut self, sx: i16) {
