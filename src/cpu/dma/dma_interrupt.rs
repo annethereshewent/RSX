@@ -20,6 +20,15 @@ impl DmaInterrupt {
     self.update_master_flag();
   }
 
+  pub fn write_upper(&mut self, val: u32) {
+    self.val &= 0xff00_0000;
+    // this acknowledges any interrupts by clearing the bits (bits 24-30)
+    self.val &= !((val << 16) & 0x7f00_0000);
+    self.val |= (val << 16) & 0xff_0000;
+
+    self.update_master_flag();
+  }
+
   pub fn force_irq(&self) -> bool {
     (self.val >> 15) & 0b1 == 1
   }

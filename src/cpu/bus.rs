@@ -70,6 +70,7 @@ impl Bus {
         self.scratchpad[offset]
       }
       0x1f80_1040 => self.controllers.read_byte(),
+      0x1f80_1080..=0x1f80_10ff => self.dma.get().read(address) as u8,
       0x1f80_1800..=0x1f80_1803 => self.cdrom.read(address),
       0x1fc0_0000..=0x1fc7_ffff => self.bios[(address - 0x1fc0_0000) as usize],
       0x0000_0000..=0x001f_ffff => {
@@ -191,6 +192,13 @@ impl Bus {
       0x1f80_1040 => self.controllers.queue_byte(value),
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070..=0x1f80_1074 => panic!("unimplemented writes to interrupt registers"),
+      0x1f80_1080..=0x1f80_10ff => {
+        let mut dma = self.dma.get();
+
+        dma.write(address, value as u32);
+
+        self.dma.set(dma);
+      }
       0x1f80_1800..=0x1f80_1803 => self.cdrom.write(address, value),
       0x1f80_1100..=0x1f80_112b => {
         self.timers.write(address, value as u32);

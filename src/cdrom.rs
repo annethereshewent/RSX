@@ -563,6 +563,7 @@ impl Cdrom {
 
         self.subresponse_cycles += 50;
       }
+      0x1b => self.reads(),
       0x1e => {
         self.push_stat();
 
@@ -625,6 +626,14 @@ impl Cdrom {
   }
 
   fn readn(&mut self) {
+    self.read_command(true);
+  }
+
+  fn reads(&mut self) {
+    self.read_command(false);
+  }
+
+  fn read_command(&mut self, is_readn: bool) {
     if self.processing_seek {
       self.drive_mode = DriveMode::Seek;
       self.next_drive_mode = DriveMode::Read;
@@ -634,9 +643,9 @@ impl Cdrom {
       self.is_playing = false;
 
       self.drive_cycles += if self.double_speed {
-        140
+        if is_readn { 140 } else { 14 }
       } else {
-        280
+        if is_readn { 280 } else { 28 }
       };
     } else {
       self.drive_mode = DriveMode::Read;
@@ -696,6 +705,10 @@ impl Cdrom {
       DATA_OFFSET
     };
 
+    if self.data_buffer_empty() {
+      panic!("data buffer is empty");
+    }
+
     let val = self.data_buffer[offset + self.data_buffer_pointer];
 
     self.data_buffer_pointer += 1;
@@ -746,6 +759,7 @@ impl Cdrom {
         value
       },
       1 => if self.response_buffer.is_empty() { 0 } else { self.response_buffer.pop_front().unwrap() },
+      2 => self.read_data_buffer(),
       3 => {
         match self.index {
           0 => (0b111 << 5) | self.interrupt_enable,
