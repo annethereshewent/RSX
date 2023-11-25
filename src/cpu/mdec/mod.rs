@@ -211,8 +211,6 @@ impl Mdec {
           b ^= 0x80;
         }
 
-
-
         if self.data_output_depth == 3 {
           let offset = ((x + xx) + (y + yy) * 16) * 2;
           let r5bit = ((r as u8) >> 3) as u16;
@@ -255,8 +253,6 @@ impl Mdec {
 
     while self.data_in.len() > 0 {
       let processed = match self.current_block {
-        4 => self.decode_block(BlockType::Cr, Qt::Uv),
-        5 => self.decode_block(BlockType::Cb, Qt::Uv),
         0 => {
           let processed = self.decode_block(BlockType::Yb, Qt::Y);
           self.yuv_to_rgb(0, 0);
@@ -288,6 +284,8 @@ impl Mdec {
 
           processed
         }
+        4 => self.decode_block(BlockType::Cr, Qt::Uv),
+        5 => self.decode_block(BlockType::Cb, Qt::Uv),
         _ => unreachable!()
       };
 
@@ -299,7 +297,6 @@ impl Mdec {
         }
       }
     }
-    // panic!("finished processing an mdec thing");
   }
 
   fn decode_block(&mut self, block_type: BlockType, qt: Qt) -> bool {
