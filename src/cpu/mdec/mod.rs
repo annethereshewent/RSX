@@ -264,12 +264,12 @@ impl Mdec {
         }
         3 => {
          let processed = self.decode_block(BlockType::Yb, Qt::Y);
-          self.yuv_to_rgb(0, 8);
+          self.yuv_to_rgb(8, 0);
           processed
         }
         4 => {
           let processed = self.decode_block(BlockType::Yb, Qt::Y);
-          self.yuv_to_rgb(8, 0);
+          self.yuv_to_rgb(0, 8);
           processed
         }
         5 => {
