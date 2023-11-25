@@ -194,17 +194,16 @@ impl Mdec {
       for x in 0..8 {
         let mut r = self.blocks[BlockType::Cr as usize].data[((x + xx) / 2) + ((y + yy) / 2) * 8];
         let mut b = self.blocks[BlockType::Cb as usize].data[((x + xx) / 2) + ((y + yy) / 2) * 8];
-        let mut g = (-3.437 * (b as f32) + (-0.7143 * r as f32)) as i16;
+        let mut g = (-0.3437 * (b as f32) + (-0.7143 * r as f32)) as i16;
 
         r = (1.402 * r as f32) as i16;
         b = (1.772 * b as f32) as i16;
 
-        let y_color = self.blocks[BlockType::Yb as usize].data[x + y * 8];
+        let l = self.blocks[BlockType::Yb as usize].data[x + y * 8];
 
-
-        r = Mdec::min_max(r + y_color);
-        g = Mdec::min_max(g + y_color);
-        b = Mdec::min_max(b + y_color);
+        r = Mdec::min_max(r + l);
+        g = Mdec::min_max(g + l);
+        b = Mdec::min_max(b + l);
 
         if !self.data_output_signed {
           r ^= 0x80;
@@ -212,9 +211,10 @@ impl Mdec {
           b ^= 0x80;
         }
 
-        let offset = ((x + xx) + (y + yy) * 16) * 2;
+
 
         if self.data_output_depth == 3 {
+          let offset = ((x + xx) + (y + yy) * 16) * 2;
           let r5bit = ((r as u8) >> 3) as u16;
           let g5bit = ((g as u8) >> 3) as u16;
           let b5bit = ((b as u8) >> 3) as u16;
@@ -228,6 +228,7 @@ impl Mdec {
           self.output[offset] = data as u8;
           self.output[offset + 1] = (data >> 8) as u8;
         } else if self.data_output_depth == 2 {
+          let offset = ((x + xx) + (y + yy) * 16) * 3;
 
           self.output[offset] = r as u8;
           self.output[offset + 1] = g as u8;
