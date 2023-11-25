@@ -250,30 +250,29 @@ impl Mdec {
 
   fn decode_macroblocks(&mut self) {
     // see https://psx-spx.consoledev.net/macroblockdecodermdec/#mdec-decompression
-    // except somehow the Yb blocks come first here per other emulators,
-    // not sure why the discrepancy but this seems to work while the no$ specs
-    // do not
 
     self.output = [0; 768];
 
     while self.data_in.len() > 0 {
       let processed = match self.current_block {
-        0 => {
+        0 => self.decode_block(BlockType::Cr, Qt::Uv),
+        1 => self.decode_block(BlockType::Cb, Qt::Uv),
+        2 => {
           let processed = self.decode_block(BlockType::Yb, Qt::Y);
           self.yuv_to_rgb(0, 0);
           processed
         }
-        1 => {
-          let processed = self.decode_block(BlockType::Yb, Qt::Y);
+        3 => {
+         let processed = self.decode_block(BlockType::Yb, Qt::Y);
           self.yuv_to_rgb(0, 8);
           processed
         }
-        2 => {
+        4 => {
           let processed = self.decode_block(BlockType::Yb, Qt::Y);
           self.yuv_to_rgb(8, 0);
           processed
         }
-        3 => {
+        5 => {
           let processed = self.decode_block(BlockType::Yb, Qt::Y);
           self.yuv_to_rgb(8, 8);
 
@@ -289,8 +288,7 @@ impl Mdec {
 
           processed
         }
-        4 => self.decode_block(BlockType::Cr, Qt::Uv),
-        5 => self.decode_block(BlockType::Cb, Qt::Uv),
+
         _ => unreachable!()
       };
 
@@ -394,7 +392,7 @@ impl Mdec {
       //  31    Reset MDEC (0=No change, 1=Abort any command, and set status=80040000h
       self.words_remaining = 0;
       self.processing = false;
-      self.current_block = 4;
+      self.current_block = 0;
     }
   }
 }
