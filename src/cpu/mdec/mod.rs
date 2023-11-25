@@ -342,13 +342,13 @@ impl Mdec {
 
     let q_scale = (data >> 10) & 0x3f;
 
-    let mut dc = (((data & 0x3ff) << 6) as i16) >> 6;
+    let mut dc = Self::sign_extend_i10(data & 0x3ff);
 
     dc = dc * quant_table[k] as i16;
 
     while k < 64 {
       if q_scale == 0 {
-        dc = ((((data & 0x3ff) << 6) as i16) >> 6) * 2;
+        dc = (Self::sign_extend_i10(data & 0x3ff)) * 2;
       }
 
       if dc < -0x400 {
@@ -359,7 +359,7 @@ impl Mdec {
 
       if q_scale > 0 {
         block.data[self.zagzig_table[k]] = dc;
-      } else {
+      } else if q_scale == 0 {
         block.data[k] = dc;
       }
 
@@ -372,13 +372,17 @@ impl Mdec {
       k += (((data >> 10) & 0x3f)+ 1) as usize;
 
       if k < 64 {
-        dc = (((((data & 0x3ff) << 6) as i16) >> 6) * quant_table[k] as i16 * q_scale as i16 + 4) / 8;
+        dc = ((Self::sign_extend_i10(data & 0x3ff)) * quant_table[k] as i16 * q_scale as i16 + 4) / 8;
       }
     }
 
     self.idct_core(block_type);
 
     true
+  }
+
+  fn sign_extend_i10(value: u16) -> i16 {
+    ((value << 6) as i16) >> 6
   }
 
   fn idct_core(&mut self, block_type: BlockType) {
