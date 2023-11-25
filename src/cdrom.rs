@@ -446,7 +446,7 @@ impl Cdrom {
 
 
     match mode {
-      CdReadMode::Audio => self.read_audio(file_pointer, spu),
+      CdReadMode::Audio => self.read_audio(spu),
       CdReadMode::Data => self.read_data(file_pointer),
       CdReadMode::Skip => ()
     }
@@ -455,13 +455,12 @@ impl Cdrom {
     self.drive_cycles += 44100 / divisor;
   }
 
-  fn read_audio(&mut self, file_pointer: u64, spu: &mut SPU) {
+  fn read_audio(&mut self, spu: &mut SPU) {
     if self.sector_subheader.bits_per_sample() != 4 {
       todo!("unimplemented bits per sample given")
     }
 
     let mut buffer = [0u8; 0x914];
-    self.game_file.seek(SeekFrom::Start(file_pointer)).unwrap();
     self.game_file.read_exact(&mut buffer).unwrap();
 
     let channels = self.sector_subheader.channels();
@@ -469,7 +468,7 @@ impl Cdrom {
     // per docs, "Each sector consists of 12h 128-byte portions (=900h bytes)
     // (the remaining 14h bytes of the sectors 914h-byte data region are 00h filled)."
     for i in 0..0x12 {
-      self.decode_blocks(&buffer[(i * 128)..], channels);
+      self.decode_blocks(&buffer[i * 128..], channels);
     }
 
     let repeat = match self.sector_subheader.sample_rate() {
@@ -480,7 +479,7 @@ impl Cdrom {
 
     for channel in 0..channels {
       for _ in 0..repeat {
-        for i in 0..self.sample_buffer.len() {
+        for i in 0..self.sample_buffer[channel].len() {
           self.ringbuf[channel][i & 0x1f] = self.sample_buffer[channel][i];
 
           self.sixstep -= 1;
@@ -489,7 +488,8 @@ impl Cdrom {
             self.sixstep = 6;
 
             for j in 0..7 {
-              let sample = self.zigzag_interpolate(self.ringbuf[channel], ZIGZAG_INTERPOLATION_TABLE[j], i);
+              let sample = self.zigzag_interpolate(self.ringbuf[channel], ZIGZAG_INTERPOLATION_TABLE[j], i+1);
+
 
               if channels == 1 {
                 spu.cd_left_buffer.push_back(sample);
@@ -515,7 +515,7 @@ impl Cdrom {
     // https://psx-spx.consoledev.net/cdromdrive/#25-point-zigzag-interpolation
     let mut sum = 0;
     for i in 1..30 {
-      sum += ((buffer[(index - (i-1)) & 0x1f] as i32) * table[i - 1]) / 0x8000;
+      sum += ((buffer[(index - i) & 0x1f] as i32) * table[i - 1]) / 0x8000;
     }
 
     if sum < -0x8000 {
@@ -561,6 +561,7 @@ impl Cdrom {
       sample &= 0xf;
 
       let mut sample = ((sample as u16) << 12) as i16 as i32;
+      sample >>= shift;
 
       let filter = (32 + self.previous_samples[channel][0] as i32 * f0 + self.previous_samples[channel][1] as i32 * f1) / 64;
 
@@ -575,7 +576,6 @@ impl Cdrom {
       self.sample_buffer[channel].push(sample as i16);
       self.previous_samples[channel][1] = self.previous_samples[channel][0];
       self.previous_samples[channel][0] = sample as i16;
-
     }
   }
 

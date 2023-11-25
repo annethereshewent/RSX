@@ -95,7 +95,9 @@ pub struct SPU {
   noise_level: i16,
   noise_timer: isize,
   pub cd_left_buffer: VecDeque<i16>,
-  pub cd_right_buffer: VecDeque<i16>
+  pub cd_right_buffer: VecDeque<i16>,
+  capture_index: u32,
+  writing_to_capture_half: bool
 }
 
 pub const CPU_TO_APU_CYCLES: i32 = 768;
@@ -133,7 +135,9 @@ impl SPU {
       noise_level: 1,
       noise_timer: 0,
       cd_left_buffer: VecDeque::new(),
-      cd_right_buffer: VecDeque::new()
+      cd_right_buffer: VecDeque::new(),
+      capture_index: 0,
+      writing_to_capture_half: false
     }
   }
 
@@ -231,9 +235,20 @@ impl SPU {
     let mut left_reverb = 0.0;
     let mut right_reverb = 0.0;
 
+    let mut cd_left = 0.0;
+    let mut cd_right = 0.0;
+
     self.update_voices()
 ;
     self.tick_noise();
+
+    if !self.cd_left_buffer.is_empty() {
+      cd_left = SPU::to_f32(self.cd_left_buffer.pop_front().unwrap());
+    }
+
+    if !self.cd_right_buffer.is_empty() {
+      cd_right = SPU::to_f32(self.cd_right_buffer.pop_front().unwrap());
+    }
 
     for i in 0..self.voices.len() {
       let voice = &mut self.voices[i];
@@ -252,6 +267,16 @@ impl SPU {
         right_reverb += sample_right;
       }
 
+      if self.control.cd_audio_enable() {
+        output_left += cd_left * Self::to_f32(self.cd_volume_left);
+        output_right += cd_right * Self::to_f32(self.cd_volume_right);
+      }
+
+      if self.control.cd_audio_reverb() {
+        left_reverb += cd_left * Self::to_f32(self.cd_volume_left);
+        right_reverb += cd_right * Self::to_f32(self.cd_volume_right);
+      }
+
       let should_modulate = (self.modulate_on >> i) & 0b1 == 1;
 
       voice.tick(i > 0 && should_modulate, modulator, &mut self.sound_ram);
@@ -268,6 +293,16 @@ impl SPU {
 
       self.reverb.calculate_reverb([left_reverb, right_reverb], &mut self.sound_ram);
     }
+
+    self.sound_ram.write_16(self.capture_index, SPU::to_i16(cd_left) as u16);
+    self.sound_ram.write_16(self.capture_index + 0x400, SPU::to_i16(cd_right) as u16);
+
+    // fake writes to capture buffer
+    self.sound_ram.write_16(self.capture_index + 0x800, 0);
+    self.sound_ram.write_16(self.capture_index + 0xc00, 0);
+
+    self.capture_index = (self.capture_index + 2) & 0x3ff;
+    self.writing_to_capture_half = self.capture_index >= 0x200;
 
     if self.control.irq9_enable() && self.sound_ram.irq {
       self.sound_ram.irq = false;
@@ -352,6 +387,8 @@ impl SPU {
         let mut value = (control & 0x20) << 2;
         value |= (self.irq_status as u16) << 6;
         value |= control & 0x3f;
+        value |= (self.writing_to_capture_half as u16) << 11;
+
 
         value
       }
@@ -425,6 +462,7 @@ impl SPU {
 
         self.update_echo();
       }
+      0x1f80_1d9c..=0x1f80_1d9e => (),
       0x1f80_1da2 => self.reverb.write_mbase(val),
       0x1f80_1da4 => self.sound_ram.irq_address = (val as u32) * 8,
       0x1f80_1da6 => {

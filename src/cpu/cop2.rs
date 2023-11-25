@@ -693,6 +693,17 @@ impl COP2 {
     self.sz_fifo[3] = sz;
   }
 
+  fn to_u5(val: i16) -> u8 {
+    if val > 0x1f {
+      return 0x1f;
+    }
+    if val < 0 {
+      return 0;
+    }
+
+    return val as u8;
+  }
+
   pub fn read_data(&mut self, destination: usize) -> u32 {
     match destination {
       0 => (self.v[0].0 as u16 as u32) | (self.v[0].1 as u16 as u32) << 16,
@@ -714,6 +725,15 @@ impl COP2 {
       }
       23 => self.res1,
       24..=27 => self.mac[destination - 24] as u32,
+      28 | 29 => {
+        let r = COP2::to_u5(self.ir[1] >> 7) as u32;
+        let g = COP2::to_u5(self.ir[2] >> 7) as u32;
+        let b = COP2::to_u5(self.ir[3] >> 7) as u32;
+
+        r | (g << 5) | (b << 10)
+      }
+      30 => self.lzcs as u32,
+      31 => self.lzcr as u32,
       _ => panic!("unsupported destination: {destination}")
     }
   }

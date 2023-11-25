@@ -174,8 +174,6 @@ impl Mdec {
               self.color_quant_table[i * 2 + 1] = (halfword >> 8) as u8;
             }
           }
-
-          self.processing = false;
         }
         3 => {
           for i in 0..64 {
@@ -185,6 +183,8 @@ impl Mdec {
         }
         _ => panic!("invalid command received: {}", self.command)
       }
+
+      self.processing = false;
     }
 
   }
@@ -238,10 +238,10 @@ impl Mdec {
   }
 
   fn min_max(val: i16) -> i16 {
-    if val < -127 {
-      return -127;
-    } else if val > 128 {
-      return 128;
+    if val < -128 {
+      return -128;
+    } else if val > 127 {
+      return 127;
     }
 
     val
@@ -254,24 +254,24 @@ impl Mdec {
 
     while self.data_in.len() > 0 {
       let processed = match self.current_block {
-        0 => self.decode_block(BlockType::Cr, Qt::Uv),
-        1 => self.decode_block(BlockType::Cb, Qt::Uv),
-        2 => {
+        4 => self.decode_block(BlockType::Cr, Qt::Uv),
+        5 => self.decode_block(BlockType::Cb, Qt::Uv),
+        0 => {
           let processed = self.decode_block(BlockType::Yb, Qt::Y);
           self.yuv_to_rgb(0, 0);
           processed
         }
-        3 => {
+        1 => {
           let processed = self.decode_block(BlockType::Yb, Qt::Y);
           self.yuv_to_rgb(0, 8);
           processed
         }
-        4 => {
+        2 => {
           let processed = self.decode_block(BlockType::Yb, Qt::Y);
           self.yuv_to_rgb(8, 0);
           processed
         }
-        5 => {
+        3 => {
           let processed = self.decode_block(BlockType::Yb, Qt::Y);
           self.yuv_to_rgb(8, 8);
 
@@ -298,6 +298,7 @@ impl Mdec {
         }
       }
     }
+    // panic!("finished processing an mdec thing");
   }
 
   fn decode_block(&mut self, block_type: BlockType, qt: Qt) -> bool {
@@ -329,7 +330,7 @@ impl Mdec {
 
     dc = dc * quant_table[k] as i16;
 
-    while k <= 63 {
+    while k < 64 {
       if q_scale == 0 {
         dc = ((((data & 0x3ff) << 6) as i16) >> 6) * 2;
       }
@@ -354,7 +355,7 @@ impl Mdec {
 
       k += (((data >> 10) & 0x3f)+ 1) as usize;
 
-      if k <= 63 {
+      if k < 64 {
         dc = (((((data & 0x3ff) << 6) as i16) >> 6) * quant_table[k] as i16 * q_scale as i16 + 4) / 8;
       }
     }
@@ -373,9 +374,9 @@ impl Mdec {
         for y in 0..8 {
           let mut sum = 0;
           for z in 0..8 {
-            sum += block.data[y + z * 8] * (self.scale_table[x + z * 8] / 8);
+            sum += block.data[y + z * 8] as i32 * (self.scale_table[x + z * 8] as i32 / 8);
           }
-          temp[x + y * 8] = (sum + 0xfff) / 0x2000;
+          temp[x + y * 8] = ((sum + 0xfff) / 0x2000) as i16;
         }
       }
       mem::swap(&mut block.data, temp);
