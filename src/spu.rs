@@ -267,16 +267,6 @@ impl SPU {
         right_reverb += sample_right;
       }
 
-      if self.control.cd_audio_enable() {
-        output_left += cd_left * Self::to_f32(self.cd_volume_left);
-        output_right += cd_right * Self::to_f32(self.cd_volume_right);
-      }
-
-      if self.control.cd_audio_reverb() {
-        left_reverb += cd_left * Self::to_f32(self.cd_volume_left);
-        right_reverb += cd_right * Self::to_f32(self.cd_volume_right);
-      }
-
       let should_modulate = (self.modulate_on >> i) & 0b1 == 1;
 
       voice.tick(i > 0 && should_modulate, modulator, &mut self.sound_ram);
@@ -286,6 +276,16 @@ impl SPU {
 
     output_left *= SPU::to_f32(self.volume_left);
     output_right *= SPU::to_f32(self.volume_right);
+
+    if self.control.cd_audio_enable() {
+      output_left += cd_left * SPU::to_f32(self.cd_volume_left);
+      output_right += cd_right * SPU::to_f32(self.cd_volume_right);
+    }
+
+    if self.control.cd_audio_reverb() {
+      left_reverb += cd_left * SPU::to_f32(self.cd_volume_left);
+      right_reverb += cd_right * SPU::to_f32(self.cd_volume_right);
+    }
 
     if self.control.reverb_master_enable() {
       output_left += self.reverb.left_out * SPU::to_f32(self.reverb_volume_left);

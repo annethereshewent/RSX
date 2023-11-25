@@ -490,7 +490,6 @@ impl Cdrom {
             for j in 0..7 {
               let sample = self.zigzag_interpolate(self.ringbuf[channel], ZIGZAG_INTERPOLATION_TABLE[j], i+1);
 
-
               if channels == 1 {
                 spu.cd_left_buffer.push_back(sample);
                 spu.cd_right_buffer.push_back(sample);
