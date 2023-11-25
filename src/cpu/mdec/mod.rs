@@ -11,11 +11,20 @@ const ZIGZAG_TABLE: [usize; 64] = [
   35, 36, 48, 49, 57, 58, 62, 63
 ];
 
+
+#[derive(PartialEq, Clone, Copy)]
+pub enum OutputDepth {
+  FourBit = 0,
+  EightBit = 1,
+  TwentyfourBit = 2,
+  FifteenBit = 3
+}
+
 #[derive(Copy, Clone)]
 pub enum BlockType {
-  Cr,
-  Cb,
-  Yb
+  Cr = 0,
+  Cb = 1,
+  Yb = 2
 }
 
 pub enum Qt {
@@ -39,7 +48,7 @@ impl Block {
 pub struct Mdec {
   data_out: VecDeque<u8>,
   data_in: VecDeque<u16>,
-  data_output_depth: u32,
+  data_output_depth: OutputDepth,
   data_bit15: bool,
   data_output_signed: bool,
   dma1_enabled: bool,
@@ -71,7 +80,7 @@ impl Mdec {
       data_out: VecDeque::new(),
       dma0_enabled: false,
       dma1_enabled: false,
-      data_output_depth: 0,
+      data_output_depth: OutputDepth::FourBit,
       data_output_signed: false,
       words_remaining: 0,
       current_block: 0,
@@ -92,7 +101,7 @@ impl Mdec {
 
     status |= (self.data_bit15 as u32) << 23;
     status |= (self.data_output_signed as u32) << 24;
-    status |= self.data_output_depth << 25;
+    status |= (self.data_output_depth as u32) << 25;
     status |= (self.dma1_enabled as u32) << 27;
     status |= (self.dma0_enabled as u32) << 28;
     status |= (self.processing as u32) << 29;
@@ -125,7 +134,13 @@ impl Mdec {
 
     match self.command {
       1 => {
-        self.data_output_depth = (value >> 27) & 0b11;
+        self.data_output_depth = match (value >> 27) & 0b11 {
+          0 => OutputDepth::FourBit,
+          1 => OutputDepth::EightBit,
+          2 => OutputDepth::TwentyfourBit,
+          3 => OutputDepth::FifteenBit,
+          _ => unreachable!()
+        };
         self.data_output_signed = (value >> 26) & 0b1 == 1;
         self.data_bit15 = (value >> 25) & 0b1 == 1;
         self.words_remaining = (value & 0xffff) as u16;
@@ -211,7 +226,7 @@ impl Mdec {
           b ^= 0x80;
         }
 
-        if self.data_output_depth == 3 {
+        if self.data_output_depth == OutputDepth::FifteenBit {
           let offset = ((x + xx) + (y + yy) * 16) * 2;
 
           let r5bit = ((r as u8) >> 3) as u16;
@@ -226,7 +241,7 @@ impl Mdec {
 
           self.output[offset] = data as u8;
           self.output[offset + 1] = (data >> 8) as u8;
-        } else if self.data_output_depth == 2 {
+        } else if self.data_output_depth == OutputDepth::TwentyfourBit {
           let offset = ((x + xx) + (y + yy) * 16) * 3;
 
           self.output[offset] = r as u8;
@@ -276,11 +291,11 @@ impl Mdec {
           let processed = self.decode_block(BlockType::Yb, Qt::Y);
           self.yuv_to_rgb(8, 8);
 
-          if self.data_output_depth == 3 {
+          if self.data_output_depth == OutputDepth::FifteenBit {
             for i in 0..512 {
               self.data_out.push_back(self.output[i]);
             }
-          } else if self.data_output_depth == 2 {
+          } else if self.data_output_depth == OutputDepth::TwentyfourBit {
             for i in 0..768 {
               self.data_out.push_back(self.output[i]);
             }
