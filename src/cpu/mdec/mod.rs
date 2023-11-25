@@ -213,6 +213,7 @@ impl Mdec {
 
         if self.data_output_depth == 3 {
           let offset = ((x + xx) + (y + yy) * 16) * 2;
+
           let r5bit = ((r as u8) >> 3) as u16;
           let g5bit = ((g as u8) >> 3) as u16;
           let b5bit = ((b as u8) >> 3) as u16;
@@ -232,6 +233,7 @@ impl Mdec {
           self.output[offset + 1] = g as u8;
           self.output[offset + 2] = b as u8;
         }
+        // TODO: support the other output depths if needed
       }
     }
   }
@@ -247,7 +249,10 @@ impl Mdec {
   }
 
   fn decode_macroblocks(&mut self) {
-    // https://psx-spx.consoledev.net/macroblockdecodermdec/#mdec-decompression
+    // see https://psx-spx.consoledev.net/macroblockdecodermdec/#mdec-decompression
+    // except somehow the Yb blocks come first here per other emulators,
+    // not sure why the discrepancy but this seems to work while the no$ specs
+    // do not
 
     self.output = [0; 768];
 
@@ -292,7 +297,7 @@ impl Mdec {
       if processed {
         self.current_block += 1;
 
-        if self.current_block >= 6 {
+        if self.current_block == 6 {
           self.current_block = 0;
         }
       }
@@ -300,7 +305,7 @@ impl Mdec {
   }
 
   fn decode_block(&mut self, block_type: BlockType, qt: Qt) -> bool {
-    let mut block = self.blocks[block_type as usize];
+    let block = &mut self.blocks[block_type as usize];
     for i in 0..64 {
       block.data[i] = 0;
     }
@@ -334,7 +339,7 @@ impl Mdec {
       }
 
       if dc < -0x400 {
-        dc = 0x400;
+        dc = -0x400;
       } else if dc > 0x3ff {
         dc = 0x3ff;
       }
@@ -358,14 +363,14 @@ impl Mdec {
       }
     }
 
-    self.idct_core(&mut block);
-
-    self.blocks[block_type as usize] = block;
+    self.idct_core(block_type);
 
     true
   }
 
-  fn idct_core(&mut self, block: &mut Block) {
+  fn idct_core(&mut self, block_type: BlockType) {
+    let block = &mut self.blocks[block_type as usize];
+
     let temp = &mut [0; 64];
     for _ in 0..2 {
       for x in 0..8 {
