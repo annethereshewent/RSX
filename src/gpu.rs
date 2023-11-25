@@ -339,7 +339,7 @@ impl GPU {
   }
 
   pub fn get_vram_address_24(x: u32, y: u32) -> usize {
-    3 * (((x & 0x3ff) + 2048 * (y & 0x1ff))) as usize
+    (3 * (x & 0x3ff) + 2048 * (y & 0x1ff)) as usize
   }
 
   pub fn in_hblank(&self) -> bool {

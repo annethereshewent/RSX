@@ -81,6 +81,7 @@ impl DMA {
       }
     } else {
       let value = match channel.channel_id {
+        1 => bus.mdec.read_dma(),
         2 => bus.gpu.gpuread(),
         _ => panic!("unhandled tranfer to ram from DMA channel {}", channel.channel_id)
       };
