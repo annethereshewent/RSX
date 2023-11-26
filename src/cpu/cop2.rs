@@ -326,7 +326,7 @@ impl COP2 {
     let mx_m22 = mx[1][1] as i64;
     let mx_m23 = mx[1][2] as i64;
 
-    let mx_m31 = mx[2][1] as i64;
+    let mx_m31 = mx[2][0] as i64;
     let mx_m32 = mx[2][1] as i64;
     let mx_m33 = mx[2][2] as i64;
 
@@ -392,9 +392,11 @@ impl COP2 {
     let c11 = self.color[0][0] as i64;
     let c12 = self.color[0][1] as i64;
     let c13 = self.color[0][2] as i64;
+
     let c21 = self.color[1][0] as i64;
     let c22 = self.color[1][1] as i64;
     let c23 = self.color[1][2] as i64;
+
     let c31 = self.color[2][0] as i64;
     let c32 = self.color[2][1] as i64;
     let c33 = self.color[2][2] as i64;
@@ -494,7 +496,7 @@ impl COP2 {
     (value << 20) >> 20
   }
 
-  fn rtp(&mut self, index: usize) {
+  fn rtp(&mut self, index: usize, dq: bool) {
     let tr_x = (self.tr.0 as i64) << 12;
     let tr_y = (self.tr.1 as i64) << 12;
     let mut tr_z = (self.tr.2 as i64) << 12;
@@ -530,7 +532,8 @@ impl COP2 {
     self.ir[1] = self.set_ir_flags(self.mac[1], 1, self.lm);
     self.ir[2] = self.set_ir_flags(self.mac[2], 2, self.lm);
     // self.ir[3] = self.set_ir_flags(self.mac[3], 3);
-    // not sure why ir3 checks the old value instead of the current like ir1 and 2, but this seems to work ok.
+    // not sure why ir3 checks the old value instead of the current like ir1 and 2, but this was
+    // found in another emulator and it seems to break things if done otherwise
     self.ir[3] = self.set_ir_flag3(zs, self.mac[3]);
 
     let sz3 = self.set_sz3_or_otz_flags(zs);
@@ -569,7 +572,7 @@ impl COP2 {
     self.push_sx(sx2_saturated);
     self.push_sy(sy2_saturated);
 
-    if index == 2 {
+    if dq {
       let p = self.dqb as i64 + self.dqa as i64 * h_divided_by_sz as i64;
       self.set_mac0_flags(p);
       self.mac[0] = p as i32;
@@ -666,13 +669,13 @@ impl COP2 {
   }
 
   fn rtpt(&mut self) {
-    self.rtp(0);
-    self.rtp(1);
-    self.rtp(2);
+    self.rtp(0, false);
+    self.rtp(1, false);
+    self.rtp(2, true);
   }
 
   fn rtps(&mut self) {
-    self.rtp(0);
+    self.rtp(0, true);
   }
 
   fn push_sx(&mut self, sx: i16) {
