@@ -196,12 +196,13 @@ impl COP2 {
     let ir3 = self.ir[3] as i64;
 
     self.mac[1] = (self.set_mac_flags(bk_x * 0x1000 + color_m11 * ir1 + color_m12 * ir2 + color_m13 * ir3, 1) >> self.sf) as i32;
-    self.mac[2] = (self.set_mac_flags(bk_y * 0x1000 + color_m21 * ir1 + color_m22 * ir2 + color_m23 * ir3, 1) >> self.sf) as i32;
-    self.mac[3] = (self.set_mac_flags(bk_z * 0x1000 + color_m31 * ir1 + color_m32 * ir2 + color_m33 * ir3, 1) >> self.sf) as i32;
+    self.mac[2] = (self.set_mac_flags(bk_y * 0x1000 + color_m21 * ir1 + color_m22 * ir2 + color_m23 * ir3, 2) >> self.sf) as i32;
+    self.mac[3] = (self.set_mac_flags(bk_z * 0x1000 + color_m31 * ir1 + color_m32 * ir2 + color_m33 * ir3, 3) >> self.sf) as i32;
 
-    self.ir[1] = self.set_ir_flags(self.mac[1], 1, self.lm);
-    self.ir[2] = self.set_ir_flags(self.mac[2], 2, self.lm);
-    self.ir[3] = self.set_ir_flags(self.mac[3], 3, self.lm);
+
+    for i in 1..4 {
+      self.ir[i] = self.set_ir_flags(self.mac[i], i, self.lm);
+    }
 
     let r = self.rgbc.r as i64;
     let g = self.rgbc.g as i64;
@@ -305,7 +306,7 @@ impl COP2 {
       0 => self.v[0],
       1 => self.v[1],
       2 => self.v[2],
-      3 => (self.ir[0], self.ir[1], self.ir[2]),
+      3 => (self.ir[1], self.ir[2], self.ir[3]),
       _ => unreachable!("can't happen")
     };
 
