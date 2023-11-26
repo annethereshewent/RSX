@@ -233,7 +233,7 @@ impl Mdec {
           let g5bit = ((g as u8) >> 3) as u16;
           let b5bit = ((b as u8) >> 3) as u16;
 
-          let mut data = r5bit | (g5bit >> 5) | ( b5bit >> 10);
+          let mut data = r5bit | (g5bit << 5) | ( b5bit << 10);
 
           if self.data_bit15 {
             data |= 1 << 15;
