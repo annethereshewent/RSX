@@ -138,6 +138,11 @@ impl COP2 {
       0x3f => self.ncct(),
       _ => panic!("unimplemented op code for gte: {:x}", op_code)
     }
+
+    if (self.flags & 0x7f87e000) != 0 {
+      self.flags |= 0x8000_0000;
+    }
+
   }
 
   fn nccs(&mut self) {
