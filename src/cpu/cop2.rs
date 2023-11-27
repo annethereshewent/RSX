@@ -134,13 +134,13 @@ impl COP2 {
     }
 
     match op_code {
-      0x01 => self.rtps(), // this one
-      0x06 => self.nclip(), // this one
-      0x12 => self.mvmva(), // this one
+      0x01 => self.rtps(),
+      0x06 => self.nclip(),
+      0x12 => self.mvmva(),
       0x13 => self.ncds(),
-      0x1b => self.nccs(), // this one
+      0x1b => self.nccs(),
       0x2d => self.avsz3(), // this one
-      0x30 => self.rtpt(), // this one
+      0x30 => self.rtpt(),
       0x3d => self.gpf(), // this one
       0x3e => self.gpl(), // this one
       0x3f => self.ncct(),
@@ -148,7 +148,7 @@ impl COP2 {
     }
 
     if (self.flags & 0x7f87e000) != 0 {
-      self.flags |= 0x8000_0000;
+      self.flags |= 1 << 31;
     }
 
     if self.debug_on {
@@ -547,7 +547,7 @@ impl COP2 {
       return 0xff;
     }
 
-    return value as u8
+    value as u8
   }
 
   fn set_mac_flags(&mut self, value: i64, index: usize) -> i64 {
@@ -644,7 +644,7 @@ impl COP2 {
 
     // finally saturate sx2 and sy2 to -0x400 to 0x3ff
     let sx2_saturated = self.set_sn_flags(sx2, 1);
-    let sy2_saturated = self.set_sn_flags(sy2, 1);
+    let sy2_saturated = self.set_sn_flags(sy2, 2);
 
     self.push_sx(sx2_saturated);
     self.push_sy(sy2_saturated);
@@ -798,9 +798,9 @@ impl COP2 {
       }
       7 => self.otz as u32,
       8..=11 => self.ir[destination - 8] as u32,
-      12..=14 => (self.sxy_fifo[destination - 12].0 as u32) | (self.sxy_fifo[destination - 12].1 as u32) << 16,
+      12..=14 => (self.sxy_fifo[destination - 12].0 as u16 as u32) | (self.sxy_fifo[destination - 12].1 as u16 as u32) << 16,
       15 => (self.sxy_fifo[2].0 as u16 as u32) | (self.sxy_fifo[2].1 as u16 as u32) << 16,
-      16..=19 => self.sz_fifo[destination - 16] as u16 as u32,
+      16..=19 => self.sz_fifo[destination - 16] as u32,
       20..=22 => {
         (self.rgb_fifo[destination - 20].r as u32) | (self.rgb_fifo[destination - 20].g as u32) << 8 | (self.rgb_fifo[destination - 20].b as u32) << 16 | (self.rgb_fifo[destination - 20].c as u32) << 24
       }
@@ -950,7 +950,7 @@ impl COP2 {
         self.flags = value & 0x7fff_f000;
 
         if (value & 0x7f87e000) != 0 {
-          self.flags |= 0x8000_0000;
+          self.flags |= 1 << 31;
         }
       }
       _ => panic!("unhandled destination received: {destination}")
