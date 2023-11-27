@@ -501,7 +501,6 @@ impl GPU {
 
 
   fn read_texture(&mut self, uv: (i32, i32)) -> Option<RgbColor> {
-    panic!("it's trying to read a full texture");
     let tex_x_base = (self.stat.texture_x_base as i32) * 64;
     let tex_y_base = (self.stat.texture_y_base1 as i32) * 16;
 
