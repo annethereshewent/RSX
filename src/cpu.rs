@@ -123,7 +123,7 @@ pub struct CPU {
   interrupts: Rc<Cell<InterruptRegisters>>,
   current_instruction: u32,
   isolated_cache: [IsolatedCacheLine; 256],
-  cop2: COP2,
+  pub cop2: COP2,
   pub debug_on: bool,
   output: String
 }

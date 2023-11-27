@@ -1,4 +1,4 @@
-use std::cmp;
+use std::{cmp, collections::HashMap};
 
 use super::instruction::Instruction;
 
@@ -24,7 +24,7 @@ const UNR_TABLE: [u8; 0x101] = [
   0x00
 ];
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Rgb {
   r: u8,
   g: u8,
@@ -33,6 +33,8 @@ struct Rgb {
 }
 
 pub struct COP2 {
+  pub debug_on: bool,
+  executed_commands: HashMap<u32, bool>,
   zsf3: i16,
   zsf4: i16,
   h: u16,
@@ -102,7 +104,9 @@ impl COP2 {
       res1: 0,
       mac: [0; 4],
       lzcs: 0,
-      lzcr: 0
+      lzcr: 0,
+      debug_on: false,
+      executed_commands: HashMap::new()
     }
   }
 
@@ -125,22 +129,33 @@ impl COP2 {
 
     self.flags = 0;
 
+    if self.debug_on {
+      println!("executed {:X}", op_code);
+    }
+
     match op_code {
-      0x01 => self.rtps(),
-      0x06 => self.nclip(),
-      0x12 => self.mvmva(),
+      0x01 => self.rtps(), // this one
+      0x06 => self.nclip(), // this one
+      0x12 => self.mvmva(), // this one
       0x13 => self.ncds(),
-      0x1b => self.nccs(),
-      0x2d => self.avsz3(),
-      0x30 => self.rtpt(),
-      0x3d => self.gpf(),
-      0x3e => self.gpl(),
+      0x1b => self.nccs(), // this one
+      0x2d => self.avsz3(), // this one
+      0x30 => self.rtpt(), // this one
+      0x3d => self.gpf(), // this one
+      0x3e => self.gpl(), // this one
       0x3f => self.ncct(),
       _ => panic!("unimplemented op code for gte: {:x}", op_code)
     }
 
     if (self.flags & 0x7f87e000) != 0 {
       self.flags |= 0x8000_0000;
+    }
+
+    if self.debug_on {
+      println!("{:?}", self.mac);
+      println!("{:?}", self.ir);
+      println!("{:x}", self.flags);
+      println!("{:?}", self.rgb_fifo[2]);
     }
 
   }

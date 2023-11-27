@@ -117,6 +117,8 @@ impl SdlFrontend {
           } else if k ==  Keycode::G {
             println!("toggling gpu debug");
             cpu.bus.gpu.debug_on = !cpu.bus.gpu.debug_on;
+          } else if k == Keycode::U {
+            cpu.cop2.debug_on = !cpu.cop2.debug_on;
           }
         },
         Event::KeyUp { keycode: Some(_k), .. } => (),
