@@ -187,9 +187,21 @@ impl COP2 {
     let vy = self.v[index].1 as i64;
     let vz = self.v[index].2 as i64;
 
-    self.mac[1] = (self.set_mac_flags(light_m11 * vx + light_m12 * vy + light_m13 * vz, 1) >> self.sf) as i32;
-    self.mac[2] = (self.set_mac_flags(light_m21 * vx + light_m22 * vy + light_m23 * vz, 2) >> self.sf) as i32;
-    self.mac[3] = (self.set_mac_flags(light_m31 * vx + light_m32 * vy + light_m33 * vz, 3) >> self.sf) as i32;
+    let mut mac1 = self.set_mac_flags(light_m11 * vx, 1);
+    let mut mac2 = self.set_mac_flags(light_m21 * vx, 2);
+    let mut mac3 = self.set_mac_flags(light_m31 * vx, 3);
+
+    mac1 = self.set_mac_flags(mac1 + light_m12 * vy, 1);
+    mac2 = self.set_mac_flags(mac2 + light_m22 * vy, 2);
+    mac3 = self.set_mac_flags(mac3 + light_m32 * vy, 3);
+
+    mac1 = self.set_mac_flags(mac1 + light_m13 * vz, 1);
+    mac2 = self.set_mac_flags(mac2 + light_m23 * vz, 2);
+    mac3 = self.set_mac_flags(mac3 + light_m33 * vz, 3);
+
+    self.mac[1] = (mac1 >> self.sf) as i32;
+    self.mac[2] = (mac2 >> self.sf) as i32;
+    self.mac[3] = (mac3 >> self.sf) as i32;
 
     for i in 1..4 {
       self.ir[i] = self.set_ir_flags(self.mac[i], i, self.lm);
@@ -215,10 +227,21 @@ impl COP2 {
     let ir2 = self.ir[2] as i64;
     let ir3 = self.ir[3] as i64;
 
-    self.mac[1] = (self.set_mac_flags(bk_x * 0x1000 + color_m11 * ir1 + color_m12 * ir2 + color_m13 * ir3, 1) >> self.sf) as i32;
-    self.mac[2] = (self.set_mac_flags(bk_y * 0x1000 + color_m21 * ir1 + color_m22 * ir2 + color_m23 * ir3, 2) >> self.sf) as i32;
-    self.mac[3] = (self.set_mac_flags(bk_z * 0x1000 + color_m31 * ir1 + color_m32 * ir2 + color_m33 * ir3, 3) >> self.sf) as i32;
+    mac1 = self.set_mac_flags(bk_x * 0x1000 + color_m11 * ir1, 1);
+    mac2 = self.set_mac_flags(bk_y * 0x1000 + color_m21 * ir1, 2);
+    mac3 = self.set_mac_flags(bk_z * 0x1000 + color_m31 * ir1, 3);
 
+    mac1 = self.set_mac_flags(mac1 + color_m12 * ir2, 1);
+    mac2 = self.set_mac_flags(mac2 + color_m22 * ir2, 2);
+    mac3 = self.set_mac_flags(mac3 + color_m32 * ir2, 3);
+
+    mac1 = self.set_mac_flags(mac1 + color_m13 * ir3, 1);
+    mac2 = self.set_mac_flags(mac2 + color_m23 * ir3, 2);
+    mac3 = self.set_mac_flags(mac3 + color_m33 * ir3, 3);
+
+    self.mac[1] = (mac1 >> self.sf) as i32;
+    self.mac[2] = (mac2 >> self.sf) as i32;
+    self.mac[3] = (mac3 >> self.sf) as i32;
 
     for i in 1..4 {
       self.ir[i] = self.set_ir_flags(self.mac[i], i, self.lm);
@@ -358,9 +381,18 @@ impl COP2 {
     let tx_y = tx.1 as i64;
     let tx_z = tx.2 as i64;
 
-    let mac1 = self.set_mac_flags(tx_x * 0x1000 + mx_m11 * vx_x + mx_m12 * vx_y + mx_m13 * vx_z, 1);
-    let mac2 = self.set_mac_flags(tx_y * 0x1000 + mx_m21 * vx_x + mx_m22 * vx_y + mx_m23 * vx_z, 2);
-    let mac3 = self.set_mac_flags(tx_z * 0x1000 + mx_m31 * vx_x + mx_m32 * vx_y + mx_m33 * vx_z, 3);
+
+    let mut mac1 = self.set_mac_flags(tx_x * 0x1000 + mx_m11 * vx_x, 1);
+    let mut mac2 = self.set_mac_flags(tx_y * 0x1000 + mx_m21 * vx_x, 2);
+    let mut mac3 = self.set_mac_flags(tx_z * 0x1000 + mx_m31 * vx_x, 3);
+
+    mac1 = self.set_mac_flags(mac1 + mx_m12 * vx_y, 1);
+    mac2 = self.set_mac_flags(mac2 + mx_m22 * vx_y, 2);
+    mac3 = self.set_mac_flags(mac3 + mx_m32 * vx_y, 3);
+
+    mac1 = self.set_mac_flags(mac1 + mx_m13 * vx_z, 1);
+    mac2 = self.set_mac_flags(mac2 + mx_m23 * vx_z, 2);
+    mac3 = self.set_mac_flags(mac3 + mx_m33 * vx_z, 3);
 
     if self.cv == 2 {
       todo!("bugged cv mode 2 not implemented yet");
@@ -392,13 +424,21 @@ impl COP2 {
     let vy = self.v[index].1 as i64;
     let vz = self.v[index].2 as i64;
 
-    let temp0 = self.set_mac_flags(l11 * vx + l12 * vy + l13 * vz, 1);
-    let temp1 = self.set_mac_flags(l21 * vx + l22 * vy + l23 * vz, 2);
-    let temp2 = self.set_mac_flags(l31 * vx + l32 * vy + l33 * vz, 3);
+    let mut mac1 = self.set_mac_flags(l11 * vx, 1);
+    let mut mac2 = self.set_mac_flags(l21 * vx, 2);
+    let mut mac3 = self.set_mac_flags(l31 * vx, 3);
 
-    self.mac[1] = (temp0 >> self.sf) as i32;
-    self.mac[2] = (temp1 >> self.sf) as i32;
-    self.mac[3] = (temp2 >> self.sf) as i32;
+    mac1 = self.set_mac_flags(mac1 + l12 * vy, 1);
+    mac2 = self.set_mac_flags(mac2 + l22 * vy, 2);
+    mac3 = self.set_mac_flags(mac3 + l32 * vy, 3);
+
+    mac1 = self.set_mac_flags(mac1 + l13 * vz, 1);
+    mac2 = self.set_mac_flags(mac2 + l23 * vz, 2);
+    mac3 = self.set_mac_flags(mac3 + l33 * vz, 3);
+
+    self.mac[1] = (mac1 >> self.sf) as i32;
+    self.mac[2] = (mac2 >> self.sf) as i32;
+    self.mac[3] = (mac3 >> self.sf) as i32;
 
 
     self.ir[1] = self.set_ir_flags(self.mac[1], 1, self.lm);
@@ -425,13 +465,21 @@ impl COP2 {
     let ir2 = self.ir[2] as i64;
     let ir3 = self.ir[3] as i64;
 
-    let temp0 = self.set_mac_flags(rbk + c11 * ir1 + c12 * ir2 + c13 * ir3, 1);
-    let temp1 = self.set_mac_flags(bbk + c21 * ir1 + c22 * ir2 + c23 * ir3, 2);
-    let temp2 = self.set_mac_flags(gbk + c31 * ir1 + c32 * ir2 + c33 * ir3, 3);
+    let mut mac1 = self.set_mac_flags(rbk + c11 * ir1, 1);
+    let mut mac2 = self.set_mac_flags(bbk + c21 * ir1, 2);
+    let mut mac3 = self.set_mac_flags(gbk + c31 * ir1, 3);
 
-    self.mac[1] = (temp0 >> self.sf) as i32;
-    self.mac[2] = (temp1 >> self.sf) as i32;
-    self.mac[3] = (temp2 >> self.sf) as i32;
+    mac1 = self.set_mac_flags(mac1 + c12 * ir2, 1);
+    mac2 = self.set_mac_flags(mac2 + c22 * ir2, 2);
+    mac3 = self.set_mac_flags(mac3 + c32 * ir2, 3);
+
+    mac1 = self.set_mac_flags(mac1 + c13 * ir3, 1);
+    mac2 = self.set_mac_flags(mac2 + c23 * ir3, 2);
+    mac3 = self.set_mac_flags(mac3 + c33 * ir3, 3);
+
+    self.mac[1] = (mac1 >> self.sf) as i32;
+    self.mac[2] = (mac2 >> self.sf) as i32;
+    self.mac[3] = (mac3 >> self.sf) as i32;
 
     self.ir[1] = self.set_ir_flags(self.mac[1], 1, self.lm);
     self.ir[2] = self.set_ir_flags(self.mac[2], 2, self.lm);
@@ -537,9 +585,18 @@ impl COP2 {
     let r32 = self.rotation[2][1] as i64;
     let r33 = self.rotation[2][2] as i64;
 
-    let ssx = self.set_mac_flags(tr_x + r11 * vx + r12 * vy + r13 * vz, 1);
-    let ssy = self.set_mac_flags(tr_y + r21 * vx + r22 * vy + r23 * vz, 2);
-    let ssz = self.set_mac_flags(tr_z + r31 * vx + r32 * vy + r33 * vz, 3);
+    let mut ssx = self.set_mac_flags(tr_x + r11 * vx, 1);
+    let mut ssy = self.set_mac_flags(tr_y + r21 * vx, 2);
+    let mut ssz = self.set_mac_flags(tr_z + r31 * vx, 3);
+
+    ssx = self.set_mac_flags(ssx + r12 * vy, 1);
+    ssy = self.set_mac_flags(ssy + r22 * vy, 2);
+    ssz = self.set_mac_flags(ssz + r32 * vy, 3);
+
+    ssx = self.set_mac_flags(ssx + r13 * vz, 1);
+    ssy = self.set_mac_flags(ssy + r23 * vz, 2);
+    ssz = self.set_mac_flags(ssz + r33 * vz, 3);
+
 
     tr_z = ssz;
 
