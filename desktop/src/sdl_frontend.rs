@@ -1,37 +1,44 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use rsx::{gpu::GPU, spu::SPU, cpu::CPU, controllers::joypad::{LowInput, HighInput}};
 use sdl2::{video::Window, EventPump, event::Event, render::Canvas, pixels::PixelFormatEnum, audio::AudioCallback, Sdl, keyboard::Keycode, controller::{GameController, Button}};
 
-pub struct PsxAudioCallback<'a> {
-  pub spu: &'a mut SPU
+pub struct PsxAudioCallback {
+  pub audio_samples: VecDeque<i16>
 }
 
-impl AudioCallback for PsxAudioCallback<'_> {
+impl AudioCallback for PsxAudioCallback {
   type Channel = i16;
 
   fn callback(&mut self, buf: &mut [Self::Channel]) {
-    let mut index = 0;
-    let buffer_index = self.spu.buffer_index;
+    let len = self.audio_samples.len();
 
-    let (last_left, last_right) = if buffer_index > 1 {
-      (self.spu.audio_buffer[buffer_index - 2], self.spu.audio_buffer[buffer_index - 1])
+    let (last_left, last_right) = if len > 1 {
+      (self.audio_samples[len - 2], self.audio_samples[len - 1])
     } else {
       (0, 0)
     };
 
+    let mut index = 0;
+
     for b in buf.iter_mut() {
-      *b = if index >= buffer_index {
-        if index % 2 == 0 { last_left } else { last_right }
+      *b = if let Some(sample) = self.audio_samples.pop_front() {
+        sample
       } else {
-        self.spu.audio_buffer[index]
+        if  index % 2 == 0 { last_left } else { last_right }
       };
 
-      self.spu.previous_value = *b;
       index += 1;
     }
 
-    self.spu.buffer_index = 0;
+  }
+}
+
+impl PsxAudioCallback {
+  pub fn push_samples(&mut self, samples: Vec<i16>) {
+    for sample in samples.iter() {
+      self.audio_samples.push_back(*sample);
+    }
   }
 }
 

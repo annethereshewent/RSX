@@ -11,7 +11,7 @@ pub mod reverb;
 pub const FIFO_CAPACITY: usize = 32;
 pub const SPU_RAM_SIZE: usize = 0x80000; // 512 kb
 
-pub const NUM_SAMPLES: usize = 4096 * 2;
+pub const NUM_SAMPLES: usize = 32768;
 
 pub struct SoundRam {
   data: Box<[u8]>,
@@ -66,8 +66,7 @@ impl DataTransfer {
 }
 
 pub struct SPU {
-  pub audio_buffer: [i16; NUM_SAMPLES],
-  pub buffer_index: usize,
+  pub audio_buffer: Vec<i16>,
   pub previous_value: i16,
   cpu_cycles: i32,
   voices: [Voice; 24],
@@ -129,8 +128,7 @@ impl SPU {
       sound_ram: SoundRam::new(),
       reverb: Reverb::new(),
       endx: 0,
-      audio_buffer: [0; NUM_SAMPLES],
-      buffer_index: 0,
+      audio_buffer: Vec::with_capacity(NUM_SAMPLES),
       previous_value: 0,
       noise_level: 1,
       noise_timer: 0,
@@ -314,9 +312,8 @@ impl SPU {
   }
 
   fn push_sample(&mut self, sample: f32) {
-    if self.buffer_index < NUM_SAMPLES {
-      self.audio_buffer[self.buffer_index] = SPU::to_i16(sample);
-      self.buffer_index += 1;
+    if self.audio_buffer.len() < NUM_SAMPLES {
+      self.audio_buffer.push(SPU::to_i16(sample));
     }
   }
 

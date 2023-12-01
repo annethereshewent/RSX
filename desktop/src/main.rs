@@ -1,4 +1,4 @@
-use std::{fs::{self, File}, env};
+use std::{fs::{self, File}, env, collections::VecDeque, ops::DerefMut};
 
 pub mod sdl_frontend;
 
@@ -29,13 +29,13 @@ pub fn main() {
   let spec = AudioSpecDesired {
     freq: Some(44100),
     channels: Some(2),
-    samples: Some(4096)
+    samples: Some(2048)
   };
 
-  let device = audio_subsystem.open_playback(
+  let mut device = audio_subsystem.open_playback(
     None,
     &spec,
-    |_| PsxAudioCallback { spu: &mut cpu.bus.spu }
+    |_| PsxAudioCallback { audio_samples: VecDeque::new() }
   ).unwrap();
 
   device.resume();
@@ -52,5 +52,7 @@ pub fn main() {
 
     frontend.render(&mut cpu.bus.gpu);
     frontend.handle_events(&mut cpu);
+
+    device.lock().deref_mut().push_samples(cpu.bus.spu.audio_buffer.drain(..).collect())
   }
 }
