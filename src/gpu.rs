@@ -106,6 +106,7 @@ pub struct GPU {
   command_index: usize,
   words_remaining: u32,
   cycles: i32,
+  cpu_cycles: i32,
   dotclock_cycles: i32,
   num_scanlines: u32,
   current_scanline: u32,
@@ -182,7 +183,8 @@ impl GPU {
       drawing_area_top_left: 0,
       drawing_area_bottom_right: 0,
       draw_offset: 0,
-      debug_on: false
+      debug_on: false,
+      cpu_cycles: 0
     }
   }
 
@@ -216,7 +218,18 @@ impl GPU {
       .as_millis();
   }
 
-  pub fn tick(&mut self, cycles: i32, timers: &mut Timers) {
+  pub fn tick_counter(&mut self, cycles: i32, timers: &mut Timers) {
+    self.cpu_cycles += cycles;
+
+    // ticking for 250 cycles allows for less of a rounding error when multiplying by
+    // the gpu to cpu cycles ratio. otherwise rendering appears to be too slow.
+    if self.cpu_cycles > 250 {
+      self.tick(self.cpu_cycles, timers);
+      self.cpu_cycles = 0;
+    }
+  }
+
+  fn tick(&mut self, cycles: i32, timers: &mut Timers) {
     let elapsed_gpu_cycles = ((cycles as f64) * GPU_CYCLES_TO_CPU_CYCLES).round() as i32;
 
     let dotclock = self.get_dotclock();

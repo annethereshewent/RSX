@@ -328,7 +328,7 @@ impl Bus {
     self.cycles += cycles;
 
     self.timers.tick(cycles);
-    self.gpu.tick(cycles, &mut self.timers);
+    self.gpu.tick_counter(cycles, &mut self.timers);
     self.cdrom.tick_counter(cycles, &mut self.spu);
     self.controllers.tick(cycles);
 
