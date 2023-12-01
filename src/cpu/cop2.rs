@@ -140,6 +140,7 @@ impl COP2 {
       0x10 => self.dpcs(),
       0x12 => self.mvmva(),
       0x13 => self.ncds(),
+      0x16 => self.ncdt(),
       0x1b => self.nccs(),
       0x28 => self.sqr(),
       0x2a => self.dpct(),
@@ -156,12 +157,12 @@ impl COP2 {
       self.flags |= 1 << 31;
     }
 
-    if self.debug_on {
-      println!("{:?}", self.mac);
-      println!("{:?}", self.ir);
-      println!("{:x}", self.flags);
-      println!("{:?}", self.rgb_fifo[2]);
-    }
+    // if self.debug_on {
+    //   println!("{:?}", self.mac);
+    //   println!("{:?}", self.ir);
+    //   println!("{:x}", self.flags);
+    //   println!("{:?}", self.rgb_fifo[2]);
+    // }
 
   }
 
@@ -437,6 +438,12 @@ impl COP2 {
 
   fn ncds(&mut self) {
     self.ncd(0);
+  }
+
+  fn ncdt(&mut self) {
+    self.ncd(0);
+    self.ncd(1);
+    self.ncd(2);
   }
 
   fn mvmva(&mut self) {
