@@ -1,10 +1,9 @@
-use std::{fs::{self, File}, env, collections::VecDeque, ops::DerefMut};
+use std::{fs::{self, File}, env};
 
 pub mod sdl_frontend;
 
 use rsx::cpu::CPU;
-use sdl2::audio::AudioSpecDesired;
-use sdl_frontend::{SdlFrontend, PsxAudioCallback};
+use sdl_frontend::SdlFrontend;
 
 extern crate rsx;
 
@@ -22,23 +21,8 @@ pub fn main() {
   let sdl_context = sdl2::init().unwrap();
 
   let mut cpu = CPU::new(fs::read("../SCPH1001.BIN").unwrap(), game_file);
+
   let mut frontend = SdlFrontend::new(&sdl_context);
-
-  let audio_subsystem = sdl_context.audio().unwrap();
-
-  let spec = AudioSpecDesired {
-    freq: Some(44100),
-    channels: Some(2),
-    samples: Some(2048)
-  };
-
-  let mut device = audio_subsystem.open_playback(
-    None,
-    &spec,
-    |_| PsxAudioCallback { audio_samples: VecDeque::new() }
-  ).unwrap();
-
-  device.resume();
 
   if args.len() == 3 {
     cpu.load_exe(&args[2]);
@@ -52,7 +36,6 @@ pub fn main() {
 
     frontend.render(&mut cpu.bus.gpu);
     frontend.handle_events(&mut cpu);
-
-    device.lock().deref_mut().push_samples(cpu.bus.spu.audio_buffer.drain(..).collect())
+    frontend.push_samples(cpu.bus.spu.audio_buffer.drain(..).collect());
   }
 }

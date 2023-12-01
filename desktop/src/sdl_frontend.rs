@@ -1,10 +1,10 @@
-use std::collections::{HashMap, VecDeque};
+use std::{collections::{HashMap, VecDeque}, ops::DerefMut};
 
-use rsx::{gpu::GPU, spu::SPU, cpu::CPU, controllers::joypad::{LowInput, HighInput}};
-use sdl2::{video::Window, EventPump, event::Event, render::Canvas, pixels::PixelFormatEnum, audio::AudioCallback, Sdl, keyboard::Keycode, controller::{GameController, Button}};
+use rsx::{gpu::GPU, cpu::CPU, controllers::joypad::{LowInput, HighInput}};
+use sdl2::{video::Window, EventPump, event::Event, render::Canvas, pixels::PixelFormatEnum, audio::{AudioCallback, AudioSpecDesired, AudioDevice}, Sdl, keyboard::Keycode, controller::{GameController, Button}};
 
 pub struct PsxAudioCallback {
-  pub audio_samples: VecDeque<i16>
+  audio_samples: VecDeque<i16>
 }
 
 impl AudioCallback for PsxAudioCallback {
@@ -39,6 +39,10 @@ impl PsxAudioCallback {
     for sample in samples.iter() {
       self.audio_samples.push_back(*sample);
     }
+
+    while self.audio_samples.len() > 1024 * 16 {
+      self.audio_samples.pop_back().unwrap();
+    }
   }
 }
 
@@ -46,7 +50,8 @@ pub struct SdlFrontend {
   event_pump: EventPump,
   canvas: Canvas<Window>,
   _controller: Option<GameController>,
-  button_map: HashMap<Button, (bool, u8)>
+  button_map: HashMap<Button, (bool, u8)>,
+  device: AudioDevice<PsxAudioCallback>
 }
 
 impl SdlFrontend {
@@ -82,6 +87,22 @@ impl SdlFrontend {
         }
       });
 
+    let audio_subsystem = sdl_context.audio().unwrap();
+
+    let spec = AudioSpecDesired {
+      freq: Some(44100),
+      channels: Some(2),
+      samples: Some(1024)
+    };
+
+    let device = audio_subsystem.open_playback(
+      None,
+      &spec,
+      |_| PsxAudioCallback { audio_samples: VecDeque::new() }
+    ).unwrap();
+
+    device.resume();
+
     let mut button_map = HashMap::new();
 
     button_map.insert(Button::A, (true, HighInput::ButtonCross as u8));
@@ -108,7 +129,8 @@ impl SdlFrontend {
       event_pump,
       canvas,
       _controller,
-      button_map
+      button_map,
+      device
     }
   }
 
@@ -159,6 +181,10 @@ impl SdlFrontend {
         _ => {},
     };
     }
+  }
+
+  pub fn push_samples(&mut self, samples: Vec<i16>) {
+    self.device.lock().deref_mut().push_samples(samples);
   }
 
   pub fn render(&mut self, gpu: &mut GPU) {
