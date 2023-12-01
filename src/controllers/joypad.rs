@@ -37,7 +37,7 @@ impl Joypad {
   pub fn new() -> Self {
     Self {
       state: 0,
-      digital_mode: false,
+      digital_mode: true,
       rx_axis: 128,
       ry_axis: 128,
       lx_axis: 128,
@@ -65,6 +65,22 @@ impl Joypad {
     } else {
       self.high_input |= 1 << input;
     }
+  }
+
+  pub fn set_rightx(&mut self, value: u8) {
+    self.rx_axis = value;
+  }
+
+  pub fn set_righty(&mut self, value: u8) {
+    self.ry_axis = value;
+  }
+
+  pub fn set_leftx(&mut self, value: u8) {
+    self.lx_axis = value;
+  }
+
+  pub fn set_lefty(&mut self, value: u8) {
+    self.ly_axis = value;
   }
 
   pub fn reply(&mut self, command: u8) -> u8 {

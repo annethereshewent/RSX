@@ -1,7 +1,7 @@
 use std::{collections::{HashMap, VecDeque}, ops::DerefMut};
 
 use rsx::{gpu::GPU, cpu::CPU, controllers::joypad::{LowInput, HighInput}};
-use sdl2::{video::Window, EventPump, event::Event, render::Canvas, pixels::PixelFormatEnum, audio::{AudioCallback, AudioSpecDesired, AudioDevice}, Sdl, keyboard::Keycode, controller::{GameController, Button}};
+use sdl2::{video::Window, EventPump, event::Event, render::Canvas, pixels::PixelFormatEnum, audio::{AudioCallback, AudioSpecDesired, AudioDevice}, Sdl, keyboard::Keycode, controller::{GameController, Button, Axis}};
 
 pub struct PsxAudioCallback {
   audio_samples: VecDeque<i16>
@@ -176,7 +176,15 @@ impl SdlFrontend {
           }
         }
         Event::ControllerAxisMotion { axis, value, .. } => {
-
+          let normalized_value = ((value >> 8) + 128) as u8;
+          match axis {
+            Axis::LeftX => joypad.set_leftx(normalized_value),
+            Axis::LeftY => joypad.set_lefty(normalized_value),
+            Axis::RightX => joypad.set_rightx(normalized_value),
+            Axis::RightY => joypad.set_rightx(normalized_value),
+            Axis::TriggerLeft => joypad.set_high_input(HighInput::ButtonL2 as u8, normalized_value >= 192),
+            Axis::TriggerRight => joypad.set_high_input(HighInput::ButtonR2 as u8, normalized_value >= 192)
+          }
         }
         _ => {},
     };
