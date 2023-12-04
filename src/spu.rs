@@ -257,6 +257,13 @@ impl SPU {
 
       let (sample_left, sample_right) = voice.get_samples(self.noise_level);
 
+      if (i == 1) {
+        self.sound_ram.write_16(self.capture_index + 0x800, SPU::to_i16(sample_left) as u16);
+      }
+      if (i == 3) {
+        self.sound_ram.write_16(self.capture_index + 0xc00, SPU::to_i16(sample_left) as u16);
+      }
+
       output_left += sample_left;
       output_right += sample_right;
 
@@ -294,10 +301,6 @@ impl SPU {
 
     self.sound_ram.write_16(self.capture_index, SPU::to_i16(cd_left) as u16);
     self.sound_ram.write_16(self.capture_index + 0x400, SPU::to_i16(cd_right) as u16);
-
-    // fake writes to capture buffer
-    self.sound_ram.write_16(self.capture_index + 0x800, 0);
-    self.sound_ram.write_16(self.capture_index + 0xc00, 0);
 
     self.capture_index = (self.capture_index + 2) & 0x3ff;
     self.writing_to_capture_half = self.capture_index >= 0x200;
