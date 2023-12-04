@@ -138,11 +138,33 @@ pub struct GPU {
   drawing_area_bottom_right: u32,
   draw_offset: u32,
   pub debug_on: bool,
-  dither_table: [[[u8; 0x200]; 4]; 4]
+  dither_table: [[[u8; 0x200]; 4]; 4],
+  polyline: bool,
+  polylines_remaining: u8
 }
 
 impl GPU {
   pub fn new(interrupts: Rc<Cell<InterruptRegisters>>) -> Self {
+    let mut dither_table = [[[0; 0x200]; 4]; 4];
+
+    for x in 0..4 {
+      for y in 0..4 {
+        for i in 0..0x200 {
+          let out = i + DITHER_OFFSETS[x][y];
+
+          let out = if out < 0 {
+            0
+          } else if out > 0xff {
+            0xff
+          } else {
+            out as u8
+          };
+
+          dither_table[x][y][i as usize] = out;
+        }
+      }
+    }
+
     Self {
       stat: GpuStatRegister::new(),
       texture_rectangle_x_flip: false,
@@ -194,7 +216,9 @@ impl GPU {
       draw_offset: 0,
       debug_on: false,
       cpu_cycles: 0,
-      dither_table: [[[0; 0x200]; 4]; 4]
+      dither_table,
+      polyline: false,
+      polylines_remaining: 0
     }
   }
 
@@ -402,6 +426,10 @@ impl GPU {
       return;
     }
 
+    if self.polyline {
+      self.process_polyline(val);
+    }
+
     self.command_buffer[self.command_index] = val;
     self.command_index += 1;
 
@@ -429,6 +457,7 @@ impl GPU {
       0x01 => self.gp0_invalidate_cache(),
       0x02 => self.gp0_fill_vram(),
       0x20..=0x3f => self.gp0_draw_polygon(),
+      0x40..=0x5f => self.gp0_draw_line(),
       0x60..=0x7f => self.gp0_draw_rectangle(),
       0x80..=0x9f => self.gp0_vram_to_vram_transfer(),
       0xa0 => self.gp0_image_transfer_to_vram(),
@@ -440,6 +469,25 @@ impl GPU {
       0xe5 => self.gp0_drawing_offset(),
       0xe6 => self.gp0_mask_bit(),
       _ => todo!("invalid or unsupported GP0 command: {:02x}", op_code)
+    }
+  }
+
+  fn process_polyline(&mut self, word: u32) {
+    if (word & 0xf000f000) == 0x5000_5000 {
+      self.polyline = false;
+      return;
+    }
+
+    println!("inside polyline, received op code {:x}", word >> 24);
+
+    self.command_buffer[self.command_index] = word;
+    self.command_index += 1;
+
+    self.polylines_remaining -= 1;
+
+    if self.polylines_remaining == 0 {
+
+      // self.rasterize_line();
     }
   }
 
@@ -684,6 +732,40 @@ impl GPU {
     self.stat.set_mask_attributes(val);
   }
 
+  fn gp0_draw_line(&mut self) {
+    let word = self.command_buffer[0];
+
+    let shaded = (word >> 28) & 0b1 == 1;
+    self.polyline = (word >> 27) & 0b1 == 1;
+    let semi_transparent = (word >> 25) & 0b1 == 1;
+
+    self.polylines_remaining = if shaded {
+      1
+    } else {
+      2
+    };
+
+    if !self.polyline {
+      let color = GPU::parse_color(word);
+      let mut color2 = color;
+
+      let mut buffer_pos = 1;
+
+      let start_position = self.parse_position(self.command_buffer[buffer_pos]);
+
+      buffer_pos += 1;
+
+      if shaded {
+        color2 = GPU::parse_color(self.command_buffer[buffer_pos]);
+        buffer_pos += 1;
+      }
+
+      let end_position = self.parse_position(self.command_buffer[buffer_pos]);
+
+      self.rasterize_line(start_position, end_position, &mut [color, color2], shaded, semi_transparent);
+    }
+  }
+
   fn gp0_draw_rectangle(&mut self) {
     let word = self.command_buffer[0];
 
@@ -813,30 +895,6 @@ impl GPU {
 
     self.texture_rectangle_x_flip = ((val >> 12) & 0b1) == 1;
     self.texture_rectangle_y_flip = ((val >> 13) & 0b1) == 1;
-
-    if self.stat.dither_enabled && !previous_dither {
-      self.build_dither_table();
-    }
-  }
-
-  fn build_dither_table(&mut self) {
-    for x in 0..4 {
-      for y in 0..4 {
-        for i in 0..0x200 {
-          let out = i + DITHER_OFFSETS[x][y];
-
-          let out = if out < 0 {
-            0
-          } else if out > 0xff {
-            0xff
-          } else {
-            out as u8
-          };
-
-          self.dither_table[x][y][i as usize] = out;
-        }
-      }
-    }
   }
 
   fn gp0_draw_area_top_left(&mut self) {

@@ -1,4 +1,4 @@
-use std::cmp;
+use std::{cmp, mem};
 
 use super::{GPU, gpu_stat_register::{ColorDepth, TextureColors, SemiTransparency}, RgbColor};
 
@@ -162,6 +162,61 @@ impl GPU {
 
   fn add_quarter_semitransparency(x: u8, y: u8) -> u8 {
     cmp::min(255, (x as u32 + y as u32) / 4) as u8
+  }
+
+  pub fn rasterize_line(&mut self, mut start_position: (i32, i32), mut end_position: (i32, i32), colors: &mut [RgbColor], shaded: bool, semi_transparent: bool) {
+    if start_position.0 >= end_position.0 {
+      mem::swap(&mut start_position, &mut end_position);
+    }
+
+    let start_x = start_position.0;
+    let start_y = start_position.1;
+
+    let end_x = end_position.0;
+    let end_y = end_position.1;
+
+    let diff_x = (end_x - start_x).abs();
+    let diff_y = (end_y - start_y).abs();
+
+    if diff_x > 1024 || diff_y > 512 || (diff_x == 0 && diff_y == 0) {
+      return;
+    }
+
+    // so basically, to draw the line, get the slope of the line and follow the slope and render the line that way. this is cheap but it should work?
+    let slope = (diff_y / diff_x) as f32;
+
+    // for the colors we can do something similar and create a "slope" based on the x coordinate and the difference between the rgb color values
+    // use fixed point to make conversion to u8 easier
+    let mut color_r_fp = (colors[0].r as i32) << 12;
+    let mut color_g_fp = (colors[0].g as i32) << 12;
+    let mut color_b_fp = (colors[0].b as i32) << 12;
+
+    let r_slope = (((colors[1].r - colors[0].r) as i32) << 12) / diff_x;
+    let g_slope = (((colors[1].g - colors[0].g) as i32) << 12) / diff_x;
+    let b_slope = (((colors[1].b - colors[0].b) as i32) << 12) / diff_x;
+
+    let mut color = colors[0];
+
+    for x in start_x..=end_x {
+      color.r = (color_r_fp >> 12) as u8;
+      color.g = (color_g_fp >> 12) as u8;
+      color.b = (color_b_fp >> 12) as u8;
+
+      let y = (slope * x as f32) as i32 + start_y;
+
+      if shaded {
+        color_r_fp += r_slope;
+        color_g_fp += g_slope;
+        color_b_fp += b_slope;
+      }
+
+      if self.stat.dither_enabled {
+        self.dither((x, y), &mut color);
+      }
+
+      self.render_pixel((x, y), color, false, semi_transparent);
+    }
+
   }
 
   pub fn rasterize_rectangle(&mut self, color: RgbColor, coordinates: (i32, i32), tex_coordinates: (i32, i32), clut: (i32, i32), dimensions: (u32, u32), textured: bool, blended: bool, semi_transparent: bool) {
