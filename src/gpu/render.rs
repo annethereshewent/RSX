@@ -4,7 +4,7 @@ use super::{GPU, gpu_stat_register::{ColorDepth, TextureColors, SemiTransparency
 
 impl GPU {
   fn cross_product(a: (i32, i32), b: (i32, i32), c: (i32, i32)) -> i32 {
-    (a.0 - b.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0)
+    (b.0 - a.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0)
   }
 
   pub fn update_picture(&mut self) {

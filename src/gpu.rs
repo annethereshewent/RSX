@@ -140,7 +140,11 @@ pub struct GPU {
   pub debug_on: bool,
   dither_table: [[[u8; 0x200]; 4]; 4],
   polyline: bool,
-  polylines_remaining: u8
+  polyline_words_remaining: u8,
+  polyline_prev_coord: (i32, i32),
+  polyline_prev_color: RgbColor,
+  polyline_shaded: bool,
+  polyline_semitransparent: bool
 }
 
 impl GPU {
@@ -218,7 +222,16 @@ impl GPU {
       cpu_cycles: 0,
       dither_table,
       polyline: false,
-      polylines_remaining: 0
+      polyline_words_remaining: 0,
+      polyline_prev_coord: (0, 0),
+      polyline_prev_color: RgbColor {
+        r: 0,
+        g: 0,
+        b: 0,
+        a: false
+      },
+      polyline_shaded: false,
+      polyline_semitransparent: false
     }
   }
 
@@ -478,16 +491,37 @@ impl GPU {
       return;
     }
 
-    println!("inside polyline, received op code {:x}", word >> 24);
-
     self.command_buffer[self.command_index] = word;
     self.command_index += 1;
 
-    self.polylines_remaining -= 1;
+    self.polyline_words_remaining -= 1;
 
-    if self.polylines_remaining == 0 {
+    if self.polyline_words_remaining == 0 {
 
-      // self.rasterize_line();
+      let mut buffer_index = 0;
+
+      let mut color2 = self.polyline_prev_color;
+
+      if self.polyline_shaded {
+        color2 = GPU::parse_color(self.command_buffer[buffer_index]);
+
+        buffer_index += 1;
+      }
+
+      let end_position = self.parse_position(self.command_buffer[buffer_index]);
+
+      self.rasterize_line(self.polyline_prev_coord, end_position, &mut [self.polyline_prev_color, color2], self.polyline_shaded, self.polyline_semitransparent);
+
+      self.polyline_prev_coord = end_position;
+      self.polyline_prev_color = color2;
+
+      self.polyline_words_remaining = if self.polyline_shaded {
+        2
+      } else {
+        1
+      };
+
+      self.command_index = 0;
     }
   }
 
@@ -739,31 +773,37 @@ impl GPU {
     self.polyline = (word >> 27) & 0b1 == 1;
     let semi_transparent = (word >> 25) & 0b1 == 1;
 
-    self.polylines_remaining = if shaded {
-      1
-    } else {
+    self.polyline_words_remaining = if shaded {
       2
+    } else {
+      1
     };
 
-    if !self.polyline {
-      let color = GPU::parse_color(word);
-      let mut color2 = color;
+    let color = GPU::parse_color(word);
+    let mut color2 = color;
 
-      let mut buffer_pos = 1;
+    let mut buffer_pos = 1;
 
-      let start_position = self.parse_position(self.command_buffer[buffer_pos]);
+    let start_position = self.parse_position(self.command_buffer[buffer_pos]);
 
+    buffer_pos += 1;
+
+    if shaded {
+      color2 = GPU::parse_color(self.command_buffer[buffer_pos]);
       buffer_pos += 1;
-
-      if shaded {
-        color2 = GPU::parse_color(self.command_buffer[buffer_pos]);
-        buffer_pos += 1;
-      }
-
-      let end_position = self.parse_position(self.command_buffer[buffer_pos]);
-
-      self.rasterize_line(start_position, end_position, &mut [color, color2], shaded, semi_transparent);
     }
+
+    let end_position = self.parse_position(self.command_buffer[buffer_pos]);
+
+    self.rasterize_line(start_position, end_position, &mut [color, color2], shaded, semi_transparent);
+
+    if self.polyline {
+      self.polyline_prev_color = color2;
+      self.polyline_prev_coord = end_position;
+      self.polyline_shaded = shaded;
+      self.polyline_semitransparent = semi_transparent;
+    }
+
   }
 
   fn gp0_draw_rectangle(&mut self) {
