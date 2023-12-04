@@ -41,7 +41,7 @@ impl PsxAudioCallback {
     }
 
     while self.audio_samples.len() > 1024 * 16 {
-      self.audio_samples.pop_back().unwrap();
+      self.audio_samples.pop_front().unwrap();
     }
   }
 }

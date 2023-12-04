@@ -257,10 +257,10 @@ impl SPU {
 
       let (sample_left, sample_right) = voice.get_samples(self.noise_level);
 
-      if (i == 1) {
+      if i == 1 {
         self.sound_ram.write_16(self.capture_index + 0x800, SPU::to_i16(sample_left) as u16);
       }
-      if (i == 3) {
+      if i == 3 {
         self.sound_ram.write_16(self.capture_index + 0xc00, SPU::to_i16(sample_left) as u16);
       }
 
