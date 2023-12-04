@@ -271,6 +271,10 @@ impl GPU {
 
           if is_shaded {
             output = GPU::interpolate_color(area as i32, vec_3d, c[0], c[1], c[2]);
+
+            if self.stat.dither_enabled {
+              self.dither(curr_p, &mut output);
+            }
           }
 
           if is_textured {
@@ -280,6 +284,10 @@ impl GPU {
             if let Some(mut texture) = self.get_texture(uv, clut) {
               if is_blended {
                 GPU::blend_colors(&mut texture, &blend_color);
+
+                if self.stat.dither_enabled {
+                  self.dither(curr_p, &mut texture);
+                }
               }
 
               output = texture;
@@ -497,6 +505,15 @@ impl GPU {
     } else {
       None
     }
+  }
+
+  fn dither(&mut self, position: (i32, i32), pixel: &mut RgbColor) {
+    let x = (position.0 & 3) as usize;
+    let y = (position.1 & 3) as usize;
+
+    pixel.r = self.dither_table[x][y][pixel.r as usize];
+    pixel.g = self.dither_table[x][y][pixel.g as usize];
+    pixel.b = self.dither_table[x][y][pixel.b as usize];
   }
 
 

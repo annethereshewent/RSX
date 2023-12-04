@@ -19,6 +19,14 @@ const COMMAND_LENGTH: [u32; 256] = [
   1, 1,
 ];
 
+// per https://psx-spx.consoledev.net/graphicsprocessingunitgpu/#24bit-rgb-to-15bit-rgb-dithering-enabled-in-texpage-attribute
+const DITHER_OFFSETS: [[i16; 4]; 4] = [
+  [-4, 0, -3, 1],
+  [2, -2, 3, -1],
+  [-3, 1, -4, 0],
+  [3, -1, 2, -2],
+];
+
 pub const CYCLES_PER_SCANLINE: usize = 3413;
 pub const NUM_SCANLINES_PER_FRAME: usize = 263;
 
@@ -129,7 +137,8 @@ pub struct GPU {
   drawing_area_top_left: u32,
   drawing_area_bottom_right: u32,
   draw_offset: u32,
-  pub debug_on: bool
+  pub debug_on: bool,
+  dither_table: [[[u8; 0x200]; 4]; 4]
 }
 
 impl GPU {
@@ -184,7 +193,8 @@ impl GPU {
       drawing_area_bottom_right: 0,
       draw_offset: 0,
       debug_on: false,
-      cpu_cycles: 0
+      cpu_cycles: 0,
+      dither_table: [[[0; 0x200]; 4]; 4]
     }
   }
 
@@ -797,10 +807,36 @@ impl GPU {
   fn gp0_draw_mode(&mut self) {
     let val = self.command_buffer[0];
 
+    let previous_dither = self.stat.dither_enabled;
+
     self.stat.update_draw_mode(val);
 
     self.texture_rectangle_x_flip = ((val >> 12) & 0b1) == 1;
     self.texture_rectangle_y_flip = ((val >> 13) & 0b1) == 1;
+
+    if self.stat.dither_enabled && !previous_dither {
+      self.build_dither_table();
+    }
+  }
+
+  fn build_dither_table(&mut self) {
+    for x in 0..4 {
+      for y in 0..4 {
+        for i in 0..0x200 {
+          let out = i + DITHER_OFFSETS[x][y];
+
+          let out = if out < 0 {
+            0
+          } else if out > 0xff {
+            0xff
+          } else {
+            out as u8
+          };
+
+          self.dither_table[x][y][i as usize] = out;
+        }
+      }
+    }
   }
 
   fn gp0_draw_area_top_left(&mut self) {
