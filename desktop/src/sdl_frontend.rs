@@ -40,7 +40,7 @@ impl PsxAudioCallback {
       self.audio_samples.push_back(*sample);
     }
 
-    while self.audio_samples.len() > 1024 * 16 {
+    while self.audio_samples.len() > 32768 {
       self.audio_samples.pop_front().unwrap();
     }
   }
@@ -92,7 +92,7 @@ impl SdlFrontend {
     let spec = AudioSpecDesired {
       freq: Some(44100),
       channels: Some(2),
-      samples: Some(1024)
+      samples: Some(512)
     };
 
     let device = audio_subsystem.open_playback(
