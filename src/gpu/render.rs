@@ -3,8 +3,8 @@ use std::{cmp, mem};
 use super::{GPU, gpu_stat_register::{ColorDepth, TextureColors, SemiTransparency}, RgbColor};
 
 impl GPU {
-  fn get_2d_area(pos1: (i32, i32), pos2: (i32, i32), pos3: (i32, i32)) -> i32 {
-    (pos2.0 - pos1.0) * (pos3.1 - pos1.1) - (pos2.1 - pos1.1) * (pos3.0 - pos1.0)
+  fn cross_product(a: (i32, i32), b: (i32, i32), c: (i32, i32)) -> i32 {
+    (a.0 - b.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0)
   }
 
   pub fn update_picture(&mut self) {
@@ -165,7 +165,7 @@ impl GPU {
   }
 
   pub fn rasterize_line(&mut self, mut start_position: (i32, i32), mut end_position: (i32, i32), colors: &mut [RgbColor], shaded: bool, semi_transparent: bool) {
-    if start_position.0 >= end_position.0 {
+    if start_position.0 > end_position.0 {
       mem::swap(&mut start_position, &mut end_position);
     }
 
@@ -184,45 +184,75 @@ impl GPU {
       return;
     }
 
-    // so basically, to draw the line, get the slope of the line and follow the slope and render the line that way.
-    // convert to fixed point to be less resource intensive than using floating point
-    // let slope = (diff_y / diff_x) as f32;
-    let slope = ((diff_y as i64) << 12) / diff_x as i64;
-
-    // for the colors we can do something similar and create a "slope" based on the x coordinate and the difference between the rgb color values
-    // use fixed point to make conversion to u8 easier
     let mut color_r_fp = (colors[0].r as i32) << 12;
     let mut color_g_fp = (colors[0].g as i32) << 12;
     let mut color_b_fp = (colors[0].b as i32) << 12;
 
-    let r_slope = (((colors[1].r - colors[0].r) as i32) << 12) / diff_x;
-    let g_slope = (((colors[1].g - colors[0].g) as i32) << 12) / diff_x;
-    let b_slope = (((colors[1].b - colors[0].b) as i32) << 12) / diff_x;
+    if diff_x != 0 {
+      // so basically, to draw the line, get the slope of the line and follow the slope and render the line that way.
+      // convert to fixed point to be less resource intensive than using floating point
+      // let slope = (diff_y / diff_x) as f32;
+      let slope = ((diff_y as i64) << 12) / diff_x as i64;
 
-    let mut color = colors[0];
+      // for the colors we can do something similar and create a "slope" based on the x coordinate and the difference between the rgb color values
+      // use fixed point to make conversion to u8 easier
+      let r_slope = (((colors[1].r - colors[0].r) as i32) << 12) / diff_x;
+      let g_slope = (((colors[1].g - colors[0].g) as i32) << 12) / diff_x;
+      let b_slope = (((colors[1].b - colors[0].b) as i32) << 12) / diff_x;
 
-    for x in start_x..=end_x {
-      color.r = (color_r_fp >> 12) as u8;
-      color.g = (color_g_fp >> 12) as u8;
-      color.b = (color_b_fp >> 12) as u8;
+      let mut color = colors[0];
 
-      let x_fp = (x as i64) << 12;
+      for x in start_x..=end_x {
+        color.r = (color_r_fp >> 12) as u8;
+        color.g = (color_g_fp >> 12) as u8;
+        color.b = (color_b_fp >> 12) as u8;
 
-      let y = ((x_fp * slope) >> 12) as i32 + start_y;
+        let x_fp = (x as i64) << 12;
 
-      if shaded {
-        color_r_fp += r_slope;
-        color_g_fp += g_slope;
-        color_b_fp += b_slope;
+        let y = ((x_fp * slope) >> 12) as i32 + start_y;
+
+        if shaded {
+          color_r_fp += r_slope;
+          color_g_fp += g_slope;
+          color_b_fp += b_slope;
+        }
+
+        if self.stat.dither_enabled {
+          self.dither((x, y), &mut color);
+        }
+
+        self.render_pixel((x, y), color, false, semi_transparent);
       }
+    } else {
+      // line is vertical, just render from start y to end y
 
-      if self.stat.dither_enabled {
-        self.dither((x, y), &mut color);
+      // create a "slope" based on the change in y instead of change in x
+      let diff_y = diff_y.abs();
+
+      let r_slope = (((colors[1].r - colors[0].r) as i32) << 12) / diff_y;
+      let g_slope = (((colors[1].g - colors[0].g) as i32) << 12) / diff_y;
+      let b_slope = (((colors[1].b - colors[0].b) as i32) << 12) / diff_y;
+
+      let mut color = colors[0];
+
+      for y in start_y..=end_y {
+        color.r = (color_r_fp >> 12) as u8;
+        color.g = (color_g_fp >> 12) as u8;
+        color.b = (color_b_fp >> 12) as u8;
+
+        if shaded {
+          color_r_fp += r_slope;
+          color_g_fp += g_slope;
+          color_b_fp += b_slope;
+        }
+
+        if self.stat.dither_enabled {
+          self.dither((start_x, y), &mut color);
+        }
+
+        self.render_pixel((start_x, y), color, false, semi_transparent);
       }
-
-      self.render_pixel((x, y), color, false, semi_transparent);
     }
-
   }
 
   pub fn rasterize_rectangle(&mut self, color: RgbColor, coordinates: (i32, i32), tex_coordinates: (i32, i32), clut: (i32, i32), dimensions: (u32, u32), textured: bool, blended: bool, semi_transparent: bool) {
@@ -256,18 +286,18 @@ impl GPU {
   }
 
   pub fn rasterize_triangle(&mut self, c: &mut [RgbColor], p: &mut [(i32, i32)], t: &mut [(i32,i32)], clut: (i32, i32), is_textured: bool, is_shaded: bool, is_blended: bool, semi_transparent: bool) {
-    let mut area = GPU::get_2d_area(p[0], p[1], p[2]);
+    let mut cross_product = GPU::cross_product(p[0], p[1], p[2]);
 
-    if area == 0 {
+    if cross_product == 0 {
       return;
     }
 
-    if area < 0 {
+    if cross_product < 0 {
       p.swap(1, 2);
       c.swap(1, 2);
       t.swap(1, 2);
 
-      area = -area;
+      cross_product = -cross_product;
     }
 
     let mut min_x = cmp::min(p[0].0, cmp::min(p[1].0, p[2].0));
@@ -309,9 +339,9 @@ impl GPU {
 
     let mut curr_p = (min_x, min_y);
 
-    let mut w0_row = GPU::get_2d_area(p[1], p[2], curr_p) as i32;
-    let mut w1_row = GPU::get_2d_area(p[2], p[0], curr_p) as i32;
-    let mut w2_row = GPU::get_2d_area(p[0], p[1], curr_p) as i32;
+    let mut w0_row = GPU::cross_product(p[1], p[2], curr_p) as i32;
+    let mut w1_row = GPU::cross_product(p[2], p[0], curr_p) as i32;
+    let mut w2_row = GPU::cross_product(p[0], p[1], curr_p) as i32;
 
     let w0_bias = -(GPU::is_top_left(b12, a12) as i32);
     let w1_bias = -(GPU::is_top_left(b20, a20) as i32);
@@ -331,7 +361,7 @@ impl GPU {
           let vec_3d = (w0, w1, w2);
 
           if is_shaded {
-            output = GPU::interpolate_color(area as i32, vec_3d, c[0], c[1], c[2]);
+            output = GPU::interpolate_color(cross_product as i32, vec_3d, c[0], c[1], c[2]);
 
             if self.stat.dither_enabled {
               self.dither(curr_p, &mut output);
@@ -339,7 +369,7 @@ impl GPU {
           }
 
           if is_textured {
-            let mut uv = GPU::interpolate_texture_coordinates(area, vec_3d, t[0], t[1], t[2]);
+            let mut uv = GPU::interpolate_texture_coordinates(cross_product, vec_3d, t[0], t[1], t[2]);
             uv = self.mask_texture_coordinates(uv);
 
             if let Some(mut texture) = self.get_texture(uv, clut) {
