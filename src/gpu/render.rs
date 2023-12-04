@@ -175,15 +175,19 @@ impl GPU {
     let end_x = end_position.0;
     let end_y = end_position.1;
 
-    let diff_x = (end_x - start_x).abs();
-    let diff_y = (end_y - start_y).abs();
 
-    if diff_x > 1024 || diff_y > 512 || (diff_x == 0 && diff_y == 0) {
+    let diff_x = end_x - start_x;
+    let diff_y = end_y - start_y;
+
+    // no need to use .abs() on diff_x, as end_x is guaranteed to be after start_x due to mem swap above
+    if diff_x > 1024 || diff_y.abs() > 512 || (diff_x == 0 && diff_y == 0) {
       return;
     }
 
-    // so basically, to draw the line, get the slope of the line and follow the slope and render the line that way. this is cheap but it should work?
-    let slope = (diff_y / diff_x) as f32;
+    // so basically, to draw the line, get the slope of the line and follow the slope and render the line that way.
+    // convert to fixed point to be less resource intensive than using floating point
+    // let slope = (diff_y / diff_x) as f32;
+    let slope = ((diff_y as i64) << 12) / diff_x as i64;
 
     // for the colors we can do something similar and create a "slope" based on the x coordinate and the difference between the rgb color values
     // use fixed point to make conversion to u8 easier
@@ -202,7 +206,9 @@ impl GPU {
       color.g = (color_g_fp >> 12) as u8;
       color.b = (color_b_fp >> 12) as u8;
 
-      let y = (slope * x as f32) as i32 + start_y;
+      let x_fp = (x as i64) << 12;
+
+      let y = ((x_fp * slope) >> 12) as i32 + start_y;
 
       if shaded {
         color_r_fp += r_slope;
