@@ -27,6 +27,7 @@ pub fn main() {
   if args.len() == 3 {
     cpu.load_exe(&args[2]);
   }
+
   loop {
     while !cpu.bus.gpu.frame_complete {
       cpu.step();
