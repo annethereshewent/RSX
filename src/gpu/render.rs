@@ -1,5 +1,7 @@
 use std::{cmp, mem};
 
+use crate::util;
+
 use super::{GPU, gpu_stat_register::{ColorDepth, TextureColors, SemiTransparency}, RgbColor, Coordinates2d, Coordinates3d};
 
 impl GPU {
@@ -24,7 +26,7 @@ impl GPU {
           ColorDepth::FifteenBit => {
             let vram_address = GPU::get_vram_address(x as u32, y as u32);
 
-            let color = (self.vram[vram_address] as u16) | (self.vram[vram_address + 1] as u16) << 8;
+            let color = util::read_half(&self.vram, vram_address);
 
             let color = GPU::translate_15bit_to_24(color);
 
@@ -87,7 +89,7 @@ impl GPU {
     }
 
     if (!textured || color.a) && semi_transparent {
-      let val = (self.vram[vram_address] as u16) | (self.vram[vram_address + 1] as u16) << 8;
+      let val = util::read_half(&self.vram, vram_address);
       let prev_color = GPU::translate_15bit_to_24(val);
 
       let (r,g, b) = match self.stat.semi_transparency {
@@ -525,7 +527,7 @@ impl GPU {
     if self.clut_tag != clut_address {
       for i in 0..16 {
         let address = (clut_address as usize) + 2 * i;
-        self.clut_cache[i] = (self.vram[address] as u16) | (self.vram[address + 1] as u16) << 8;
+        self.clut_cache[i] = util::read_half(&self.vram, address);
       }
 
       self.clut_tag = clut_address;
@@ -574,7 +576,7 @@ impl GPU {
       for i in 0..256 {
         let address = clut_address + 2 * i;
 
-        self.clut_cache[i] = (self.vram[address] as u16) | (self.vram[address + 1] as u16) << 8;
+        self.clut_cache[i] = util::read_half(&self.vram, address);
       }
 
       self.clut_tag = clut_address as isize;

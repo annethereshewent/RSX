@@ -1,6 +1,6 @@
 use std::{rc::Rc, cell::Cell, time::{UNIX_EPOCH, SystemTime, Duration}, thread::sleep};
 
-use crate::cpu::{CPU_FREQUENCY, interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}, timers::timers::Timers};
+use crate::{cpu::{CPU_FREQUENCY, interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}, timers::timers::Timers}, util};
 
 use self::gpu_stat_register::{GpuStatRegister, VideoMode, TextureColors, SemiTransparency};
 
@@ -428,7 +428,7 @@ impl GPU {
 
     let vram_address = GPU::get_vram_address(x, y);
 
-    (self.vram[vram_address] as u16) | (self.vram[vram_address + 1] as u16) << 8
+    util::read_half(&self.vram, vram_address)
   }
 
   pub fn get_vram_address(x: u32, y: u32) -> usize {
