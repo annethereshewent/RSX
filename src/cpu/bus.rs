@@ -362,9 +362,11 @@ impl Bus {
   }
 
   pub fn reset_cycles(&mut self) {
+    let cycles = self.cycles;
     self.cycles = 0;
-    self.last_timer_sync -= self.cycles;
-    self.last_sync -= self.cycles;
+
+    self.last_timer_sync -= cycles;
+    self.last_sync -= cycles;
   }
 
   pub fn sync_timers(&mut self) {

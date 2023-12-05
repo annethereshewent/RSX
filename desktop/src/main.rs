@@ -38,10 +38,10 @@ pub fn main() {
 
     cpu.bus.gpu.frame_complete = false;
 
+    cpu.bus.reset_cycles();
+
     frontend.render(&mut cpu.bus.gpu);
     frontend.handle_events(&mut cpu);
     frontend.push_samples(cpu.bus.spu.audio_buffer.drain(..).collect());
-
-
   }
 }
