@@ -486,7 +486,7 @@ impl GPU {
   }
 
   fn process_polyline(&mut self, word: u32) {
-    if (word & 0xf000f000) == 0x5000_5000 {
+    if (word & 0xf000_f000) == 0x5000_5000 {
       self.polyline = false;
       return;
     }

@@ -303,9 +303,16 @@ impl CPU {
 
     index += 0x10 + 4;
 
-    self.r[29] = CPU::read_word(&bytes, index);
+    let sp_base = CPU::read_word(&bytes, index);
 
-    self.r[30] = self.r[29];
+    index += 4;
+
+    if sp_base != 0 {
+      let sp_offset = CPU::read_word(&bytes, index);
+
+      self.r[29] = sp_base + sp_offset;
+      self.r[30] = self.r[29];
+    }
 
     index = 0x800;
 
