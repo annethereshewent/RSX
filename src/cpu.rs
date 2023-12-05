@@ -252,8 +252,6 @@ impl CPU {
     self.tick_instruction();
 
     self.execute(Instruction::new(instr));
-
-    self.bus.reset_cycles();
   }
 
   pub fn set_reg(&mut self, rt: usize, val: u32) {

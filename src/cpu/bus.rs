@@ -18,14 +18,16 @@ pub struct Bus {
   pub spu: SPU,
   pub cdrom: Cdrom,
   pub interrupts: Rc<Cell<InterruptRegisters>>,
-  timers: Timers,
+  pub timers: Timers,
   dma: Rc<Cell<DMA>>,
   pub mdec: Mdec,
   pub controllers: Controllers,
   pub cycles: i32,
   pub cache_control: u32,
   exp2_buffer: Vec<u8>,
-  scratchpad: Box<[u8]>
+  scratchpad: Box<[u8]>,
+  last_timer_sync: i32,
+  pub last_sync: i32
 }
 
 impl Bus {
@@ -45,7 +47,9 @@ impl Bus {
       cache_control: 0,
       exp2_buffer: Vec::new(),
       mdec: Mdec::new(),
-      scratchpad: vec![0; 0x400].into_boxed_slice()
+      scratchpad: vec![0; 0x400].into_boxed_slice(),
+      last_timer_sync: 0,
+      last_sync: 0
     }
   }
 
@@ -113,6 +117,8 @@ impl Bus {
       }
       0x1f80_1080..=0x1f80_10ff => self.dma.get().read(address),
       0x1f80_1100..=0x1f80_112b => {
+        self.timers.tick(self.cycles - self.last_timer_sync);
+        self.last_timer_sync = self.cycles;
 
         self.timers.read(address) as u32
       }
@@ -154,6 +160,9 @@ impl Bus {
         (self.scratchpad[offset] as u16) | (self.scratchpad[offset + 1] as u16) << 8
       }
       0x1f80_1100..=0x1f80_112b => {
+        self.timers.tick(self.cycles - self.last_timer_sync);
+        self.last_timer_sync = self.cycles;
+
         self.timers.read(address) as u16
       }
       0x1fc0_0000..=0x1fc7_ffff => {
@@ -201,6 +210,9 @@ impl Bus {
       }
       0x1f80_1800..=0x1f80_1803 => self.cdrom.write(address, value),
       0x1f80_1100..=0x1f80_112b => {
+        self.timers.tick(self.cycles - self.last_timer_sync);
+        self.last_timer_sync = self.cycles;
+
         self.timers.write(address, value as u32);
       }
       0x1f80_1c00..=0x1f80_1e7f => panic!("8 bit writes to spu not supported"),
@@ -251,6 +263,9 @@ impl Bus {
         self.interrupts.set(interrupts);
       }
       0x1f80_1100..=0x1f80_112b => {
+        self.timers.tick(self.cycles - self.last_timer_sync);
+        self.last_timer_sync = self.cycles;
+
         self.timers.write(address, value as u32);
       }
       0xfffe_0130 => self.cache_control = value as u32,
@@ -306,6 +321,9 @@ impl Bus {
         self.dma.set(dma);
       }
       0x1f80_1100..=0x1f80_112b => {
+        self.timers.tick(self.cycles - self.last_timer_sync);
+        self.last_timer_sync = self.cycles;
+
         self.timers.write(address, value);
       }
       0x1f80_1810..=0x1f80_1817 => {
@@ -327,9 +345,9 @@ impl Bus {
   pub fn tick(&mut self, cycles: i32) {
     self.cycles += cycles;
 
-    self.timers.tick(cycles);
     self.gpu.tick_counter(cycles, &mut self.timers);
     self.cdrom.tick_counter(cycles, &mut self.spu);
+
     self.controllers.tick(cycles);
 
     let mut interrupts = self.interrupts.get();
@@ -345,6 +363,15 @@ impl Bus {
 
   pub fn reset_cycles(&mut self) {
     self.cycles = 0;
+    self.last_timer_sync -= self.cycles;
+    self.last_sync -= self.cycles;
+  }
+
+  pub fn sync_timers(&mut self) {
+    self.timers.tick(self.cycles - self.last_timer_sync);
+    self.last_timer_sync = self.cycles;
+
+    self.last_sync = self.cycles;
   }
 
   fn write_expansion_2(&mut self, address: u32, val: u8) {

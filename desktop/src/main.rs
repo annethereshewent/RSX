@@ -27,10 +27,13 @@ pub fn main() {
   if args.len() == 3 {
     cpu.load_exe(&args[2]);
   }
-
   loop {
     while !cpu.bus.gpu.frame_complete {
-      cpu.step();
+      while cpu.bus.cycles - cpu.bus.last_sync < 128 {
+        cpu.step();
+      }
+
+      cpu.bus.sync_timers();
     }
 
     cpu.bus.gpu.frame_complete = false;
@@ -38,5 +41,7 @@ pub fn main() {
     frontend.render(&mut cpu.bus.gpu);
     frontend.handle_events(&mut cpu);
     frontend.push_samples(cpu.bus.spu.audio_buffer.drain(..).collect());
+
+
   }
 }
