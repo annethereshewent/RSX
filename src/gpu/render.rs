@@ -1,10 +1,10 @@
 use std::{cmp, mem};
 
-use super::{GPU, gpu_stat_register::{ColorDepth, TextureColors, SemiTransparency}, RgbColor};
+use super::{GPU, gpu_stat_register::{ColorDepth, TextureColors, SemiTransparency}, RgbColor, Coordinates2d, Coordinates3d};
 
 impl GPU {
-  fn cross_product(a: (i32, i32), b: (i32, i32), c: (i32, i32)) -> i32 {
-    (b.0 - a.0) * (c.1 - a.1) - (b.1 - a.1) * (c.0 - a.0)
+  fn cross_product(a: Coordinates2d, b: Coordinates2d, c: Coordinates2d) -> i32 {
+    (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
   }
 
   pub fn update_picture(&mut self) {
@@ -56,12 +56,7 @@ impl GPU {
     g = (g << 3) | (g >> 2);
     b = (b << 3) | (b >> 2);
 
-    RgbColor {
-      r,
-      g,
-      b,
-      a
-    }
+    RgbColor::new(r, g, b, a)
   }
 
   pub fn get_dimensions(&self) -> (u32, u32) {
@@ -82,8 +77,8 @@ impl GPU {
     (w, h)
   }
 
-  pub fn render_pixel(&mut self, position: (i32, i32), color: RgbColor, textured: bool, semi_transparent: bool) {
-    let vram_address = GPU::get_vram_address(position.0 as u32, position.1 as u32);
+  pub fn render_pixel(&mut self, position: Coordinates2d, color: RgbColor, textured: bool, semi_transparent: bool) {
+    let vram_address = GPU::get_vram_address(position.x as u32, position.y as u32);
 
     let mut color = color;
 
@@ -164,16 +159,16 @@ impl GPU {
     cmp::min(255, (x as u32 + y as u32) / 4) as u8
   }
 
-  pub fn rasterize_line(&mut self, mut start_position: (i32, i32), mut end_position: (i32, i32), colors: &mut [RgbColor], shaded: bool, semi_transparent: bool) {
-    if start_position.0 > end_position.0 {
+  pub fn rasterize_line(&mut self, mut start_position: Coordinates2d, mut end_position: Coordinates2d, colors: &mut [RgbColor], shaded: bool, semi_transparent: bool) {
+    if start_position.x > end_position.x {
       mem::swap(&mut start_position, &mut end_position);
     }
 
-    let start_x = start_position.0;
-    let start_y = start_position.1;
+    let start_x = start_position.x;
+    let start_y = start_position.y;
 
-    let end_x = end_position.0;
-    let end_y = end_position.1;
+    let end_x = end_position.x;
+    let end_y = end_position.y;
 
 
     let diff_x = end_x - start_x;
@@ -218,10 +213,10 @@ impl GPU {
         }
 
         if self.stat.dither_enabled {
-          self.dither((x, y), &mut color);
+          self.dither(Coordinates2d::new(x, y), &mut color);
         }
 
-        self.render_pixel((x, y), color, false, semi_transparent);
+        self.render_pixel(Coordinates2d::new(x, y), color, false, semi_transparent);
       }
     } else {
       // line is vertical, just render from start y to end y
@@ -246,20 +241,22 @@ impl GPU {
           color_b_fp += b_slope;
         }
 
+        let position = Coordinates2d::new(start_x, y);
+
         if self.stat.dither_enabled {
-          self.dither((start_x, y), &mut color);
+          self.dither(position, &mut color);
         }
 
-        self.render_pixel((start_x, y), color, false, semi_transparent);
+        self.render_pixel(position, color, false, semi_transparent);
       }
     }
   }
 
-  pub fn rasterize_rectangle(&mut self, color: RgbColor, coordinates: (i32, i32), tex_coordinates: (i32, i32), clut: (i32, i32), dimensions: (u32, u32), textured: bool, blended: bool, semi_transparent: bool) {
+  pub fn rasterize_rectangle(&mut self, color: RgbColor, coordinates: Coordinates2d, tex_coordinates: Coordinates2d, clut: Coordinates2d, dimensions: (u32, u32), textured: bool, blended: bool, semi_transparent: bool) {
     for x in 0..dimensions.0 {
       for y in 0..dimensions.1 {
-        let curr_x = coordinates.0 + x as i32;
-        let curr_y = coordinates.1 + y as i32;
+        let curr_x = coordinates.x + x as i32;
+        let curr_y = coordinates.y + y as i32;
 
         if curr_x < self.drawing_area_left as i32 || curr_y < self.drawing_area_top as i32 || curr_x >= self.drawing_area_right as i32 || curr_y >= self.drawing_area_bottom as i32 {
           continue;
@@ -268,7 +265,7 @@ impl GPU {
         let mut output = color;
 
         if textured {
-          let mut uv = (tex_coordinates.0 + (x & 0xff) as i32, tex_coordinates.1 + (y & 0xff) as i32);
+          let mut uv = Coordinates2d::new(tex_coordinates.x + (x & 0xff) as i32, tex_coordinates.y + (y & 0xff) as i32);
           uv = self.mask_texture_coordinates(uv);
 
           if let Some(mut texture) = self.get_texture(uv, clut) {
@@ -280,12 +277,12 @@ impl GPU {
             continue;
           }
         }
-        self.render_pixel((curr_x, curr_y), output, textured, semi_transparent);
+        self.render_pixel(Coordinates2d::new(curr_x, curr_y), output, textured, semi_transparent);
       }
     }
   }
 
-  pub fn rasterize_triangle(&mut self, c: &mut [RgbColor], p: &mut [(i32, i32)], t: &mut [(i32,i32)], clut: (i32, i32), is_textured: bool, is_shaded: bool, is_blended: bool, semi_transparent: bool) {
+  pub fn rasterize_triangle(&mut self, c: &mut [RgbColor], p: &mut [Coordinates2d], t: &mut [Coordinates2d], clut: Coordinates2d, is_textured: bool, is_shaded: bool, is_blended: bool, semi_transparent: bool) {
     let mut cross_product = GPU::cross_product(p[0], p[1], p[2]);
 
     if cross_product == 0 {
@@ -300,11 +297,11 @@ impl GPU {
       cross_product = -cross_product;
     }
 
-    let mut min_x = cmp::min(p[0].0, cmp::min(p[1].0, p[2].0));
-    let mut min_y = cmp::min(p[0].1, cmp::min(p[1].1, p[2].1));
+    let mut min_x = cmp::min(p[0].x, cmp::min(p[1].x, p[2].x));
+    let mut min_y = cmp::min(p[0].y, cmp::min(p[1].y, p[2].y));
 
-    let mut max_x = cmp::max(p[0].0, cmp::max(p[1].0, p[2].0));
-    let mut max_y = cmp::max(p[0].1, cmp::max(p[1].1, p[2].1));
+    let mut max_x = cmp::max(p[0].x, cmp::max(p[1].x, p[2].x));
+    let mut max_y = cmp::max(p[0].y, cmp::max(p[1].y, p[2].y));
 
     let diff_x = max_x - min_x;
     let diff_y = max_y - min_y;
@@ -328,16 +325,16 @@ impl GPU {
     max_x = cmp::min(max_x, self.drawing_area_right as i32);
     max_y = cmp::min(max_y, self.drawing_area_bottom as i32);
 
-    let a01 = (p[0].1 - p[1].1) as i32;
-    let b01 = (p[1].0 - p[0].0) as i32;
+    let a01 = (p[0].y - p[1].y) as i32;
+    let b01 = (p[1].x - p[0].x) as i32;
 
-    let a12 = (p[1].1 - p[2].1) as i32;
-    let b12 = (p[2].0 - p[1].0) as i32;
+    let a12 = (p[1].y - p[2].y) as i32;
+    let b12 = (p[2].x - p[1].x) as i32;
 
-    let a20 = (p[2].1 - p[0].1) as i32;
-    let b20 = (p[0].0 - p[2].0) as i32;
+    let a20 = (p[2].y - p[0].y) as i32;
+    let b20 = (p[0].x - p[2].x) as i32;
 
-    let mut curr_p = (min_x, min_y);
+    let mut curr_p = Coordinates2d::new(min_x, min_y);
 
     let mut w0_row = GPU::cross_product(p[1], p[2], curr_p) as i32;
     let mut w1_row = GPU::cross_product(p[2], p[0], curr_p) as i32;
@@ -350,16 +347,15 @@ impl GPU {
     let blend_color = c[0];
     let mut output = blend_color;
 
-    while curr_p.1 < max_y {
-      curr_p.0 = min_x;
+    while curr_p.y < max_y {
+      curr_p.x = min_x;
 
       let mut w0 = w0_row;
       let mut w1 = w1_row;
       let mut w2 = w2_row;
-      while curr_p.0 < max_x {
+      while curr_p.x < max_x {
         if ((w0 + w0_bias) | (w1 + w1_bias) | (w2 + w2_bias)) >= 0 {
-          let vec_3d = (w0, w1, w2);
-
+          let vec_3d = Coordinates3d::new(w0, w1, w2);
           if is_shaded {
             output = GPU::interpolate_color(cross_product as i32, vec_3d, c[0], c[1], c[2]);
 
@@ -387,7 +383,7 @@ impl GPU {
               w1 += a20;
               w2 += a01;
 
-              curr_p.0 += 1;
+              curr_p.x += 1;
               continue;
             }
           }
@@ -398,13 +394,13 @@ impl GPU {
         w1 += a20;
         w2 += a01;
 
-        curr_p.0 += 1;
+        curr_p.x += 1;
       }
       w0_row += b12;
       w1_row += b20;
       w2_row += b01;
 
-      curr_p.1 += 1;
+      curr_p.y += 1;
     }
   }
 
@@ -428,7 +424,7 @@ impl GPU {
     (y < 0) || ((x < 0) && (y == 0))
   }
 
-  fn interpolate_color(area: i32, vec_3d: (i32,i32,i32), color0: RgbColor, color1: RgbColor, color2: RgbColor) -> RgbColor {
+  fn interpolate_color(area: i32, vec_3d: Coordinates3d, color0: RgbColor, color1: RgbColor, color2: RgbColor) -> RgbColor {
     let color0_r = color0.r as i32;
     let color1_r = color1.r as i32;
     let color2_r = color2.r as i32;
@@ -442,42 +438,37 @@ impl GPU {
     let color2_b = color2.b as i32;
 
 
-    let r = ((vec_3d.0 * color0_r + vec_3d.1 * color1_r + vec_3d.2 * color2_r) / area) as u8;
-    let g = ((vec_3d.0 * color0_g + vec_3d.1 * color1_g + vec_3d.2 * color2_g) / area) as u8;
-    let b = ((vec_3d.0 * color0_b + vec_3d.1 * color1_b + vec_3d.2 * color2_b) / area) as u8;
+    let r = ((vec_3d.x * color0_r + vec_3d.y * color1_r + vec_3d.z * color2_r) / area) as u8;
+    let g = ((vec_3d.x * color0_g + vec_3d.y * color1_g + vec_3d.z * color2_g) / area) as u8;
+    let b = ((vec_3d.x * color0_b + vec_3d.y * color1_b + vec_3d.z * color2_b) / area) as u8;
 
-    RgbColor {
-      r,
-      g,
-      b,
-      a: false
-    }
+    RgbColor::new(r, g, b, false)
   }
 
-  fn interpolate_texture_coordinates(area: i32, w: (i32, i32, i32),
-    t0: (i32, i32),
-    t1: (i32, i32),
-    t2: (i32, i32)) -> (i32, i32) {
-    let u = (w.0 * t0.0 + w.1 * t1.0 + w.2 * t2.0) / area;
-    let v = (w.0 * t0.1 + w.1 * t1.1 + w.2 * t2.1) / area;
+  fn interpolate_texture_coordinates(area: i32, w: Coordinates3d,
+    t0: Coordinates2d,
+    t1: Coordinates2d,
+    t2: Coordinates2d) -> Coordinates2d {
+    let u = (w.x * t0.x + w.y * t1.x + w.z * t2.x) / area;
+    let v = (w.x * t0.y + w.y * t1.y + w.z * t2.y) / area;
 
-    (u, v)
+    Coordinates2d::new(u, v)
   }
 
-  fn mask_texture_coordinates(&self, mut uv: (i32, i32)) -> (i32, i32) {
+  fn mask_texture_coordinates(&self, mut uv: Coordinates2d) -> Coordinates2d {
     let mask_x = self.texture_window_x_mask as i32;
     let mask_y = self.texture_window_y_mask as i32;
 
     let offset_x = self.texture_window_x_offset as i32;
     let offset_y = self.texture_window_y_offset as i32;
 
-    uv.0 = (uv.0 & !mask_x) | (offset_x & mask_x);
-    uv.1 = (uv.1 & !mask_y) | (offset_y & mask_y);
+    uv.x = (uv.x & !mask_x) | (offset_x & mask_x);
+    uv.y = (uv.y & !mask_y) | (offset_y & mask_y);
 
     uv
   }
 
-  fn get_texture(&mut self, uv: (i32, i32), clut: (i32, i32)) -> Option<RgbColor> {
+  fn get_texture(&mut self, uv: Coordinates2d, clut: Coordinates2d) -> Option<RgbColor> {
     match self.stat.texture_colors {
       TextureColors::FourBit => self.read_4bit_clut(uv, clut),
       TextureColors::EightBit => self.read_8bit_clut(uv, clut),
@@ -485,17 +476,17 @@ impl GPU {
     }
   }
 
-  fn read_4bit_clut(&mut self, uv: (i32, i32), clut: (i32, i32)) -> Option<RgbColor> {
+  fn read_4bit_clut(&mut self, uv: Coordinates2d, clut: Coordinates2d) -> Option<RgbColor> {
     let tex_x_base = (self.stat.texture_x_base as i32) * 64;
     let tex_y_base = (self.stat.texture_y_base1 as i32) * 16;
 
     // since each pixel is 4 bits wide, we divide x offset by 2
-    let offset_x = (2 * tex_x_base + (uv.0 / 2)) as u32;
-    let offset_y = (tex_y_base + uv.1) as u32;
+    let offset_x = (2 * tex_x_base + (uv.x / 2)) as u32;
+    let offset_y = (tex_y_base + uv.y) as u32;
 
     let texture_address = (offset_x + 2048 * offset_y) as usize;
 
-    let block = (((uv.1 / 64) * 4) + (uv.0 / 64)) as isize;
+    let block = (((uv.y / 64) * 4) + (uv.x / 64)) as isize;
 
     // each cacheline is organized in blocks of 4 * 64 cache lines.
     // each line is thus made up of 4 blocks,
@@ -504,10 +495,10 @@ impl GPU {
 
     // see the diagram here for a good visual example:
     // https://psx-spx.consoledev.net/graphicsprocessingunitgpu/#gpu-texture-caching
-    let entry = (((uv.1 * 4) | ((uv.0 / 16) & 0x3)) & 0xff) as usize;
+    let entry = (((uv.y * 4) | ((uv.x / 16) & 0x3)) & 0xff) as usize;
 
     // each cache entry is 8 bytes wide
-    let index = ((uv.0 / 2) & 7) as usize;
+    let index = ((uv.x / 2) & 7) as usize;
 
     let cache_entry = &mut self.texture_cache[entry];
 
@@ -523,13 +514,13 @@ impl GPU {
     let mut clut_entry = cache_entry.data[index] as usize;
 
     // each pixel is 4 bits, if x is odd, then get the upper 4 bits, otherwise get the lower ones
-    if (uv.0 & 0b1) != 0 {
+    if (uv.x & 0b1) != 0 {
       clut_entry >>= 4;
     } else {
       clut_entry &= 0xf;
     }
 
-    let clut_address = (2 * clut.0 + 2048 * clut.1) as isize;
+    let clut_address = (2 * clut.x + 2048 * clut.y) as isize;
 
     if self.clut_tag != clut_address {
       for i in 0..16 {
@@ -549,19 +540,19 @@ impl GPU {
     }
   }
 
-  fn read_8bit_clut(&mut self, uv: (i32, i32), clut: (i32, i32)) -> Option<RgbColor> {
+  fn read_8bit_clut(&mut self, uv: Coordinates2d, clut: Coordinates2d) -> Option<RgbColor> {
     let tex_x_base = (self.stat.texture_x_base as i32) * 64;
     let tex_y_base = (self.stat.texture_y_base1 as i32) * 16;
 
-    let offset_x = (2 * tex_x_base + uv.0) as u32;
-    let offset_y = (tex_y_base + uv.1) as u32;
+    let offset_x = (2 * tex_x_base + uv.x) as u32;
+    let offset_y = (tex_y_base + uv.y) as u32;
 
     let texture_address = (offset_x + offset_y * 2048) as usize;
 
     // in this case, each cache line is organized in blocks of 8 * 32 cache lines,
     // and each cache entry is 8 8bpp pixels wide (half as many as 4bb mode)
-    let entry = ((4 * uv.1 + ((uv.0 / 8) & 0x7)) & 0xff) as usize;
-    let block = ((uv.0 / 32) + (uv.1 / 64) * 8) as isize;
+    let entry = ((4 * uv.y + ((uv.x / 8) & 0x7)) & 0xff) as usize;
+    let block = ((uv.x / 32) + (uv.y / 64) * 8) as isize;
 
     let cache_entry = &mut self.texture_cache[entry];
 
@@ -573,11 +564,11 @@ impl GPU {
       cache_entry.tag = block;
     }
 
-    let index = (uv.0 & 0x7) as usize;
+    let index = (uv.x & 0x7) as usize;
 
     let clut_entry = cache_entry.data[index];
 
-    let clut_address = (2 * clut.0 + clut.1 * 2048) as usize;
+    let clut_address = (2 * clut.x + clut.y * 2048) as usize;
 
     if self.clut_tag != clut_address as isize {
       for i in 0..256 {
@@ -598,9 +589,9 @@ impl GPU {
     }
   }
 
-  fn dither(&mut self, position: (i32, i32), pixel: &mut RgbColor) {
-    let x = (position.0 & 3) as usize;
-    let y = (position.1 & 3) as usize;
+  fn dither(&mut self, position: Coordinates2d, pixel: &mut RgbColor) {
+    let x = (position.x & 3) as usize;
+    let y = (position.y & 3) as usize;
 
     pixel.r = self.dither_table[x][y][pixel.r as usize];
     pixel.g = self.dither_table[x][y][pixel.g as usize];
@@ -608,17 +599,17 @@ impl GPU {
   }
 
 
-  fn read_texture(&mut self, uv: (i32, i32)) -> Option<RgbColor> {
+  fn read_texture(&mut self, uv: Coordinates2d) -> Option<RgbColor> {
     let tex_x_base = (self.stat.texture_x_base as i32) * 64;
     let tex_y_base = (self.stat.texture_y_base1 as i32) * 16;
 
-    let offset_x = tex_x_base + uv.0;
-    let offset_y = tex_y_base + uv.1;
+    let offset_x = tex_x_base + uv.x;
+    let offset_y = tex_y_base + uv.y;
 
     let texture_address = 2 * (offset_x + offset_y * 1024) as usize;
 
     // for this case, each cache entry is 8 * 32 cache lines, and each cache entry is 4 16bpp pixels wide
-    let entry = (((uv.1 * 8) + ((uv.0 / 4 ) & 0x7)) & 0xff) as usize;
+    let entry = (((uv.y * 8) + ((uv.x / 4 ) & 0x7)) & 0xff) as usize;
     let block = ((offset_x / 32) + (offset_y / 32) * 8) as isize;
 
     let cache_entry = &mut self.texture_cache[entry];
@@ -629,7 +620,7 @@ impl GPU {
       }
     }
 
-    let index = ((uv.0 * 2) & 0x7) as usize;
+    let index = ((uv.x * 2) & 0x7) as usize;
 
     let texture = (cache_entry.data[index] as u16) | (cache_entry.data[index + 1] as u16) << 8;
 

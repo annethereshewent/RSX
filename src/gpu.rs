@@ -39,6 +39,37 @@ pub const FPS_INTERVAL: u128 = 1000 / 60;
 
 const VRAM_SIZE: usize = 2 * 1024 * 512;
 
+#[derive(Copy, Clone)]
+pub struct Coordinates2d {
+  pub x: i32,
+  pub y: i32
+}
+
+impl Coordinates2d {
+  pub fn new(x: i32, y: i32) -> Self {
+    Self {
+      x,
+      y
+    }
+  }
+}
+
+#[derive(Copy, Clone)]
+pub struct Coordinates3d {
+  pub x: i32,
+  pub y: i32,
+  pub z: i32
+}
+
+impl Coordinates3d {
+  pub fn new(x: i32, y: i32, z: i32) -> Self {
+    Self {
+      x,
+      y,
+      z
+    }
+  }
+}
 
 #[derive(Copy, Clone)]
 pub struct RgbColor {
@@ -46,6 +77,17 @@ pub struct RgbColor {
   pub g: u8,
   pub b: u8,
   pub a: bool
+}
+
+impl RgbColor {
+  fn new(r: u8, g: u8, b: u8, a: bool) -> Self {
+    Self {
+      r,
+      g,
+      b,
+      a
+    }
+  }
 }
 
 #[derive(Clone, Copy)]
@@ -130,7 +172,7 @@ pub struct GPU {
   clut_cache: [u16; 256],
   current_texture_x_base: u8,
   current_texture_y_base: u8,
-  current_clut: (i32, i32),
+  current_clut: Coordinates2d,
   current_texture_colors: TextureColors,
   gpuread: u32,
   texture_window: u32,
@@ -141,7 +183,7 @@ pub struct GPU {
   dither_table: [[[u8; 0x200]; 4]; 4],
   polyline: bool,
   polyline_words_remaining: u8,
-  polyline_prev_coord: (i32, i32),
+  polyline_prev_coord: Coordinates2d,
   polyline_prev_color: RgbColor,
   polyline_shaded: bool,
   polyline_semitransparent: bool
@@ -209,7 +251,7 @@ impl GPU {
       texture_cache: [TextureCache::new(); 256],
       clut_tag: -1,
       clut_cache: [0; 256],
-      current_clut: (0,0),
+      current_clut: Coordinates2d::new(0, 0),
       current_texture_colors: TextureColors::FourBit,
       current_texture_x_base: 0,
       current_texture_y_base: 0,
@@ -223,13 +265,8 @@ impl GPU {
       dither_table,
       polyline: false,
       polyline_words_remaining: 0,
-      polyline_prev_coord: (0, 0),
-      polyline_prev_color: RgbColor {
-        r: 0,
-        g: 0,
-        b: 0,
-        a: false
-      },
+      polyline_prev_coord: Coordinates2d::new(0, 0),
+      polyline_prev_color: RgbColor::new(0, 0, 0, false),
       polyline_shaded: false,
       polyline_semitransparent: false
     }
@@ -661,15 +698,10 @@ impl GPU {
     let g = (val >> 8) as u8;
     let b = (val >> 16) as u8;
 
-    RgbColor {
-      r,
-      g,
-      b,
-      a: false
-    }
+    RgbColor::new(r, g, b, false)
   }
 
-  pub fn parse_position(&self, val: u32) -> (i32, i32) {
+  pub fn parse_position(&self, val: u32) -> Coordinates2d {
     let mut x = (val & 0xffff) as i32;
     let mut y = (val >> 16) as i32;
 
@@ -679,7 +711,7 @@ impl GPU {
     let x_offset = self.drawing_x_offset as i32;
     let y_offset = self.drawing_y_offset as i32;
 
-    (x + x_offset, y + y_offset)
+    Coordinates2d::new(x + x_offset, y + y_offset)
   }
 
   fn sign_extend_i32(mut value: i32, size: usize) -> i32 {
@@ -695,11 +727,11 @@ impl GPU {
     return value;
   }
 
-  fn parse_texture_coords(command: u32) -> (i32, i32) {
+  fn parse_texture_coords(command: u32) -> Coordinates2d {
     let x = (command & 0xff) as i32;
     let y = ((command >> 8) & 0xff) as i32;
 
-    (x, y)
+    Coordinates2d::new(x, y)
   }
 
   fn parse_texture_data(&mut self, command: u32) {
@@ -729,13 +761,13 @@ impl GPU {
     self.stat.texture_y_base1 = ((texture_data & 0x10)) as u8;
   }
 
-  fn to_clut(command: u32) -> (i32, i32) {
+  fn to_clut(command: u32) -> Coordinates2d {
     let clut = command >> 16;
 
     let x = (clut & 0x3f) * 16;
     let y = ((clut >> 6)) & 0x1ff;
 
-    (x as i32, y as i32)
+    Coordinates2d::new(x as i32, y as i32)
   }
 
   fn gp0_image_transfer_to_vram(&mut self) {
@@ -817,20 +849,21 @@ impl GPU {
 
     let color = GPU::parse_color(self.command_buffer[0]);
 
-    let mut tex_coordinates: (i32, i32) = (0,0);
+    let mut tex_coordinates = Coordinates2d::new(0, 0);
 
     let coordinates = self.parse_position(self.command_buffer[1]);
 
     let mut command_pos = 2;
 
-    let mut clut = (0,0);
+    let mut clut = Coordinates2d::new(0, 0);
 
     if textured {
       tex_coordinates = GPU::parse_texture_coords(self.command_buffer[command_pos]);
 
       clut = GPU::to_clut(self.command_buffer[command_pos]);
 
-      if textured && (clut != self.current_clut ||
+      if textured && (clut.x != self.current_clut.x||
+        clut.y != self.current_clut.y ||
         self.stat.texture_x_base != self.current_texture_x_base ||
         self.stat.texture_y_base1 != self.current_texture_y_base ||
         self.stat.texture_colors != self.current_texture_colors) {
@@ -872,12 +905,12 @@ impl GPU {
     let color = GPU::parse_color(self.command_buffer[0]);
 
     let mut colors = [color, color, color, color];
-    let mut positions: [(i32, i32); 4] = [(0,0); 4];
-    let mut tex_positions: [(i32, i32); 4] = [(0,0); 4];
+    let mut positions: [Coordinates2d; 4] = [Coordinates2d::new(0, 0); 4];
+    let mut tex_positions: [Coordinates2d; 4] = [Coordinates2d::new(0, 0); 4];
 
     let mut command_index = 0;
 
-    let mut clut = (0,0);
+    let mut clut = Coordinates2d::new(0, 0);
 
     for i in 0..num_vertices {
       if i == 0 || is_shaded {
@@ -902,10 +935,11 @@ impl GPU {
       }
     }
 
-    if is_textured && (clut != self.current_clut ||
-    self.stat.texture_x_base != self.current_texture_x_base ||
-    self.stat.texture_y_base1 != self.current_texture_y_base ||
-    self.stat.texture_colors != self.current_texture_colors) {
+    if is_textured && (clut.x != self.current_clut.x ||
+      clut.y != self.current_clut.y ||
+      self.stat.texture_x_base != self.current_texture_x_base ||
+      self.stat.texture_y_base1 != self.current_texture_y_base ||
+      self.stat.texture_colors != self.current_texture_colors) {
       self.gp0_invalidate_cache();
     }
 

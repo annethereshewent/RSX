@@ -1,6 +1,6 @@
 use std::{rc::Rc, cell::Cell, fs::{File, self}};
 
-use crate::{cpu::instruction::Instruction, gpu::{CYCLES_PER_SCANLINE, NUM_SCANLINES_PER_FRAME, GPU_FREQUENCY}};
+use crate::{cpu::instruction::Instruction, gpu::{CYCLES_PER_SCANLINE, NUM_SCANLINES_PER_FRAME, GPU_FREQUENCY}, util};
 
 use self::{bus::Bus, dma::DMA, interrupt::interrupt_registers::InterruptRegisters, cop2::COP2};
 
@@ -286,29 +286,29 @@ impl CPU {
 
     let mut index = 0x10;
 
-    self.pc = CPU::read_word(&bytes, index);
+    self.pc = util::read_word(&bytes, index);
     self.next_pc = self.pc + 4;
 
     index += 4;
 
-    self.r[28] = CPU::read_word(&bytes, index);
+    self.r[28] = util::read_word(&bytes, index);
 
     index += 4;
 
-    let file_dest = CPU::read_word(&bytes, index);
+    let file_dest = util::read_word(&bytes, index);
 
     index += 4;
 
-    let file_size = CPU::read_word(&bytes, index);
+    let file_size = util::read_word(&bytes, index);
 
     index += 0x10 + 4;
 
-    let sp_base = CPU::read_word(&bytes, index);
+    let sp_base = util::read_word(&bytes, index);
 
     index += 4;
 
     if sp_base != 0 {
-      let sp_offset = CPU::read_word(&bytes, index);
+      let sp_offset = util::read_word(&bytes, index);
 
       self.r[29] = sp_base + sp_offset;
       self.r[30] = self.r[29];
@@ -320,10 +320,6 @@ impl CPU {
       self.bus.ram[((file_dest + i) & 0x1fffff) as usize] = bytes[index];
       index += 1;
     }
-  }
-
-  pub fn read_word(bytes: &Vec<u8>, index: usize) -> u32 {
-    (bytes[index] as u32) | (bytes[index + 1] as u32) << 8 | (bytes[index + 2] as u32) << 16 | (bytes[index + 3] as u32) << 24
   }
 
   fn write_to_cache(&mut self, address: u32, value: u32) {

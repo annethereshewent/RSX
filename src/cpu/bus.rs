@@ -123,7 +123,7 @@ impl Bus {
         match offset {
           0 => self.gpu.gpuread(),
           4 => self.gpu.stat_value(),
-          _ => todo!("GPU read register not implemented yet: {offset}")
+          _ => panic!("invalid GPU register: {offset}")
         }
       }
       0x1f80_1824 => self.mdec.read_status(),
