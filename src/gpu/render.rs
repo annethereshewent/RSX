@@ -520,7 +520,8 @@ impl GPU {
 
     let mut curr_p = Coordinates2d::new(min_x, min_y);
 
-    let mut output = RgbColor::new(r_base as u8, g_base as u8, b_base as u8, false);
+    let mut output = c[0];
+    let mut color_base = RgbColor::new(r_base as u8, g_base as u8, b_base as u8, false);
 
     let curr_min_y = p[0].y;
     let curr_max_y = p[2].y;
@@ -610,8 +611,7 @@ impl GPU {
         if curr_p.x >= curr_min_x && curr_p.x < curr_max_x && curr_p.y >= curr_min_y && curr_p.y < curr_max_y {
           // render the pixel
           if is_shaded {
-
-            GPU::interpolate_color2(&mut output, curr_p, drdx, drdy, dgdx, dgdy, dbdx, dbdy);
+            GPU::interpolate_color2(&mut output, curr_p, color_base, drdx, drdy, dgdx, dgdy, dbdx, dbdy);
 
             if self.stat.dither_enabled {
               self.dither(curr_p, &mut output);
@@ -649,10 +649,10 @@ impl GPU {
     //panic!("processed one triangle lmao");
   }
 
-  fn interpolate_color2(output: &mut RgbColor, curr_p: Coordinates2d, drdx: f32, drdy: f32, dgdx: f32, dgdy: f32, dbdx: f32, dbdy: f32) {
-    output.r += (drdx * curr_p.x as f32 + drdy * curr_p.y as f32) as u8;
-    output.g += (dgdx * curr_p.x as f32 + dgdy * curr_p.y as f32) as u8;
-    output.b += (dbdx * curr_p.x as f32 + dbdy * curr_p.y as f32) as u8;
+  fn interpolate_color2(output: &mut RgbColor, curr_p: Coordinates2d, color_base: RgbColor, drdx: f32, drdy: f32, dgdx: f32, dgdy: f32, dbdx: f32, dbdy: f32) {
+    output.r = (drdx * curr_p.x as f32 + drdy * curr_p.y as f32) as u8 + color_base.r;
+    output.g = (dgdx * curr_p.x as f32 + dgdy * curr_p.y as f32) as u8 + color_base.g;
+    output.b = (dbdx * curr_p.x as f32 + dbdy * curr_p.y as f32) as u8 + color_base.b;
   }
 
   fn interpolate_texture_coordinates2(curr_p: Coordinates2d, texture: Coordinates2d, dudx: f32, dudy: f32, dvdx: f32, dvdy: f32) -> Coordinates2d {
