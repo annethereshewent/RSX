@@ -521,7 +521,7 @@ impl GPU {
     let mut curr_p = Coordinates2d::new(min_x, min_y);
 
     let mut output = c[0];
-    let mut color_base = RgbColor::new(r_base as u8, g_base as u8, b_base as u8, false);
+    let color_base = RgbColor::new(r_base as u8, g_base as u8, b_base as u8, false);
 
     let curr_min_y = p[0].y;
     let curr_max_y = p[2].y;
@@ -529,7 +529,7 @@ impl GPU {
     while curr_p.y < max_y {
       curr_p.x = min_x;
       while curr_p.x < max_x {
-        let rel_pos = Coordinates2d::new(curr_p.x - min_x, curr_p.y - min_y);
+        // let mut rel_pos = Coordinates2d::new(curr_p.x - min_x, curr_p.y - min_y);
         let (curr_min_x, curr_max_x) = if p02_is_left {
           let mut curr_max_x = max_x;
 
@@ -540,11 +540,13 @@ impl GPU {
           // neither are horizontal
 
           if p01_slope.is_none() {
+            let rel_pos = Coordinates2d::new(curr_p.x - p[1].x, curr_p.y - p[1].y);
             // use p12 slope
             let slope = p12_slope.unwrap();
 
             curr_max_x  = (slope * rel_pos.y as f32) as i32 + p[1].x;
           } else if p12_slope.is_none() {
+            let rel_pos = Coordinates2d::new(curr_p.x - p[0].x, curr_p.y - p[0].y);
 
             let slope = p01_slope.unwrap();
 
@@ -553,17 +555,20 @@ impl GPU {
             // determine what slope to use based on y coordinate
             if curr_p.y <= p[1].y {
               // use p01 slope
+              let rel_pos = Coordinates2d::new(curr_p.x - p[0].x, curr_p.y - p[0].y);
               let slope = p01_slope.unwrap();
 
               curr_max_x = (slope * rel_pos.y as f32) as i32 + p[0].x;
             } else {
               // use p12 slope
+              let rel_pos = Coordinates2d::new(curr_p.x - p[1].x, curr_p.y - p[1].y);
               let slope = p12_slope.unwrap();
 
               curr_max_x = (slope * rel_pos.y as f32) as i32 + p[1].x;
             }
           }
 
+          let rel_pos = Coordinates2d::new(curr_p.x - p[0].x, curr_p.y - p[0].y);
           let slope = p02_slope.unwrap();
 
           let curr_min_x = (slope * rel_pos.y as f32) as i32 + p[0].x;
@@ -575,38 +580,36 @@ impl GPU {
           // see above
 
           if p01_slope.is_none() {
+            let rel_pos = Coordinates2d::new(curr_p.x - p[0].x, curr_p.y - p[0].y);
             // use p12 slope
             let slope = p12_slope.unwrap();
             curr_min_x = (slope * rel_pos.y as f32) as i32 + p[1].x;
           } else if p12_slope.is_none() {
+            let rel_pos = Coordinates2d::new(curr_p.x - p[0].x, curr_p.y - p[0].y);
             // use p01 slope
             let slope = p01_slope.unwrap();
             curr_min_x = (slope * rel_pos.y as f32) as i32 + p[0].x;
           } else {
             if curr_p.y <= p[1].y {
               // use p01 slope
+              let rel_pos = Coordinates2d::new(curr_p.x - p[0].x, curr_p.y - p[0].y);
               let slope = p01_slope.unwrap();
               curr_min_x  = (slope * rel_pos.y as f32) as i32 + p[0].x;
             } else {
               // use p12 slope
+              let rel_pos = Coordinates2d::new(curr_p.x - p[1].x, curr_p.y - p[1].y);
               let slope = p12_slope.unwrap();
               curr_min_x = (slope * rel_pos.y as f32) as i32 + p[1].x;
             }
           }
 
+          let rel_pos = Coordinates2d::new(curr_p.x - p[0].x, curr_p.y - p[0].y);
           let slope = p02_slope.unwrap();
 
           let curr_max_x = (slope * rel_pos.y as f32) as i32 + p[0].x;
 
           (curr_min_x, curr_max_x)
         };
-
-        // if curr_min_x > curr_max_x || curr_min_y > curr_max_y {
-        //   println!("{:?}", p);
-        //   println!("{:?}", curr_p);
-        //   println!("curr_min_x = {} curr_max_x = {} curr_min_y = {} curr_max_y = {}", curr_min_x, curr_max_x, curr_min_y, curr_max_y);
-        //   panic!("this shouldn't happen....");
-        // }
 
         if curr_p.x >= curr_min_x && curr_p.x < curr_max_x && curr_p.y >= curr_min_y && curr_p.y < curr_max_y {
           // render the pixel
@@ -646,7 +649,6 @@ impl GPU {
 
       curr_p.y += 1;
     }
-    //panic!("processed one triangle lmao");
   }
 
   fn interpolate_color2(output: &mut RgbColor, curr_p: Coordinates2d, color_base: RgbColor, drdx: f32, drdy: f32, dgdx: f32, dgdy: f32, dbdx: f32, dbdy: f32) {
