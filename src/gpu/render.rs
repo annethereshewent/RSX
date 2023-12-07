@@ -406,6 +406,348 @@ impl GPU {
     }
   }
 
+  pub fn rasterize_triangle2(&mut self, c: &mut [RgbColor], p: &mut [Coordinates2d], t: &mut [Coordinates2d], clut: Coordinates2d, is_textured: bool, is_shaded: bool, is_blended: bool, semi_transparent: bool) {
+    // sort the vertices by y position so the first vertex is always the top most one
+    p.sort_by(|a, b| a.y.cmp(&b.y));
+
+    let mut cross_product = GPU::cross_product(p[0], p[1], p[2]);
+
+    if cross_product == 0 {
+      return;
+    }
+
+    let mut min_x = cmp::min(p[0].x, cmp::min(p[1].x, p[2].x));
+    let mut min_y = cmp::min(p[0].y, cmp::min(p[1].y, p[2].y));
+
+    let mut max_x = cmp::max(p[0].x, cmp::max(p[1].x, p[2].x));
+    let mut max_y = cmp::max(p[0].y, cmp::max(p[1].y, p[2].y));
+
+    let diff_x = max_x - min_y;
+    let diff_y = max_y - min_y;
+
+    if min_x < 0 || min_y < 0 || max_x >= 1024 || max_y >= 512 || (diff_x == 0 && diff_y == 0) {
+      return;
+    }
+
+    let drawing_area_left = self.drawing_area_left as i32;
+    let drawing_area_top = self.drawing_area_top as i32;
+    let drawing_area_right = self.drawing_area_right as i32;
+    let drawing_area_bottom = self.drawing_area_bottom as i32;
+
+    if min_x < drawing_area_left {
+      min_x = drawing_area_left;
+    }
+
+    if min_y < drawing_area_top {
+      min_y = drawing_area_top;
+    }
+
+    if max_x > drawing_area_right {
+      max_x = drawing_area_right;
+    }
+
+    if max_y > drawing_area_bottom {
+      max_y = drawing_area_bottom;
+    }
+
+    // TODO: use fixed point instead later
+    let mut drdx = 0.0;
+    let mut drdy = 0.0;
+
+    let mut dgdx = 0.0;
+    let mut dgdy = 0.0;
+
+    let mut dbdx = 0.0;
+    let mut dbdy = 0.0;
+
+    if is_shaded {
+      (drdx, drdy, dgdx, dgdy, dbdx, dbdy) = GPU::get_color_deltas(p, c, cross_product);
+    }
+
+    let mut dudx = 0.0;
+    let mut dudy = 0.0;
+
+    let mut dvdx = 0.0;
+    let mut dvdy = 0.0;
+
+    if is_textured {
+      (dudx, dudy, dvdx, dvdy) = GPU::get_texture_deltas(p, t, cross_product);
+    }
+
+    // set the base u/v and rgb colors relative to 0,0 so it's easier to convert. use the first vertex as the reference
+    let mut r_base = c[0].r as i32;
+    let mut g_base = c[0].g as i32;
+    let mut b_base = c[0].b as i32;
+
+    let mut uv_base = t[0];
+
+    r_base -= (drdx * p[0].x as f32) as i32;
+    r_base -= (drdy * p[0].y as f32) as i32;
+
+    g_base -= (dgdx * p[0].x as f32) as i32;
+    g_base -= (dgdy * p[0].y as f32) as i32;
+
+    b_base -= (dbdx * p[0].x as f32) as i32;
+    b_base -= (dbdy * p[0].y as f32) as i32;
+
+    uv_base.x -= (dudx * p[0].x as f32) as i32;
+    uv_base.x -= (dudy * p[0].y as f32) as i32;
+
+    uv_base.y -= (dvdx * p[0].x as f32) as i32;
+    uv_base.y -= (dvdy * p[0].y as f32) as i32;
+
+
+    // TODO: convert this to fixed point possibly?
+    let p01_slope = if p[0].y != p[1].y {
+      Some((p[1].x - p[0].x) as f32 / (p[1].y - p[0].y) as f32)
+    } else {
+      None
+    };
+
+    let p02_slope = if p[0].y != p[2].y {
+      Some((p[2].x - p[0].x) as f32 / (p[2].y - p[0].y) as f32)
+    } else {
+      None
+    };
+
+    let p12_slope = if p[1].y != p[2].y {
+      Some((p[2].x - p[1].x) as f32 / (p[2].y - p[1].y) as f32)
+    } else {
+      None
+    };
+
+    let p02_is_left = cross_product > 0;
+
+    let mut curr_p = Coordinates2d::new(min_x, min_y);
+
+    let mut output = RgbColor::new(r_base as u8, g_base as u8, b_base as u8, false);
+
+    let curr_min_y = p[0].y;
+    let curr_max_y = p[2].y;
+
+    while curr_p.y < max_y {
+      curr_p.x = min_x;
+      while curr_p.x < max_x {
+        let rel_pos = Coordinates2d::new(curr_p.x - min_x, curr_p.y - min_y);
+        let (curr_min_x, curr_max_x) = if p02_is_left {
+          let mut curr_max_x = max_x;
+
+          // consider the following cases:
+
+          // p01 is horizontal
+          // p12 is horizontal
+          // neither are horizontal
+
+          if p01_slope.is_none() {
+            // use p12 slope
+            let slope = p12_slope.unwrap();
+
+            curr_max_x  = (slope * rel_pos.y as f32) as i32 + p[1].x;
+          } else if p12_slope.is_none() {
+
+            let slope = p01_slope.unwrap();
+
+            curr_max_x = (slope * rel_pos.y as f32) as i32 + p[0].x;
+          } else {
+            // determine what slope to use based on y coordinate
+            if curr_p.y <= p[1].y {
+              // use p01 slope
+              let slope = p01_slope.unwrap();
+
+              curr_max_x = (slope * rel_pos.y as f32) as i32 + p[0].x;
+            } else {
+              // use p12 slope
+              let slope = p12_slope.unwrap();
+
+              curr_max_x = (slope * rel_pos.y as f32) as i32 + p[1].x;
+            }
+          }
+
+          let slope = p02_slope.unwrap();
+
+          let curr_min_x = (slope * rel_pos.y as f32) as i32 + p[0].x;
+
+          (curr_min_x, curr_max_x)
+        } else {
+          let mut curr_min_x = min_x;
+
+          // see above
+
+          if p01_slope.is_none() {
+            // use p12 slope
+            let slope = p12_slope.unwrap();
+            curr_min_x = (slope * rel_pos.y as f32) as i32 + p[1].x;
+          } else if p12_slope.is_none() {
+            // use p01 slope
+            let slope = p01_slope.unwrap();
+            curr_min_x = (slope * rel_pos.y as f32) as i32 + p[0].x;
+          } else {
+            if curr_p.y <= p[1].y {
+              // use p01 slope
+              let slope = p01_slope.unwrap();
+              curr_min_x  = (slope * rel_pos.y as f32) as i32 + p[0].x;
+            } else {
+              // use p12 slope
+              let slope = p12_slope.unwrap();
+              curr_min_x = (slope * rel_pos.y as f32) as i32 + p[1].x;
+            }
+          }
+
+          let slope = p02_slope.unwrap();
+
+          let curr_max_x = (slope * rel_pos.y as f32) as i32 + p[0].x;
+
+          (curr_min_x, curr_max_x)
+        };
+
+        // if curr_min_x > curr_max_x || curr_min_y > curr_max_y {
+        //   println!("{:?}", p);
+        //   println!("{:?}", curr_p);
+        //   println!("curr_min_x = {} curr_max_x = {} curr_min_y = {} curr_max_y = {}", curr_min_x, curr_max_x, curr_min_y, curr_max_y);
+        //   panic!("this shouldn't happen....");
+        // }
+
+        if curr_p.x >= curr_min_x && curr_p.x < curr_max_x && curr_p.y >= curr_min_y && curr_p.y < curr_max_y {
+          // render the pixel
+          if is_shaded {
+
+            GPU::interpolate_color2(&mut output, curr_p, drdx, drdy, dgdx, dgdy, dbdx, dbdy);
+
+            if self.stat.dither_enabled {
+              self.dither(curr_p, &mut output);
+            }
+          }
+
+          if is_textured {
+            let mut uv = GPU::interpolate_texture_coordinates2(curr_p, uv_base, dudx, dudy, dvdx, dvdy);
+
+            uv = self.mask_texture_coordinates(uv);
+
+            if let Some(mut texture) = self.get_texture(uv, clut) {
+              if is_blended {
+                GPU::blend_colors(&mut texture, &output);
+
+                if self.stat.dither_enabled {
+                  self.dither(curr_p, &mut texture);
+                }
+              }
+
+              output = texture;
+            } else {
+              curr_p.x += 1;
+              continue;
+            }
+          }
+
+          self.render_pixel(curr_p, output, is_textured, semi_transparent);
+        }
+        curr_p.x += 1;
+      }
+
+      curr_p.y += 1;
+    }
+    //panic!("processed one triangle lmao");
+  }
+
+  fn interpolate_color2(output: &mut RgbColor, curr_p: Coordinates2d, drdx: f32, drdy: f32, dgdx: f32, dgdy: f32, dbdx: f32, dbdy: f32) {
+    output.r += (drdx * curr_p.x as f32 + drdy * curr_p.y as f32) as u8;
+    output.g += (dgdx * curr_p.x as f32 + dgdy * curr_p.y as f32) as u8;
+    output.b += (dbdx * curr_p.x as f32 + dbdy * curr_p.y as f32) as u8;
+  }
+
+  fn interpolate_texture_coordinates2(curr_p: Coordinates2d, texture: Coordinates2d, dudx: f32, dudy: f32, dvdx: f32, dvdy: f32) -> Coordinates2d {
+    let u = (curr_p.x as f32 * dudx + curr_p.y as f32 * dudy) as i32 + texture.x;
+
+    let v = (curr_p.x as f32 * dvdx + curr_p.y as f32 * dvdy) as i32 + texture.y;
+
+    Coordinates2d::new(u, v)
+  }
+
+  fn get_color_deltas(p: &mut [Coordinates2d], c: &mut [RgbColor], cross_product: i32) -> (f32, f32, f32, f32, f32, f32) {
+    let drdx_cp = GPU::cross_product(
+      Coordinates2d::new(c[0].r as i32, p[0].y),
+      Coordinates2d::new(c[1].r as i32, p[1].y),
+      Coordinates2d::new(c[2].r as i32, p[2].y)
+    );
+
+    let drdy_cp = GPU::cross_product(
+      Coordinates2d::new(p[0].x, c[0].r as i32),
+      Coordinates2d::new(p[1].x, c[1].r as i32),
+      Coordinates2d::new(p[2].x, c[2].r as i32)
+    );
+
+    let dgdx_cp = GPU::cross_product(
+      Coordinates2d::new(c[0].g as i32, p[0].y),
+      Coordinates2d::new(c[1].g as i32, p[1].y),
+      Coordinates2d::new(c[2].g as i32, p[2].y)
+    );
+
+    let dgdy_cp = GPU::cross_product(
+      Coordinates2d::new(p[0].x, c[0].g as i32),
+      Coordinates2d::new(p[1].x, c[1].g as i32),
+      Coordinates2d::new(p[2].x, c[2].g as i32)
+    );
+
+    let dbdx_cp = GPU::cross_product(
+      Coordinates2d::new(c[0].b as i32, p[0].y),
+      Coordinates2d::new(c[1].b as i32, p[1].y),
+      Coordinates2d::new(c[2].b as i32, p[2].y)
+    );
+
+    let dbdy_cp = GPU::cross_product(
+      Coordinates2d::new(p[0].x, c[0].b as i32),
+      Coordinates2d::new(p[1].x, c[1].b as i32),
+      Coordinates2d::new(p[2].x, c[2].b as i32)
+    );
+
+
+    let drdx = drdx_cp as f32 / cross_product as f32;
+    let drdy = drdy_cp as f32 / cross_product as f32;
+
+    let dgdx = dgdx_cp as f32 / cross_product as f32;
+    let dgdy = dgdy_cp as f32 / cross_product as f32;
+
+    let dbdx = dbdx_cp as f32 / cross_product as f32;
+    let dbdy = dbdy_cp as f32 / cross_product as f32;
+
+    (drdx, drdy, dgdx, dgdy, dbdx, dbdy)
+
+  }
+
+  fn get_texture_deltas(p: &mut [Coordinates2d], t: &mut [Coordinates2d], cross_product: i32) -> (f32, f32, f32, f32) {
+    let dudx_cp = GPU::cross_product(
+      Coordinates2d::new(t[0].x, p[0].y),
+      Coordinates2d::new(t[1].x, p[1].y),
+      Coordinates2d::new(t[2].x, p[2].y)
+    );
+
+    let dudy_cp = GPU::cross_product(
+      Coordinates2d::new(p[0].x, t[0].x),
+      Coordinates2d::new(p[1].x, t[1].x),
+      Coordinates2d::new(p[2].x, t[2].x)
+    );
+
+    let dvdx_cp = GPU::cross_product(
+      Coordinates2d::new(t[0].y, p[0].y),
+      Coordinates2d::new(t[1].y, p[1].y),
+      Coordinates2d::new(t[2].y, p[2].y)
+    );
+
+    let dvdy_cp = GPU::cross_product(
+      Coordinates2d::new(p[0].x, t[0].y),
+      Coordinates2d::new(p[1].x, t[1].y),
+      Coordinates2d::new(p[2].x, t[2].y)
+    );
+
+    let dudx = dudx_cp as f32 / cross_product as f32;
+    let dudy = dudy_cp as f32 / cross_product as f32;
+
+    let dvdx = dvdx_cp as f32 / cross_product as f32;
+    let dvdy = dvdy_cp as f32 / cross_product as f32;
+
+    (dudx, dudy, dvdx, dvdy)
+  }
+
   fn blend_colors(texture: &mut RgbColor, color: &RgbColor) {
     texture.r = cmp::min(255,((texture.r as u32) * (color.r as u32)) >> 7) as u8;
     texture.g = cmp::min(255, ((texture.g as u32) * (color.g as u32)) >> 7) as u8;

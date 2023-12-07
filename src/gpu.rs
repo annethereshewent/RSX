@@ -39,7 +39,7 @@ pub const FPS_INTERVAL: u128 = 1000 / 60;
 
 const VRAM_SIZE: usize = 2 * 1024 * 512;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Coordinates2d {
   pub x: i32,
   pub y: i32
@@ -71,7 +71,7 @@ impl Coordinates3d {
   }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct RgbColor {
   pub r: u8,
   pub g: u8,
@@ -705,26 +705,14 @@ impl GPU {
     let mut x = (val & 0xffff) as i32;
     let mut y = (val >> 16) as i32;
 
-    x = GPU::sign_extend_i32(x, 11);
-    y = GPU::sign_extend_i32(y, 11);
+    // sign extend
+    x = (x << 21) >> 21;
+    y = (y << 21) >> 21;
 
     let x_offset = self.drawing_x_offset as i32;
     let y_offset = self.drawing_y_offset as i32;
 
     Coordinates2d::new(x + x_offset, y + y_offset)
-  }
-
-  fn sign_extend_i32(mut value: i32, size: usize) -> i32 {
-    let sign = 1 << (size - 1);
-    let mask = (1 << size) - 1;
-
-    if (value & sign) != 0 {
-        value |= !mask;
-    } else {
-        value &= mask;
-    }
-
-    return value;
   }
 
   fn parse_texture_coords(command: u32) -> Coordinates2d {
@@ -943,10 +931,10 @@ impl GPU {
       self.gp0_invalidate_cache();
     }
 
-    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], &mut tex_positions[0..3], clut, is_textured, is_shaded, is_blended, semi_transparent);
+    self.rasterize_triangle2(&mut colors[0..3], &mut positions[0..3], &mut tex_positions[0..3], clut, is_textured, is_shaded, is_blended, semi_transparent);
 
     if num_vertices == 4 {
-      self.rasterize_triangle(&mut colors[1..4], &mut positions[1..4], &mut tex_positions[1..4], clut, is_textured, is_shaded, is_blended, semi_transparent);
+      self.rasterize_triangle2(&mut colors[1..4], &mut positions[1..4], &mut tex_positions[1..4], clut, is_textured, is_shaded, is_blended, semi_transparent);
     }
   }
 
