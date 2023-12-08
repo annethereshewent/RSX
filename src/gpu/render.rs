@@ -493,11 +493,8 @@ impl GPU {
     b_base -= (dbdx * p[0].x as f32) as i32;
     b_base -= (dbdy * p[0].y as f32) as i32;
 
-    uv_base.x -= (dudx * p[0].x as f32) as i32;
-    uv_base.x -= (dudy * p[0].y as f32) as i32;
-
-    uv_base.y -= (dvdx * p[0].x as f32) as i32;
-    uv_base.y -= (dvdy * p[0].y as f32) as i32;
+    uv_base.x -= (dudx * p[0].x as f32 + dudy * p[0].y as f32).round() as i32;
+    uv_base.y -= (dvdx * p[0].x as f32 + dvdy * p[0].y as f32).round() as i32;
 
 
     // TODO: convert this to fixed point possibly?
