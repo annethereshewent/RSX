@@ -188,7 +188,6 @@ impl GPU {
     if diff_x != 0 {
       // so basically, to draw the line, get the slope of the line and follow the slope and render the line that way.
       // convert to fixed point to be less resource intensive than using floating point
-      // let slope = (diff_y / diff_x) as f32;
       let slope = ((diff_y as i64) << 12) / diff_x as i64;
 
       // for the colors we can do something similar and create a "slope" based on the x coordinate and the difference between the rgb color values
@@ -429,21 +428,8 @@ impl GPU {
     let diff_x = max_x - min_y;
     let diff_y = max_y - min_y;
 
-    // if min_x < 0 || min_y < 0 || max_x >= 1024 || max_y >= 512 || (diff_x == 0 && diff_y == 0) {
-    //   return;
-    // }
-
-    if min_x >= 1024 ||
-      max_x >= 1024 ||
-      min_y >= 512 ||
-      min_x >= 512 ||
-      min_x < 0 ||
-      min_y < 0 ||
-      max_x < 0 ||
-      min_y < 0 ||
-      diff_x >= 1024 ||
-      diff_y >= 512 {
-        return;
+    if min_x < 0 || min_y < 0 || max_x >= 1024 || max_y >= 512 || (diff_x == 0 && diff_y == 0) {
+      return;
     }
 
     let drawing_area_left = self.drawing_area_left as i32;
