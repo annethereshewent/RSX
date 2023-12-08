@@ -955,21 +955,12 @@ impl GPU {
       Vertex::new(positions[3], colors[3], tex_positions[3]),
     ];
 
-    let mut first_vertices = [
-      vertices[0].clone(),
-      vertices[1].clone(),
-      vertices[2].clone()
-    ];
+    let mut first_vertices = vertices.clone();
 
-    self.rasterize_triangle2(&mut first_vertices, clut, is_textured, is_shaded, is_blended, semi_transparent);
+    self.rasterize_triangle2(&mut first_vertices[0..3], clut, is_textured, is_shaded, is_blended, semi_transparent);
 
     if num_vertices == 4 {
-      let mut second_vertices = [
-        vertices[1].clone(),
-        vertices[2].clone(),
-        vertices[3].clone()
-      ];
-      self.rasterize_triangle2(&mut second_vertices, clut, is_textured, is_shaded, is_blended, semi_transparent);
+      self.rasterize_triangle2(&mut vertices[1..4], clut, is_textured, is_shaded, is_blended, semi_transparent);
     }
   }
 

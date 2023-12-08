@@ -429,8 +429,21 @@ impl GPU {
     let diff_x = max_x - min_y;
     let diff_y = max_y - min_y;
 
-    if min_x < 0 || min_y < 0 || max_x >= 1024 || max_y >= 512 || (diff_x == 0 && diff_y == 0) {
-      return;
+    // if min_x < 0 || min_y < 0 || max_x >= 1024 || max_y >= 512 || (diff_x == 0 && diff_y == 0) {
+    //   return;
+    // }
+
+    if min_x >= 1024 ||
+      max_x >= 1024 ||
+      min_y >= 512 ||
+      min_x >= 512 ||
+      min_x < 0 ||
+      min_y < 0 ||
+      max_x < 0 ||
+      min_y < 0 ||
+      diff_x >= 1024 ||
+      diff_y >= 512 {
+        return;
     }
 
     let drawing_area_left = self.drawing_area_left as i32;
@@ -657,13 +670,9 @@ impl GPU {
   }
 
   fn interpolate_texture_coordinates2(curr_p: Coordinates2d, texture: Coordinates2d, dudx: f32, dudy: f32, dvdx: f32, dvdy: f32) -> Coordinates2d {
-    let u = (curr_p.x as f32 * dudx + curr_p.y as f32 * dudy) as i32 + texture.x;
+    let u = (curr_p.x as f32 * dudx + curr_p.y as f32 * dudy).round() as i32 + texture.x;
 
-    let v = (curr_p.x as f32 * dvdx + curr_p.y as f32 * dvdy) as i32 + texture.y;
-
-    // if v == -1 {
-    //   println!("dvdx = {dvdx} dvdy = {dvdy} uv_base = ({},{}) and current = ({},{})", texture.x, texture.y, curr_p.x, curr_p.y);
-    // }
+    let v = (curr_p.x as f32 * dvdx + curr_p.y as f32 * dvdy).round() as i32 + texture.y;
 
     Coordinates2d::new(u, v)
   }
@@ -904,11 +913,6 @@ impl GPU {
     let block = ((uv.x / 32) + (uv.y / 64) * 8) as isize;
 
     let cache_entry = &mut self.texture_cache[entry];
-
-    // if self.debug_on {
-    //   println!("uv = {:?} offset_x = {offset_x} offset_y = {offset_y}", uv);
-    //   println!("texture address = {texture_address}");
-    // }
 
     if cache_entry.tag != block {
       for i in 0..8 {
