@@ -410,7 +410,7 @@ impl GPU {
     // sort the vertices by y position so the first vertex is always the top most one
     p.sort_by(|a, b| a.y.cmp(&b.y));
 
-    let mut cross_product = GPU::cross_product(p[0], p[1], p[2]);
+    let cross_product = GPU::cross_product(p[0], p[1], p[2]);
 
     if cross_product == 0 {
       return;
@@ -523,9 +523,6 @@ impl GPU {
     let mut output = c[0];
     let color_base = RgbColor::new(r_base as u8, g_base as u8, b_base as u8, false);
 
-    let curr_min_y = p[0].y;
-    let curr_max_y = p[2].y;
-
     while curr_p.y < max_y {
       curr_p.x = min_x;
       while curr_p.x < max_x {
@@ -538,7 +535,6 @@ impl GPU {
           // p01 is horizontal
           // p12 is horizontal
           // neither are horizontal
-
           if p01_slope.is_none() {
             let rel_pos = Coordinates2d::new(curr_p.x - p[1].x, curr_p.y - p[1].y);
             // use p12 slope
@@ -611,7 +607,7 @@ impl GPU {
           (curr_min_x, curr_max_x)
         };
 
-        if curr_p.x >= curr_min_x && curr_p.x < curr_max_x && curr_p.y >= curr_min_y && curr_p.y < curr_max_y {
+        if curr_p.x >= curr_min_x && curr_p.x <= curr_max_x {
           // render the pixel
           if is_shaded {
             GPU::interpolate_color2(&mut output, curr_p, color_base, drdx, drdy, dgdx, dgdy, dbdx, dbdy);
