@@ -406,7 +406,7 @@ impl GPU {
     }
   }
 
-  pub fn rasterize_triangle2(&mut self, c: &mut [RgbColor], p: &mut [Coordinates2d], t: &mut [Coordinates2d], clut: Coordinates2d, is_textured: bool, is_shaded: bool, is_blended: bool, semi_transparent: bool) {
+  pub fn rasterize_triangle2(&mut self, c: &[RgbColor], p: &mut [Coordinates2d], t: &[Coordinates2d], clut: Coordinates2d, is_textured: bool, is_shaded: bool, is_blended: bool, semi_transparent: bool) {
     // sort the vertices by y position so the first vertex is always the top most one
     p.sort_by(|a, b| a.y.cmp(&b.y));
 
@@ -661,7 +661,7 @@ impl GPU {
     Coordinates2d::new(u, v)
   }
 
-  fn get_color_deltas(p: &mut [Coordinates2d], c: &mut [RgbColor], cross_product: i32) -> (f32, f32, f32, f32, f32, f32) {
+  fn get_color_deltas(p: &mut [Coordinates2d], c: &[RgbColor], cross_product: i32) -> (f32, f32, f32, f32, f32, f32) {
     let drdx_cp = GPU::cross_product(
       Coordinates2d::new(c[0].r as i32, p[0].y),
       Coordinates2d::new(c[1].r as i32, p[1].y),
@@ -712,7 +712,7 @@ impl GPU {
 
   }
 
-  fn get_texture_deltas(p: &mut [Coordinates2d], t: &mut [Coordinates2d], cross_product: i32) -> (f32, f32, f32, f32) {
+  fn get_texture_deltas(p: &mut [Coordinates2d], t: &[Coordinates2d], cross_product: i32) -> (f32, f32, f32, f32) {
     let dudx_cp = GPU::cross_product(
       Coordinates2d::new(t[0].x, p[0].y),
       Coordinates2d::new(t[1].x, p[1].y),
