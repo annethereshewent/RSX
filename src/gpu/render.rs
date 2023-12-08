@@ -530,7 +530,7 @@ impl GPU {
       while curr_p.x < max_x {
         // let mut rel_pos = Coordinates2d::new(curr_p.x - min_x, curr_p.y - min_y);
         let (curr_min_x, curr_max_x) = if p02_is_left {
-          let mut curr_max_x = max_x;
+          let mut curr_max_x = 0;
 
           // consider the following cases:
 
@@ -573,7 +573,7 @@ impl GPU {
 
           (curr_min_x, curr_max_x)
         } else {
-          let mut curr_min_x = min_x;
+          let mut curr_min_x = 0;
 
           // see above
 
@@ -609,7 +609,7 @@ impl GPU {
           (curr_min_x, curr_max_x)
         };
 
-        if curr_p.x >= curr_min_x && curr_p.x <= curr_max_x {
+        if curr_p.x >= curr_min_x && curr_p.x < curr_max_x {
           // render the pixel
           if is_shaded {
             GPU::interpolate_color2(&mut output, curr_p, r_base, g_base, b_base, drdx, drdy, dgdx, dgdy, dbdx, dbdy);
