@@ -40,6 +40,23 @@ pub const FPS_INTERVAL: u128 = 1000 / 60;
 const VRAM_SIZE: usize = 2 * 1024 * 512;
 
 #[derive(Copy, Clone, Debug)]
+pub struct Vertex {
+  pub p: Coordinates2d,
+  pub c: RgbColor,
+  pub uv: Coordinates2d
+}
+
+impl Vertex {
+  pub fn new(p: Coordinates2d, c: RgbColor, uv: Coordinates2d) -> Self {
+    Self {
+      p,
+      uv,
+      c
+    }
+  }
+}
+
+#[derive(Copy, Clone, Debug)]
 pub struct Coordinates2d {
   pub x: i32,
   pub y: i32
@@ -931,12 +948,28 @@ impl GPU {
       self.gp0_invalidate_cache();
     }
 
-    let mut first_positions = positions.clone();
+    let mut vertices = [
+      Vertex::new(positions[0], colors[0], tex_positions[0]),
+      Vertex::new(positions[1], colors[1], tex_positions[1]),
+      Vertex::new(positions[2], colors[2], tex_positions[2]),
+      Vertex::new(positions[3], colors[3], tex_positions[3]),
+    ];
 
-    self.rasterize_triangle2(&colors[0..3], &mut first_positions[0..3], &tex_positions[0..3], clut, is_textured, is_shaded, is_blended, semi_transparent);
+    let mut first_vertices = [
+      vertices[0].clone(),
+      vertices[1].clone(),
+      vertices[2].clone()
+    ];
+
+    self.rasterize_triangle2(&mut first_vertices, clut, is_textured, is_shaded, is_blended, semi_transparent);
 
     if num_vertices == 4 {
-      self.rasterize_triangle2(&colors[1..4], &mut positions[1..4], &tex_positions[1..4], clut, is_textured, is_shaded, is_blended, semi_transparent);
+      let mut second_vertices = [
+        vertices[1].clone(),
+        vertices[2].clone(),
+        vertices[3].clone()
+      ];
+      self.rasterize_triangle2(&mut second_vertices, clut, is_textured, is_shaded, is_blended, semi_transparent);
     }
   }
 

@@ -2,7 +2,7 @@ use std::{cmp, mem};
 
 use crate::util;
 
-use super::{GPU, gpu_stat_register::{ColorDepth, TextureColors, SemiTransparency}, RgbColor, Coordinates2d, Coordinates3d};
+use super::{GPU, gpu_stat_register::{ColorDepth, TextureColors, SemiTransparency}, RgbColor, Coordinates2d, Coordinates3d, Vertex};
 
 impl GPU {
   fn cross_product(a: Coordinates2d, b: Coordinates2d, c: Coordinates2d) -> i32 {
@@ -406,9 +406,13 @@ impl GPU {
     }
   }
 
-  pub fn rasterize_triangle2(&mut self, c: &[RgbColor], p: &mut [Coordinates2d], t: &[Coordinates2d], clut: Coordinates2d, is_textured: bool, is_shaded: bool, is_blended: bool, semi_transparent: bool) {
+  pub fn rasterize_triangle2(&mut self, v: &mut [Vertex], clut: Coordinates2d, is_textured: bool, is_shaded: bool, is_blended: bool, semi_transparent: bool) {
     // sort the vertices by y position so the first vertex is always the top most one
-    p.sort_by(|a, b| a.y.cmp(&b.y));
+    v.sort_by(|a, b| a.p.y.cmp(&b.p.y));
+
+    let p: &mut Vec<Coordinates2d> = &mut v.iter().map(|vertex| vertex.p).collect();
+    let c: &Vec<RgbColor> = &v.iter().map(|vertex| vertex.c).collect();
+    let t: &Vec<Coordinates2d> = &v.iter().map(|vertex| vertex.uv).collect();
 
     let cross_product = GPU::cross_product(p[0], p[1], p[2]);
 
@@ -461,7 +465,7 @@ impl GPU {
     let mut dbdy = 0.0;
 
     if is_shaded {
-      (drdx, drdy, dgdx, dgdy, dbdx, dbdy) = GPU::get_color_deltas(p, c, cross_product);
+      (drdx, drdy, dgdx, dgdy, dbdx, dbdy) = GPU::get_color_deltas(&v, cross_product);
     }
 
     let mut dudx = 0.0;
@@ -521,7 +525,6 @@ impl GPU {
     let mut curr_p = Coordinates2d::new(min_x, min_y);
 
     let mut output = c[0];
-    let color_base = RgbColor::new(r_base as u8, g_base as u8, b_base as u8, false);
 
     while curr_p.y < max_y {
       curr_p.x = min_x;
@@ -610,7 +613,7 @@ impl GPU {
         if curr_p.x >= curr_min_x && curr_p.x <= curr_max_x {
           // render the pixel
           if is_shaded {
-            GPU::interpolate_color2(&mut output, curr_p, color_base, drdx, drdy, dgdx, dgdy, dbdx, dbdy);
+            GPU::interpolate_color2(&mut output, curr_p, r_base, g_base, b_base, drdx, drdy, dgdx, dgdy, dbdx, dbdy);
 
             if self.stat.dither_enabled {
               self.dither(curr_p, &mut output);
@@ -647,10 +650,10 @@ impl GPU {
     }
   }
 
-  fn interpolate_color2(output: &mut RgbColor, curr_p: Coordinates2d, color_base: RgbColor, drdx: f32, drdy: f32, dgdx: f32, dgdy: f32, dbdx: f32, dbdy: f32) {
-    output.r = (drdx * curr_p.x as f32 + drdy * curr_p.y as f32) as u8 + color_base.r;
-    output.g = (dgdx * curr_p.x as f32 + dgdy * curr_p.y as f32) as u8 + color_base.g;
-    output.b = (dbdx * curr_p.x as f32 + dbdy * curr_p.y as f32) as u8 + color_base.b;
+  fn interpolate_color2(output: &mut RgbColor, curr_p: Coordinates2d, r_base: i32, g_base: i32, b_base: i32, drdx: f32, drdy: f32, dgdx: f32, dgdy: f32, dbdx: f32, dbdy: f32) {
+    output.r = ((drdx * curr_p.x as f32 + drdy * curr_p.y as f32) as i32 + r_base) as u8;
+    output.g = ((dgdx * curr_p.x as f32 + dgdy * curr_p.y as f32) as i32 + g_base) as u8;
+    output.b = ((dbdx * curr_p.x as f32 + dbdy * curr_p.y as f32) as i32 + b_base) as u8
   }
 
   fn interpolate_texture_coordinates2(curr_p: Coordinates2d, texture: Coordinates2d, dudx: f32, dudy: f32, dvdx: f32, dvdy: f32) -> Coordinates2d {
@@ -658,44 +661,48 @@ impl GPU {
 
     let v = (curr_p.x as f32 * dvdx + curr_p.y as f32 * dvdy) as i32 + texture.y;
 
+    // if v == -1 {
+    //   println!("dvdx = {dvdx} dvdy = {dvdy} uv_base = ({},{}) and current = ({},{})", texture.x, texture.y, curr_p.x, curr_p.y);
+    // }
+
     Coordinates2d::new(u, v)
   }
 
-  fn get_color_deltas(p: &mut [Coordinates2d], c: &[RgbColor], cross_product: i32) -> (f32, f32, f32, f32, f32, f32) {
+  fn get_color_deltas(v: &[Vertex], cross_product: i32) -> (f32, f32, f32, f32, f32, f32) {
     let drdx_cp = GPU::cross_product(
-      Coordinates2d::new(c[0].r as i32, p[0].y),
-      Coordinates2d::new(c[1].r as i32, p[1].y),
-      Coordinates2d::new(c[2].r as i32, p[2].y)
+      Coordinates2d::new(v[0].c.r as i32, v[0].p.y),
+      Coordinates2d::new(v[1].c.r as i32, v[1].p.y),
+      Coordinates2d::new(v[2].c.r as i32, v[2].p.y)
     );
 
     let drdy_cp = GPU::cross_product(
-      Coordinates2d::new(p[0].x, c[0].r as i32),
-      Coordinates2d::new(p[1].x, c[1].r as i32),
-      Coordinates2d::new(p[2].x, c[2].r as i32)
+      Coordinates2d::new(v[0].p.x, v[0].c.r as i32),
+      Coordinates2d::new(v[1].p.x, v[1].c.r as i32),
+      Coordinates2d::new(v[2].p.x, v[2].c.r as i32)
     );
 
     let dgdx_cp = GPU::cross_product(
-      Coordinates2d::new(c[0].g as i32, p[0].y),
-      Coordinates2d::new(c[1].g as i32, p[1].y),
-      Coordinates2d::new(c[2].g as i32, p[2].y)
+      Coordinates2d::new(v[0].c.g as i32, v[0].p.y),
+      Coordinates2d::new(v[1].c.g as i32, v[1].p.y),
+      Coordinates2d::new(v[2].c.g as i32, v[2].p.y)
     );
 
     let dgdy_cp = GPU::cross_product(
-      Coordinates2d::new(p[0].x, c[0].g as i32),
-      Coordinates2d::new(p[1].x, c[1].g as i32),
-      Coordinates2d::new(p[2].x, c[2].g as i32)
+      Coordinates2d::new(v[0].p.x, v[0].c.g as i32),
+      Coordinates2d::new(v[1].p.x, v[1].c.g as i32),
+      Coordinates2d::new(v[2].p.x, v[2].c.g as i32)
     );
 
     let dbdx_cp = GPU::cross_product(
-      Coordinates2d::new(c[0].b as i32, p[0].y),
-      Coordinates2d::new(c[1].b as i32, p[1].y),
-      Coordinates2d::new(c[2].b as i32, p[2].y)
+      Coordinates2d::new(v[0].c.b as i32, v[0].p.y),
+      Coordinates2d::new(v[1].c.b as i32, v[1].p.y),
+      Coordinates2d::new(v[2].c.b as i32, v[2].p.y)
     );
 
     let dbdy_cp = GPU::cross_product(
-      Coordinates2d::new(p[0].x, c[0].b as i32),
-      Coordinates2d::new(p[1].x, c[1].b as i32),
-      Coordinates2d::new(p[2].x, c[2].b as i32)
+      Coordinates2d::new(v[0].p.x, v[0].c.b as i32),
+      Coordinates2d::new(v[1].p.x, v[1].c.b as i32),
+      Coordinates2d::new(v[2].p.x, v[2].c.b as i32)
     );
 
 
@@ -897,6 +904,11 @@ impl GPU {
     let block = ((uv.x / 32) + (uv.y / 64) * 8) as isize;
 
     let cache_entry = &mut self.texture_cache[entry];
+
+    // if self.debug_on {
+    //   println!("uv = {:?} offset_x = {offset_x} offset_y = {offset_y}", uv);
+    //   println!("texture address = {texture_address}");
+    // }
 
     if cache_entry.tag != block {
       for i in 0..8 {
