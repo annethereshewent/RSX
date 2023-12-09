@@ -203,9 +203,7 @@ impl GPU {
         color.g = (color_g_fp >> 12) as u8;
         color.b = (color_b_fp >> 12) as u8;
 
-        let x_fp = (x as i64) << 12;
-
-        let y = ((x_fp * slope) >> 12) as i32 + start_y;
+        let y = ((x as i64 * slope) >> 12) as i32 + start_y;
 
         if shaded {
           color_r_fp += r_slope;
@@ -453,64 +451,74 @@ impl GPU {
       max_y = drawing_area_bottom;
     }
 
-    // TODO: use fixed point instead later
-    let mut drdx = 0.0;
-    let mut drdy = 0.0;
+    // using fixed point arithmetic for performance boost, also hoping to fix some bugs with textures
+    let mut drdx = 0;
+    let mut drdy = 0;
 
-    let mut dgdx = 0.0;
-    let mut dgdy = 0.0;
+    let mut dgdx = 0;
+    let mut dgdy = 0;
 
-    let mut dbdx = 0.0;
-    let mut dbdy = 0.0;
+    let mut dbdx = 0;
+    let mut dbdy = 0;
 
     if is_shaded {
       (drdx, drdy, dgdx, dgdy, dbdx, dbdy) = GPU::get_color_deltas(&v, cross_product);
     }
 
-    let mut dudx = 0.0;
-    let mut dudy = 0.0;
+    let mut dudx = 0;
+    let mut dudy = 0;
 
-    let mut dvdx = 0.0;
-    let mut dvdy = 0.0;
+    let mut dvdx = 0;
+    let mut dvdy = 0;
 
     if is_textured {
       (dudx, dudy, dvdx, dvdy) = GPU::get_texture_deltas(p, t, cross_product);
     }
 
     // set the base u/v and rgb colors relative to 0,0 so it's easier to convert. use the first vertex as the reference
-    let mut r_base = c[0].r as i32;
-    let mut g_base = c[0].g as i32;
-    let mut b_base = c[0].b as i32;
+    let mut r_base = (c[0].r as i64) << 12;
+    let mut g_base = (c[0].g as i64) << 12;
+    let mut b_base = (c[0].b as i64) << 12;
 
     let mut uv_base = t[0];
 
-    r_base -= (drdx * p[0].x as f32) as i32;
-    r_base -= (drdy * p[0].y as f32) as i32;
+    let mut u_base_fp = (uv_base.x as i64) << 12;
+    let mut v_base_fp = (uv_base.y as i64) << 12;
 
-    g_base -= (dgdx * p[0].x as f32) as i32;
-    g_base -= (dgdy * p[0].y as f32) as i32;
+    // add .5 for rounding
+    u_base_fp |= 1 << 11;
+    v_base_fp |= 1 << 11;
 
-    b_base -= (dbdx * p[0].x as f32) as i32;
-    b_base -= (dbdy * p[0].y as f32) as i32;
+    r_base -= drdx * p[0].x as i64;
+    r_base -= drdy * p[0].y as i64;
 
-    uv_base.x -= (dudx * p[0].x as f32 + dudy * p[0].y as f32).round() as i32;
-    uv_base.y -= (dvdx * p[0].x as f32 + dvdy * p[0].y as f32).round() as i32;
+    g_base -= dgdx * p[0].x as i64;
+    g_base -= dgdy * p[0].y as i64;
 
-    // TODO: convert this to fixed point possibly?
+    b_base -= dbdx * p[0].x as i64;
+    b_base -= dbdy * p[0].y as i64;
+
+    u_base_fp -= dudx * p[0].x as i64 + dudy * p[0].y as i64;
+    v_base_fp -= dvdx * p[0].x as i64 + dvdy * p[0].y as i64;
+
+    // using fixed point for better performance (and to hopefully fix some bugs)
     let p01_slope = if p[0].y != p[1].y {
-      Some((p[1].x - p[0].x) as f32 / (p[1].y - p[0].y) as f32)
+      let dx_fp = ((p[1].x - p[0].x) as i64) << 12;
+      Some(dx_fp / (p[1].y - p[0].y) as i64)
     } else {
       None
     };
 
     let p02_slope = if p[0].y != p[2].y {
-      Some((p[2].x - p[0].x) as f32 / (p[2].y - p[0].y) as f32)
+      let dx_fp = ((p[2].x - p[0].x) << 12) as i64;
+      Some(dx_fp / (p[2].y - p[0].y) as i64)
     } else {
       None
     };
 
     let p12_slope = if p[1].y != p[2].y {
-      Some((p[2].x - p[1].x) as f32 / (p[2].y - p[1].y) as f32)
+      let dx_fp = ((p[2].x - p[1].x) << 12) as i64;
+      Some(dx_fp / (p[2].y - p[1].y) as i64)
     } else {
       None
     };
@@ -524,85 +532,12 @@ impl GPU {
     while curr_p.y < max_y {
       curr_p.x = min_x;
       while curr_p.x < max_x {
-        // let mut rel_pos = Coordinates2d::new(curr_p.x - min_x, curr_p.y - min_y);
+        let (boundary1, boundary2) = self.get_triangle_boundaries(p, p01_slope, p12_slope, p02_slope, curr_p);
+
         let (curr_min_x, curr_max_x) = if p02_is_left {
-          let mut curr_max_x = 0;
-
-          // consider the following cases:
-
-          // p01 is horizontal
-          // p12 is horizontal
-          // neither are horizontal
-          if p01_slope.is_none() {
-            let rel_pos = Coordinates2d::new(curr_p.x - p[1].x, curr_p.y - p[1].y);
-            // use p12 slope
-            let slope = p12_slope.unwrap();
-
-            curr_max_x  = (slope * rel_pos.y as f32) as i32 + p[1].x;
-          } else if p12_slope.is_none() {
-            let rel_pos = Coordinates2d::new(curr_p.x - p[0].x, curr_p.y - p[0].y);
-
-            let slope = p01_slope.unwrap();
-
-            curr_max_x = (slope * rel_pos.y as f32) as i32 + p[0].x;
-          } else {
-            // determine what slope to use based on y coordinate
-            if curr_p.y <= p[1].y {
-              // use p01 slope
-              let rel_pos = Coordinates2d::new(curr_p.x - p[0].x, curr_p.y - p[0].y);
-              let slope = p01_slope.unwrap();
-
-              curr_max_x = (slope * rel_pos.y as f32) as i32 + p[0].x;
-            } else {
-              // use p12 slope
-              let rel_pos = Coordinates2d::new(curr_p.x - p[1].x, curr_p.y - p[1].y);
-              let slope = p12_slope.unwrap();
-
-              curr_max_x = (slope * rel_pos.y as f32) as i32 + p[1].x;
-            }
-          }
-
-          let rel_pos = Coordinates2d::new(curr_p.x - p[0].x, curr_p.y - p[0].y);
-          let slope = p02_slope.unwrap();
-
-          let curr_min_x = (slope * rel_pos.y as f32) as i32 + p[0].x;
-
-          (curr_min_x, curr_max_x)
+          (boundary1, boundary2)
         } else {
-          let mut curr_min_x = 0;
-
-          // see above
-
-          if p01_slope.is_none() {
-            let rel_pos = Coordinates2d::new(curr_p.x - p[0].x, curr_p.y - p[0].y);
-            // use p12 slope
-            let slope = p12_slope.unwrap();
-            curr_min_x = (slope * rel_pos.y as f32) as i32 + p[1].x;
-          } else if p12_slope.is_none() {
-            let rel_pos = Coordinates2d::new(curr_p.x - p[0].x, curr_p.y - p[0].y);
-            // use p01 slope
-            let slope = p01_slope.unwrap();
-            curr_min_x = (slope * rel_pos.y as f32) as i32 + p[0].x;
-          } else {
-            if curr_p.y <= p[1].y {
-              // use p01 slope
-              let rel_pos = Coordinates2d::new(curr_p.x - p[0].x, curr_p.y - p[0].y);
-              let slope = p01_slope.unwrap();
-              curr_min_x  = (slope * rel_pos.y as f32) as i32 + p[0].x;
-            } else {
-              // use p12 slope
-              let rel_pos = Coordinates2d::new(curr_p.x - p[1].x, curr_p.y - p[1].y);
-              let slope = p12_slope.unwrap();
-              curr_min_x = (slope * rel_pos.y as f32) as i32 + p[1].x;
-            }
-          }
-
-          let rel_pos = Coordinates2d::new(curr_p.x - p[0].x, curr_p.y - p[0].y);
-          let slope = p02_slope.unwrap();
-
-          let curr_max_x = (slope * rel_pos.y as f32) as i32 + p[0].x;
-
-          (curr_min_x, curr_max_x)
+          (boundary2, boundary1)
         };
 
         if curr_p.x >= curr_min_x && curr_p.x < curr_max_x {
@@ -616,7 +551,7 @@ impl GPU {
           }
 
           if is_textured {
-            let mut uv = GPU::interpolate_texture_coordinates2(curr_p, uv_base, dudx, dudy, dvdx, dvdy);
+            let mut uv = GPU::interpolate_texture_coordinates2(curr_p, u_base_fp, v_base_fp, dudx, dudy, dvdx, dvdy);
 
             uv = self.mask_texture_coordinates(uv);
 
@@ -644,21 +579,21 @@ impl GPU {
     }
   }
 
-  fn interpolate_color2(output: &mut RgbColor, curr_p: Coordinates2d, r_base: i32, g_base: i32, b_base: i32, drdx: f32, drdy: f32, dgdx: f32, dgdy: f32, dbdx: f32, dbdy: f32) {
-    output.r = ((drdx * curr_p.x as f32 + drdy * curr_p.y as f32) as i32 + r_base) as u8;
-    output.g = ((dgdx * curr_p.x as f32 + dgdy * curr_p.y as f32) as i32 + g_base) as u8;
-    output.b = ((dbdx * curr_p.x as f32 + dbdy * curr_p.y as f32) as i32 + b_base) as u8
+  fn interpolate_color2(output: &mut RgbColor, curr_p: Coordinates2d, r_base: i64, g_base: i64, b_base: i64, drdx: i64, drdy: i64, dgdx: i64, dgdy: i64, dbdx: i64, dbdy: i64) {
+    output.r = ((drdx * curr_p.x as i64 + drdy * curr_p.y as i64 + r_base) >> 12) as u8;
+    output.g = ((dgdx * curr_p.x as i64 + dgdy * curr_p.y as i64 + g_base) >> 12) as u8;
+    output.b = ((dbdx * curr_p.x as i64 + dbdy * curr_p.y as i64 + b_base) >> 12) as u8;
   }
 
-  fn interpolate_texture_coordinates2(curr_p: Coordinates2d, texture: Coordinates2d, dudx: f32, dudy: f32, dvdx: f32, dvdy: f32) -> Coordinates2d {
-    let u = (curr_p.x as f32 * dudx + curr_p.y as f32 * dudy).round() as i32 + texture.x;
+  fn interpolate_texture_coordinates2(curr_p: Coordinates2d, u_base_fp: i64, v_base_fp: i64, dudx: i64, dudy: i64, dvdx: i64, dvdy: i64) -> Coordinates2d {
+    let u = ((curr_p.x as i64 * dudx + curr_p.y as i64 * dudy + u_base_fp) >> 12) as i32;
 
-    let v = (curr_p.x as f32 * dvdx + curr_p.y as f32 * dvdy).round() as i32 + texture.y;
+    let v = ((curr_p.x as i64 * dvdx + curr_p.y as i64 * dvdy + v_base_fp) >> 12) as i32;
 
     Coordinates2d::new(u, v)
   }
 
-  fn get_color_deltas(v: &[Vertex], cross_product: i32) -> (f32, f32, f32, f32, f32, f32) {
+  fn get_color_deltas(v: &[Vertex], cross_product: i32) -> (i64, i64, i64, i64, i64, i64) {
     let drdx_cp = GPU::cross_product(
       Coordinates2d::new(v[0].c.r as i32, v[0].p.y),
       Coordinates2d::new(v[1].c.r as i32, v[1].p.y),
@@ -696,20 +631,20 @@ impl GPU {
     );
 
 
-    let drdx = drdx_cp as f32 / cross_product as f32;
-    let drdy = drdy_cp as f32 / cross_product as f32;
+    let drdx = (drdx_cp << 12) as i64 / cross_product as i64;
+    let drdy = (drdy_cp << 12) as i64 / cross_product as i64;
 
-    let dgdx = dgdx_cp as f32 / cross_product as f32;
-    let dgdy = dgdy_cp as f32 / cross_product as f32;
+    let dgdx = (dgdx_cp << 12) as i64 / cross_product as i64;
+    let dgdy = (dgdy_cp << 12) as i64 / cross_product as i64;
 
-    let dbdx = dbdx_cp as f32 / cross_product as f32;
-    let dbdy = dbdy_cp as f32 / cross_product as f32;
+    let dbdx = (dbdx_cp << 12) as i64 / cross_product as i64;
+    let dbdy = (dbdy_cp << 12) as i64 / cross_product as i64;
 
     (drdx, drdy, dgdx, dgdy, dbdx, dbdy)
 
   }
 
-  fn get_texture_deltas(p: &mut [Coordinates2d], t: &[Coordinates2d], cross_product: i32) -> (f32, f32, f32, f32) {
+  fn get_texture_deltas(p: &mut [Coordinates2d], t: &[Coordinates2d], cross_product: i32) -> (i64, i64, i64, i64) {
     let dudx_cp = GPU::cross_product(
       Coordinates2d::new(t[0].x, p[0].y),
       Coordinates2d::new(t[1].x, p[1].y),
@@ -734,13 +669,65 @@ impl GPU {
       Coordinates2d::new(p[2].x, t[2].y)
     );
 
-    let dudx = dudx_cp as f32 / cross_product as f32;
-    let dudy = dudy_cp as f32 / cross_product as f32;
+    let dudx = (dudx_cp << 12) as i64 / cross_product as i64;
+    let dudy = (dudy_cp << 12) as i64 / cross_product as i64;
 
-    let dvdx = dvdx_cp as f32 / cross_product as f32;
-    let dvdy = dvdy_cp as f32 / cross_product as f32;
+    let dvdx = (dvdx_cp << 12) as i64 / cross_product as i64;
+    let dvdy = (dvdy_cp << 12) as i64 / cross_product as i64;
 
     (dudx, dudy, dvdx, dvdy)
+  }
+
+  /**
+   * Gets the triangle left and right boundaries depending on the slopes.
+   * Since p02 slope can either be on the left or right side of the triangle,
+   * to get the min/max for either side, just switch the boundaries. (ie: if
+   * p02 is on the left, then max is boundary2, min is boundary1, other way otherwise)
+   */
+  fn get_triangle_boundaries(&self, p: &[Coordinates2d], p01_slope: Option<i64>, p12_slope: Option<i64>, p02_slope: Option<i64>, curr_p: Coordinates2d) -> (i32, i32) {
+    let mut boundary2 = 0;
+
+    // consider the following cases:
+
+    // p01 is horizontal
+    // p12 is horizontal
+    // neither are horizontal
+    let boundary2 = if p01_slope.is_none() {
+      let rel_y = (curr_p.y - p[1].y) as i64;
+      // use p12 slope
+      let slope = p12_slope.unwrap();
+
+      ((slope * rel_y) >> 12) as i32 + p[1].x
+    } else if p12_slope.is_none() {
+      let rel_y = (curr_p.y - p[0].y) as i64;
+
+      let slope = p01_slope.unwrap();
+
+      ((slope * rel_y) >> 12) as i32 + p[0].x
+    } else {
+      // determine what slope to use based on y coordinate
+      if curr_p.y <= p[1].y {
+        // use p01 slope
+        let rel_y = (curr_p.y - p[0].y) as i64;
+        let slope = p01_slope.unwrap();
+
+        ((slope * rel_y) >> 12) as i32 + p[0].x
+      } else {
+        // use p12 slope
+        let rel_y = (curr_p.y - p[1].y) as i64;
+
+        let slope = p12_slope.unwrap();
+
+        ((slope * rel_y) >> 12) as i32 + p[1].x
+      }
+    };
+
+    let rel_y = (curr_p.y - p[0].y) as i64;
+    let slope = p02_slope.unwrap();
+
+    let boundary1 = ((slope * rel_y) >> 12) as i32 + p[0].x;
+
+    (boundary1, boundary2)
   }
 
   fn blend_colors(texture: &mut RgbColor, color: &RgbColor) {
