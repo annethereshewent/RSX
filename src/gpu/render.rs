@@ -498,8 +498,8 @@ impl GPU {
     b_base -= dbdx * p[0].x as i64;
     b_base -= dbdy * p[0].y as i64;
 
-    // u_base_fp -= dudx * p[0].x as i64 + dudy * p[0].y as i64;
-    // v_base_fp -= dvdx * p[0].x as i64 + dvdy * p[0].y as i64;
+    u_base_fp -= dudx * p[0].x as i64 + dudy * p[0].y as i64;
+    v_base_fp -= dvdx * p[0].x as i64 + dvdy * p[0].y as i64;
 
     // using fixed point for better performance (and to hopefully fix some bugs)
     let p01_slope = if p[0].y != p[1].y {
@@ -552,8 +552,8 @@ impl GPU {
 
           if is_textured {
             // texture coordinates are relative to the first vertex
-            let rel_pos = Coordinates2d::new(curr_p.x - p[0].x, curr_p.y - p[0].y);
-            let mut uv = GPU::interpolate_texture_coordinates2(rel_pos, u_base_fp, v_base_fp, dudx, dudy, dvdx, dvdy);
+            let mut uv = GPU::interpolate_texture_coordinates2(curr_p, u_base_fp, v_base_fp, dudx, dudy, dvdx, dvdy);
+
             uv = self.mask_texture_coordinates(uv);
 
             if let Some(mut texture) = self.get_texture(uv, clut) {
@@ -587,9 +587,12 @@ impl GPU {
   }
 
   fn interpolate_texture_coordinates2(curr_p: Coordinates2d, u_base_fp: i64, v_base_fp: i64, dudx: i64, dudy: i64, dvdx: i64, dvdy: i64) -> Coordinates2d {
-    let u = ((curr_p.x as i64 * dudx + curr_p.y as i64 * dudy + u_base_fp) >> 12) as i32;
+    // converting to u8 is a really shitty hack that will ensure that texture coordinates aren't out of bounds.
+    // this will definitely cause rendering issues, but I'm not sure of a way around it atm
+    // TODO: find a way around this hack
+    let u = ((curr_p.x as i64 * dudx + curr_p.y as i64 * dudy + u_base_fp) >> 12) as u8 as i32;
 
-    let v = ((curr_p.x as i64 * dvdx + curr_p.y as i64 * dvdy + v_base_fp) >> 12) as i32;
+    let v = ((curr_p.x as i64 * dvdx + curr_p.y as i64 * dvdy + v_base_fp) >> 12) as u8 as i32;
 
     Coordinates2d::new(u, v)
   }
@@ -686,8 +689,6 @@ impl GPU {
    * p02 is on the left, then max is boundary2, min is boundary1, other way otherwise).
    */
   fn get_triangle_boundaries(&self, p: &[Coordinates2d], p01_slope: Option<i64>, p12_slope: Option<i64>, p02_slope: Option<i64>, curr_p: Coordinates2d) -> (i32, i32) {
-    let mut boundary2 = 0;
-
     // consider the following cases:
 
     // p01 is horizontal
