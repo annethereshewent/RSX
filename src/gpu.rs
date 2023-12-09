@@ -957,14 +957,14 @@ impl GPU {
 
     let mut first_vertices = vertices.clone();
 
-    // self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], &mut tex_positions[0..3], clut, is_textured, is_shaded, is_blended, semi_transparent);
+    self.rasterize_triangle(&mut colors[0..3], &mut positions[0..3], &mut tex_positions[0..3], clut, is_textured, is_shaded, is_blended, semi_transparent);
 
-    self.rasterize_triangle2(&mut first_vertices[0..3], clut, is_textured, is_shaded, is_blended, semi_transparent);
+    // self.rasterize_triangle2(&mut first_vertices[0..3], clut, is_textured, is_shaded, is_blended, semi_transparent);
 
     if num_vertices == 4 {
-      // self.rasterize_triangle(&mut colors[1..4], &mut positions[1..4], &mut tex_positions[1..4], clut, is_textured, is_shaded, is_blended, semi_transparent);
+      self.rasterize_triangle(&mut colors[1..4], &mut positions[1..4], &mut tex_positions[1..4], clut, is_textured, is_shaded, is_blended, semi_transparent);
 
-      self.rasterize_triangle2(&mut vertices[1..4], clut, is_textured, is_shaded, is_blended, semi_transparent);
+      // self.rasterize_triangle2(&mut vertices[1..4], clut, is_textured, is_shaded, is_blended, semi_transparent);
     }
   }
 

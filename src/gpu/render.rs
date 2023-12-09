@@ -480,7 +480,7 @@ impl GPU {
     let mut g_base = (c[0].g as i64) << 12;
     let mut b_base = (c[0].b as i64) << 12;
 
-    let mut uv_base = t[0];
+    let uv_base = t[0];
 
     let mut u_base_fp = (uv_base.x as i64) << 12;
     let mut v_base_fp = (uv_base.y as i64) << 12;
@@ -498,8 +498,8 @@ impl GPU {
     b_base -= dbdx * p[0].x as i64;
     b_base -= dbdy * p[0].y as i64;
 
-    u_base_fp -= dudx * p[0].x as i64 + dudy * p[0].y as i64;
-    v_base_fp -= dvdx * p[0].x as i64 + dvdy * p[0].y as i64;
+    // u_base_fp -= dudx * p[0].x as i64 + dudy * p[0].y as i64;
+    // v_base_fp -= dvdx * p[0].x as i64 + dvdy * p[0].y as i64;
 
     // using fixed point for better performance (and to hopefully fix some bugs)
     let p01_slope = if p[0].y != p[1].y {
@@ -551,8 +551,9 @@ impl GPU {
           }
 
           if is_textured {
-            let mut uv = GPU::interpolate_texture_coordinates2(curr_p, u_base_fp, v_base_fp, dudx, dudy, dvdx, dvdy);
-
+            // texture coordinates are relative to the first vertex
+            let rel_pos = Coordinates2d::new(curr_p.x - p[0].x, curr_p.y - p[0].y);
+            let mut uv = GPU::interpolate_texture_coordinates2(rel_pos, u_base_fp, v_base_fp, dudx, dudy, dvdx, dvdy);
             uv = self.mask_texture_coordinates(uv);
 
             if let Some(mut texture) = self.get_texture(uv, clut) {
@@ -682,7 +683,7 @@ impl GPU {
    * Gets the triangle left and right boundaries depending on the slopes.
    * Since p02 slope can either be on the left or right side of the triangle,
    * to get the min/max for either side, just switch the boundaries. (ie: if
-   * p02 is on the left, then max is boundary2, min is boundary1, other way otherwise)
+   * p02 is on the left, then max is boundary2, min is boundary1, other way otherwise).
    */
   fn get_triangle_boundaries(&self, p: &[Coordinates2d], p01_slope: Option<i64>, p12_slope: Option<i64>, p02_slope: Option<i64>, curr_p: Coordinates2d) -> (i32, i32) {
     let mut boundary2 = 0;
@@ -692,6 +693,7 @@ impl GPU {
     // p01 is horizontal
     // p12 is horizontal
     // neither are horizontal
+    // p02 can't be horizontal because vertices are always sorted by y coordinate, hence line p02 is always either vertical or diagonal.
     let boundary2 = if p01_slope.is_none() {
       let rel_y = (curr_p.y - p[1].y) as i64;
       // use p12 slope
