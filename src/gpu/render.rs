@@ -496,7 +496,6 @@ impl GPU {
     uv_base.x -= (dudx * p[0].x as f32 + dudy * p[0].y as f32).round() as i32;
     uv_base.y -= (dvdx * p[0].x as f32 + dvdy * p[0].y as f32).round() as i32;
 
-
     // TODO: convert this to fixed point possibly?
     let p01_slope = if p[0].y != p[1].y {
       Some((p[1].x - p[0].x) as f32 / (p[1].y - p[0].y) as f32)
@@ -641,7 +640,6 @@ impl GPU {
         }
         curr_p.x += 1;
       }
-
       curr_p.y += 1;
     }
   }
@@ -891,7 +889,7 @@ impl GPU {
     let texture_address = (offset_x + offset_y * 2048) as usize;
 
     // in this case, each cache line is organized in blocks of 8 * 32 cache lines,
-    // and each cache entry is 8 8bpp pixels wide (half as many as 4bb mode)
+    // and each cache entry is 8 8bpp pixels wide (half as many as 4bpp mode)
     let entry = ((4 * uv.y + ((uv.x / 8) & 0x7)) & 0xff) as usize;
     let block = ((uv.x / 32) + (uv.y / 64) * 8) as isize;
 
