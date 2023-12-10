@@ -350,6 +350,7 @@ impl GPU {
     }
 
     // get the base u/v and rgb colors based on first vertex, then "shift" to 0,0 so it's easier to convert from absolute coordinates.
+    // using fixed point for better performance
     let mut r_base = (c[0].r as i64) << 12;
     let mut g_base = (c[0].g as i64) << 12;
     let mut b_base = (c[0].b as i64) << 12;
