@@ -346,7 +346,7 @@ impl GPU {
     let mut texture_d = TextureDeltas::new(0.0, 0.0, 0.0, 0.0);
 
     if is_textured {
-      texture_d = TextureDeltas::get_texture_deltas(p, t, cross_product);
+      texture_d = TextureDeltas::get_texture_deltas(&v, cross_product);
     }
 
     // get the base u/v and rgb colors based on first vertex, then "shift" to 0,0 so it's easier to convert from absolute coordinates.

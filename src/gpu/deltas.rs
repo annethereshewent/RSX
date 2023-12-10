@@ -16,30 +16,30 @@ impl TextureDeltas {
       dvdy
     }
   }
-  // TODO: make this method and get_color_deltas have consistent parameters between the two
-  pub fn get_texture_deltas(p: &mut [Coordinates2d], t: &[Coordinates2d], cross_product: i32) -> Self {
+
+  pub fn get_texture_deltas(v: &[Vertex], cross_product: i32) -> Self {
     let dudx_cp = GPU::cross_product(
-      Coordinates2d::new(t[0].x, p[0].y),
-      Coordinates2d::new(t[1].x, p[1].y),
-      Coordinates2d::new(t[2].x, p[2].y)
+      Coordinates2d::new(v[0].uv.x, v[0].p.y),
+      Coordinates2d::new(v[1].uv.x, v[1].p.y),
+      Coordinates2d::new(v[2].uv.x, v[2].p.y)
     );
 
     let dudy_cp = GPU::cross_product(
-      Coordinates2d::new(p[0].x, t[0].x),
-      Coordinates2d::new(p[1].x, t[1].x),
-      Coordinates2d::new(p[2].x, t[2].x)
+      Coordinates2d::new(v[0].p.x, v[0].uv.x),
+      Coordinates2d::new(v[1].p.x, v[1].uv.x),
+      Coordinates2d::new(v[2].p.x, v[2].uv.x)
     );
 
     let dvdx_cp = GPU::cross_product(
-      Coordinates2d::new(t[0].y, p[0].y),
-      Coordinates2d::new(t[1].y, p[1].y),
-      Coordinates2d::new(t[2].y, p[2].y)
+      Coordinates2d::new(v[0].uv.y, v[0].p.y),
+      Coordinates2d::new(v[1].uv.y, v[1].p.y),
+      Coordinates2d::new(v[2].uv.y, v[2].p.y)
     );
 
     let dvdy_cp = GPU::cross_product(
-      Coordinates2d::new(p[0].x, t[0].y),
-      Coordinates2d::new(p[1].x, t[1].y),
-      Coordinates2d::new(p[2].x, t[2].y)
+      Coordinates2d::new(v[0].p.x, v[0].uv.y),
+      Coordinates2d::new(v[1].p.x, v[1].uv.y),
+      Coordinates2d::new(v[2].p.x, v[2].uv.y)
     );
 
     let dudx = dudx_cp as f32 / cross_product as f32;
