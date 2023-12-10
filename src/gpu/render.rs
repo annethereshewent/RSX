@@ -290,7 +290,7 @@ impl GPU {
   }
 
   pub fn rasterize_triangle(&mut self, v: &mut [Vertex], clut: Coordinates2d, is_textured: bool, is_shaded: bool, is_blended: bool, semi_transparent: bool) {
-    // sort the vertices by y position so the first vertex is always the top most one
+    // sort the vertices by y position so the first vertex is always the top most one, and p02 slope is always vertical or slanted.
     v.sort_by(|a, b| a.p.y.cmp(&b.p.y));
 
     let p: &mut Vec<Coordinates2d> = &mut v.iter().map(|vertex| vertex.p).collect();
@@ -536,10 +536,6 @@ impl GPU {
     pixel
   }
 
-  fn is_top_left(x: i32, y: i32) -> bool {
-    (y < 0) || ((x < 0) && (y == 0))
-  }
-
   fn mask_texture_coordinates(&self, mut uv: Coordinates2d) -> Coordinates2d {
     let mask_x = self.texture_window_x_mask as i32;
     let mask_y = self.texture_window_y_mask as i32;
@@ -573,7 +569,7 @@ impl GPU {
 
     let block = (((uv.y / 64) * 4) + (uv.x / 64)) as isize;
 
-    // each cacheline is organized in blocks of 4 * 64 cache lines.
+    // each cache line is organized in blocks of 4 * 64 cache lines.
     // each line is thus made up of 4 blocks,
     // this is why we multiply y by 4. since each cache entry is 16 4bpp pixels wide,
     // divide x by 16 to get the entry number, then add to y * 4 as described above.
