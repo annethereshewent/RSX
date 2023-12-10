@@ -437,7 +437,6 @@ impl GPU {
           }
 
           if is_textured {
-            // texture coordinates are relative to the first vertex
             let mut uv = GPU::interpolate_texture_coordinates(curr_p, u_base_fp, v_base_fp, dudx, dudy, dvdx, dvdy);
 
             uv = self.mask_texture_coordinates(uv);
