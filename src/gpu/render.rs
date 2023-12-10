@@ -229,7 +229,15 @@ impl GPU {
 
       let mut color = colors[0];
 
-      for y in start_y..=end_y {
+      let going_up = start_y > end_y;
+
+      for y_offset in 0..=diff_y {
+        let y = if going_up {
+          start_y - y_offset
+        } else {
+          start_y + y_offset
+        };
+
         color.r = (color_r_fp >> 12) as u8;
         color.g = (color_g_fp >> 12) as u8;
         color.b = (color_b_fp >> 12) as u8;
@@ -281,129 +289,7 @@ impl GPU {
     }
   }
 
-  pub fn rasterize_triangle(&mut self, c: &mut [RgbColor], p: &mut [Coordinates2d], t: &mut [Coordinates2d], clut: Coordinates2d, is_textured: bool, is_shaded: bool, is_blended: bool, semi_transparent: bool) {
-    let mut cross_product = GPU::cross_product(p[0], p[1], p[2]);
-
-    if cross_product == 0 {
-      return;
-    }
-
-    if cross_product < 0 {
-      p.swap(1, 2);
-      c.swap(1, 2);
-      t.swap(1, 2);
-
-      cross_product = -cross_product;
-    }
-
-    let mut min_x = cmp::min(p[0].x, cmp::min(p[1].x, p[2].x));
-    let mut min_y = cmp::min(p[0].y, cmp::min(p[1].y, p[2].y));
-
-    let mut max_x = cmp::max(p[0].x, cmp::max(p[1].x, p[2].x));
-    let mut max_y = cmp::max(p[0].y, cmp::max(p[1].y, p[2].y));
-
-    let diff_x = max_x - min_x;
-    let diff_y = max_y - min_y;
-
-    if min_x >= 1024 ||
-      max_x >= 1024 ||
-      min_y >= 512 ||
-      min_x >= 512 ||
-      min_x < 0 ||
-      min_y < 0 ||
-      max_x < 0 ||
-      min_y < 0 ||
-      diff_x >= 1024 ||
-      diff_y >= 512 {
-        return;
-    }
-
-    min_x = cmp::max(min_x, self.drawing_area_left as i32);
-    min_y = cmp::max(min_y, self.drawing_area_top as i32);
-
-    max_x = cmp::min(max_x, self.drawing_area_right as i32);
-    max_y = cmp::min(max_y, self.drawing_area_bottom as i32);
-
-    let a01 = (p[0].y - p[1].y) as i32;
-    let b01 = (p[1].x - p[0].x) as i32;
-
-    let a12 = (p[1].y - p[2].y) as i32;
-    let b12 = (p[2].x - p[1].x) as i32;
-
-    let a20 = (p[2].y - p[0].y) as i32;
-    let b20 = (p[0].x - p[2].x) as i32;
-
-    let mut curr_p = Coordinates2d::new(min_x, min_y);
-
-    let mut w0_row = GPU::cross_product(p[1], p[2], curr_p) as i32;
-    let mut w1_row = GPU::cross_product(p[2], p[0], curr_p) as i32;
-    let mut w2_row = GPU::cross_product(p[0], p[1], curr_p) as i32;
-
-    let w0_bias = -(GPU::is_top_left(b12, a12) as i32);
-    let w1_bias = -(GPU::is_top_left(b20, a20) as i32);
-    let w2_bias = -(GPU::is_top_left(b01, a01) as i32);
-
-    let blend_color = c[0];
-    let mut output = blend_color;
-
-    while curr_p.y < max_y {
-      curr_p.x = min_x;
-
-      let mut w0 = w0_row;
-      let mut w1 = w1_row;
-      let mut w2 = w2_row;
-      while curr_p.x < max_x {
-        if ((w0 + w0_bias) | (w1 + w1_bias) | (w2 + w2_bias)) >= 0 {
-          let vec_3d = Coordinates3d::new(w0, w1, w2);
-          if is_shaded {
-            output = GPU::interpolate_color(cross_product as i32, vec_3d, c[0], c[1], c[2]);
-
-            if self.stat.dither_enabled {
-              self.dither(curr_p, &mut output);
-            }
-          }
-
-          if is_textured {
-            let mut uv = GPU::interpolate_texture_coordinates(cross_product, vec_3d, t[0], t[1], t[2]);
-            uv = self.mask_texture_coordinates(uv);
-
-            if let Some(mut texture) = self.get_texture(uv, clut) {
-              if is_blended {
-                GPU::blend_colors(&mut texture, &blend_color);
-
-                if self.stat.dither_enabled {
-                  self.dither(curr_p, &mut texture);
-                }
-              }
-
-              output = texture;
-            } else {
-              w0 += a12;
-              w1 += a20;
-              w2 += a01;
-
-              curr_p.x += 1;
-              continue;
-            }
-          }
-
-          self.render_pixel(curr_p, output, is_textured, semi_transparent);
-        }
-        w0 += a12;
-        w1 += a20;
-        w2 += a01;
-
-        curr_p.x += 1;
-      }
-      w0_row += b12;
-      w1_row += b20;
-      w2_row += b01;
-
-      curr_p.y += 1;
-    }
-  }
-
-  pub fn rasterize_triangle2(&mut self, v: &mut [Vertex], clut: Coordinates2d, is_textured: bool, is_shaded: bool, is_blended: bool, semi_transparent: bool) {
+  pub fn rasterize_triangle(&mut self, v: &mut [Vertex], clut: Coordinates2d, is_textured: bool, is_shaded: bool, is_blended: bool, semi_transparent: bool) {
     // sort the vertices by y position so the first vertex is always the top most one
     v.sort_by(|a, b| a.p.y.cmp(&b.p.y));
 
@@ -543,7 +429,7 @@ impl GPU {
         if curr_p.x >= curr_min_x && curr_p.x < curr_max_x {
           // render the pixel
           if is_shaded {
-            GPU::interpolate_color2(&mut output, curr_p, r_base, g_base, b_base, drdx, drdy, dgdx, dgdy, dbdx, dbdy);
+            GPU::interpolate_color(&mut output, curr_p, r_base, g_base, b_base, drdx, drdy, dgdx, dgdy, dbdx, dbdy);
 
             if self.stat.dither_enabled {
               self.dither(curr_p, &mut output);
@@ -552,7 +438,7 @@ impl GPU {
 
           if is_textured {
             // texture coordinates are relative to the first vertex
-            let mut uv = GPU::interpolate_texture_coordinates2(curr_p, u_base_fp, v_base_fp, dudx, dudy, dvdx, dvdy);
+            let mut uv = GPU::interpolate_texture_coordinates(curr_p, u_base_fp, v_base_fp, dudx, dudy, dvdx, dvdy);
 
             uv = self.mask_texture_coordinates(uv);
 
@@ -580,13 +466,13 @@ impl GPU {
     }
   }
 
-  fn interpolate_color2(output: &mut RgbColor, curr_p: Coordinates2d, r_base: i64, g_base: i64, b_base: i64, drdx: i64, drdy: i64, dgdx: i64, dgdy: i64, dbdx: i64, dbdy: i64) {
+  fn interpolate_color(output: &mut RgbColor, curr_p: Coordinates2d, r_base: i64, g_base: i64, b_base: i64, drdx: i64, drdy: i64, dgdx: i64, dgdy: i64, dbdx: i64, dbdy: i64) {
     output.r = ((drdx * curr_p.x as i64 + drdy * curr_p.y as i64 + r_base) >> 12) as u8;
     output.g = ((dgdx * curr_p.x as i64 + dgdy * curr_p.y as i64 + g_base) >> 12) as u8;
     output.b = ((dbdx * curr_p.x as i64 + dbdy * curr_p.y as i64 + b_base) >> 12) as u8;
   }
 
-  fn interpolate_texture_coordinates2(curr_p: Coordinates2d, u_base_fp: i64, v_base_fp: i64, dudx: i64, dudy: i64, dvdx: i64, dvdy: i64) -> Coordinates2d {
+  fn interpolate_texture_coordinates(curr_p: Coordinates2d, u_base_fp: i64, v_base_fp: i64, dudx: i64, dudy: i64, dvdx: i64, dvdy: i64) -> Coordinates2d {
     // converting to u8 is a really shitty hack that will ensure that texture coordinates aren't out of bounds.
     // this will definitely cause rendering issues, but I'm not sure of a way around it atm
     // TODO: find a way around this hack
@@ -751,37 +637,6 @@ impl GPU {
 
   fn is_top_left(x: i32, y: i32) -> bool {
     (y < 0) || ((x < 0) && (y == 0))
-  }
-
-  fn interpolate_color(area: i32, vec_3d: Coordinates3d, color0: RgbColor, color1: RgbColor, color2: RgbColor) -> RgbColor {
-    let color0_r = color0.r as i32;
-    let color1_r = color1.r as i32;
-    let color2_r = color2.r as i32;
-
-    let color0_g = color0.g as i32;
-    let color1_g = color1.g as i32;
-    let color2_g = color2.g as i32;
-
-    let color0_b = color0.b as i32;
-    let color1_b = color1.b as i32;
-    let color2_b = color2.b as i32;
-
-
-    let r = ((vec_3d.x * color0_r + vec_3d.y * color1_r + vec_3d.z * color2_r) / area) as u8;
-    let g = ((vec_3d.x * color0_g + vec_3d.y * color1_g + vec_3d.z * color2_g) / area) as u8;
-    let b = ((vec_3d.x * color0_b + vec_3d.y * color1_b + vec_3d.z * color2_b) / area) as u8;
-
-    RgbColor::new(r, g, b, false)
-  }
-
-  fn interpolate_texture_coordinates(area: i32, w: Coordinates3d,
-    t0: Coordinates2d,
-    t1: Coordinates2d,
-    t2: Coordinates2d) -> Coordinates2d {
-    let u = (w.x * t0.x + w.y * t1.x + w.z * t2.x) / area;
-    let v = (w.x * t0.y + w.y * t1.y + w.z * t2.y) / area;
-
-    Coordinates2d::new(u, v)
   }
 
   fn mask_texture_coordinates(&self, mut uv: Coordinates2d) -> Coordinates2d {
