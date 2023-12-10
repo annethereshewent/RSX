@@ -218,13 +218,13 @@ impl CPU {
   }
 
   fn cfc2(&mut self, instr: Instruction) {
-    let value = self.cop2.read_control(instr.rd());
+    let value = self.gte.read_control(instr.rd());
 
     self.update_load(instr.rt(), value);
   }
 
   fn mfc2(&mut self, instr: Instruction) {
-    let value = self.cop2.read_data(instr.rd());
+    let value = self.gte.read_data(instr.rd());
 
     self.update_load(instr.rt(), value);
   }
@@ -232,13 +232,13 @@ impl CPU {
   fn mtc2(&mut self, instr: Instruction) {
     let value = self.r[instr.rt()];
 
-    self.cop2.write_data(instr.rd(), value);
+    self.gte.write_data(instr.rd(), value);
 
     self.execute_load_delay();
   }
 
   fn cop2_command(&mut self, instr: Instruction) {
-    self.cop2.execute_command(instr);
+    self.gte.execute_command(instr);
 
     self.execute_load_delay();
   }
@@ -246,7 +246,7 @@ impl CPU {
   fn ctc2(&mut self, instr: Instruction) {
     let value = self.r[instr.rt()];
 
-    self.cop2.write_control(instr.rd(), value);
+    self.gte.write_control(instr.rd(), value);
 
     self.execute_load_delay();
   }
@@ -275,7 +275,7 @@ impl CPU {
     if address & 0b11 == 0 {
       let value = self.load_32(address);
 
-      self.cop2.write_data(instr.rt(), value);
+      self.gte.write_data(instr.rt(), value);
     } else {
       self.exception(Cause::LoadAddressError);
     }
@@ -299,7 +299,7 @@ impl CPU {
   fn swc2(&mut self, instr: Instruction) {
     let address = self.r[instr.rs()].wrapping_add(instr.immediate_signed());
 
-    let value = self.cop2.read_data(instr.rt());
+    let value = self.gte.read_data(instr.rt());
 
     self.execute_load_delay();
 

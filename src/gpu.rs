@@ -6,6 +6,7 @@ use self::gpu_stat_register::{GpuStatRegister, VideoMode, TextureColors, SemiTra
 
 pub mod gpu_stat_register;
 pub mod render;
+pub mod deltas;
 
 const COMMAND_LENGTH: [u32; 256] = [
   1, 1, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
@@ -360,7 +361,7 @@ impl GPU {
 
       if self.current_scanline == (self.num_scanlines - 20) {
         self.frame_complete = true;
-        // self.cap_fps();
+        self.cap_fps();
         // entering VBlank
         let mut interrupts = self.interrupts.get();
 

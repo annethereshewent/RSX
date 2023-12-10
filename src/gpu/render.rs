@@ -2,10 +2,10 @@ use std::{cmp, mem};
 
 use crate::util;
 
-use super::{GPU, gpu_stat_register::{ColorDepth, TextureColors, SemiTransparency}, RgbColor, Coordinates2d, Coordinates3d, Vertex};
+use super::{GPU, gpu_stat_register::{ColorDepth, TextureColors, SemiTransparency}, RgbColor, Coordinates2d, Coordinates3d, Vertex, deltas::{ColorDeltas, TextureDeltas}};
 
 impl GPU {
-  fn cross_product(a: Coordinates2d, b: Coordinates2d, c: Coordinates2d) -> i32 {
+  pub fn cross_product(a: Coordinates2d, b: Coordinates2d, c: Coordinates2d) -> i32 {
     (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
   }
 
@@ -337,31 +337,19 @@ impl GPU {
       max_y = drawing_area_bottom;
     }
 
-    // using fixed point arithmetic for performance boost, also hoping to fix some bugs with textures
-    let mut drdx = 0;
-    let mut drdy = 0;
-
-    let mut dgdx = 0;
-    let mut dgdy = 0;
-
-    let mut dbdx = 0;
-    let mut dbdy = 0;
+    let mut color_d = ColorDeltas::new(0, 0, 0, 0, 0, 0);
 
     if is_shaded {
-      (drdx, drdy, dgdx, dgdy, dbdx, dbdy) = GPU::get_color_deltas(&v, cross_product);
+      color_d = ColorDeltas::get_color_deltas(&v, cross_product);
     }
 
-    let mut dudx = 0;
-    let mut dudy = 0;
-
-    let mut dvdx = 0;
-    let mut dvdy = 0;
+    let mut texture_d = TextureDeltas::new(0, 0, 0, 0);
 
     if is_textured {
-      (dudx, dudy, dvdx, dvdy) = GPU::get_texture_deltas(p, t, cross_product);
+      texture_d = TextureDeltas::get_texture_deltas(p, t, cross_product);
     }
 
-    // set the base u/v and rgb colors relative to 0,0 so it's easier to convert. use the first vertex as the reference
+    // get the base u/v and rgb colors based on first vertex, then "shift" to 0,0 so it's easier to convert from absolute coordinates.
     let mut r_base = (c[0].r as i64) << 12;
     let mut g_base = (c[0].g as i64) << 12;
     let mut b_base = (c[0].b as i64) << 12;
@@ -375,17 +363,17 @@ impl GPU {
     u_base_fp |= 1 << 11;
     v_base_fp |= 1 << 11;
 
-    r_base -= drdx * p[0].x as i64;
-    r_base -= drdy * p[0].y as i64;
+    r_base -= color_d.drdx * p[0].x as i64;
+    r_base -= color_d.drdy * p[0].y as i64;
 
-    g_base -= dgdx * p[0].x as i64;
-    g_base -= dgdy * p[0].y as i64;
+    g_base -= color_d.dgdx * p[0].x as i64;
+    g_base -= color_d.dgdy * p[0].y as i64;
 
-    b_base -= dbdx * p[0].x as i64;
-    b_base -= dbdy * p[0].y as i64;
+    b_base -= color_d.dbdx * p[0].x as i64;
+    b_base -= color_d.dbdy * p[0].y as i64;
 
-    u_base_fp -= dudx * p[0].x as i64 + dudy * p[0].y as i64;
-    v_base_fp -= dvdx * p[0].x as i64 + dvdy * p[0].y as i64;
+    u_base_fp -= texture_d.dudx * p[0].x as i64 + texture_d.dudy * p[0].y as i64;
+    v_base_fp -= texture_d.dvdx * p[0].x as i64 + texture_d.dvdy * p[0].y as i64;
 
     // using fixed point for better performance (and to hopefully fix some bugs)
     let p01_slope = if p[0].y != p[1].y {
@@ -429,7 +417,7 @@ impl GPU {
         if curr_p.x >= curr_min_x && curr_p.x < curr_max_x {
           // render the pixel
           if is_shaded {
-            GPU::interpolate_color(&mut output, curr_p, r_base, g_base, b_base, drdx, drdy, dgdx, dgdy, dbdx, dbdy);
+            GPU::interpolate_color(&mut output, curr_p, r_base, g_base, b_base, &color_d);
 
             if self.stat.dither_enabled {
               self.dither(curr_p, &mut output);
@@ -437,7 +425,7 @@ impl GPU {
           }
 
           if is_textured {
-            let mut uv = GPU::interpolate_texture_coordinates(curr_p, u_base_fp, v_base_fp, dudx, dudy, dvdx, dvdy);
+            let mut uv = GPU::interpolate_texture_coordinates(curr_p, u_base_fp, v_base_fp, &texture_d);
 
             uv = self.mask_texture_coordinates(uv);
 
@@ -465,106 +453,22 @@ impl GPU {
     }
   }
 
-  fn interpolate_color(output: &mut RgbColor, curr_p: Coordinates2d, r_base: i64, g_base: i64, b_base: i64, drdx: i64, drdy: i64, dgdx: i64, dgdy: i64, dbdx: i64, dbdy: i64) {
-    output.r = ((drdx * curr_p.x as i64 + drdy * curr_p.y as i64 + r_base) >> 12) as u8;
-    output.g = ((dgdx * curr_p.x as i64 + dgdy * curr_p.y as i64 + g_base) >> 12) as u8;
-    output.b = ((dbdx * curr_p.x as i64 + dbdy * curr_p.y as i64 + b_base) >> 12) as u8;
+  fn interpolate_color(output: &mut RgbColor, curr_p: Coordinates2d, r_base: i64, g_base: i64, b_base: i64, color_d: &ColorDeltas) {
+    output.r = ((color_d.drdx * curr_p.x as i64 + color_d.drdy * curr_p.y as i64 + r_base) >> 12) as u8;
+    output.g = ((color_d.dgdx * curr_p.x as i64 + color_d.dgdy * curr_p.y as i64 + g_base) >> 12) as u8;
+    output.b = ((color_d.dbdx * curr_p.x as i64 + color_d.dbdy * curr_p.y as i64 + b_base) >> 12) as u8;
   }
 
-  fn interpolate_texture_coordinates(curr_p: Coordinates2d, u_base_fp: i64, v_base_fp: i64, dudx: i64, dudy: i64, dvdx: i64, dvdy: i64) -> Coordinates2d {
-    // converting to u8 is a really shitty hack that will ensure that texture coordinates aren't out of bounds.
-    // this will definitely cause rendering issues, but I'm not sure of a way around it atm
+  fn interpolate_texture_coordinates(curr_p: Coordinates2d, u_base_fp: i64, v_base_fp: i64, texture_d: &TextureDeltas) -> Coordinates2d {
+    // converting to u8 is a really crappy hack that will ensure that texture coordinates
+    // aren't ever out of bounds. this will definitely cause rendering issues,
+    // but I'm not sure of a way around it atm
     // TODO: find a way around this hack
-    let u = ((curr_p.x as i64 * dudx + curr_p.y as i64 * dudy + u_base_fp) >> 12) as u8 as i32;
+    let u = ((curr_p.x as i64 * texture_d.dudx + curr_p.y as i64 * texture_d.dudy + u_base_fp) >> 12) as u8 as i32;
 
-    let v = ((curr_p.x as i64 * dvdx + curr_p.y as i64 * dvdy + v_base_fp) >> 12) as u8 as i32;
+    let v = ((curr_p.x as i64 * texture_d.dvdx + curr_p.y as i64 * texture_d.dvdy + v_base_fp) >> 12) as u8 as i32;
 
     Coordinates2d::new(u, v)
-  }
-
-  fn get_color_deltas(v: &[Vertex], cross_product: i32) -> (i64, i64, i64, i64, i64, i64) {
-    let drdx_cp = GPU::cross_product(
-      Coordinates2d::new(v[0].c.r as i32, v[0].p.y),
-      Coordinates2d::new(v[1].c.r as i32, v[1].p.y),
-      Coordinates2d::new(v[2].c.r as i32, v[2].p.y)
-    );
-
-    let drdy_cp = GPU::cross_product(
-      Coordinates2d::new(v[0].p.x, v[0].c.r as i32),
-      Coordinates2d::new(v[1].p.x, v[1].c.r as i32),
-      Coordinates2d::new(v[2].p.x, v[2].c.r as i32)
-    );
-
-    let dgdx_cp = GPU::cross_product(
-      Coordinates2d::new(v[0].c.g as i32, v[0].p.y),
-      Coordinates2d::new(v[1].c.g as i32, v[1].p.y),
-      Coordinates2d::new(v[2].c.g as i32, v[2].p.y)
-    );
-
-    let dgdy_cp = GPU::cross_product(
-      Coordinates2d::new(v[0].p.x, v[0].c.g as i32),
-      Coordinates2d::new(v[1].p.x, v[1].c.g as i32),
-      Coordinates2d::new(v[2].p.x, v[2].c.g as i32)
-    );
-
-    let dbdx_cp = GPU::cross_product(
-      Coordinates2d::new(v[0].c.b as i32, v[0].p.y),
-      Coordinates2d::new(v[1].c.b as i32, v[1].p.y),
-      Coordinates2d::new(v[2].c.b as i32, v[2].p.y)
-    );
-
-    let dbdy_cp = GPU::cross_product(
-      Coordinates2d::new(v[0].p.x, v[0].c.b as i32),
-      Coordinates2d::new(v[1].p.x, v[1].c.b as i32),
-      Coordinates2d::new(v[2].p.x, v[2].c.b as i32)
-    );
-
-
-    let drdx = (drdx_cp << 12) as i64 / cross_product as i64;
-    let drdy = (drdy_cp << 12) as i64 / cross_product as i64;
-
-    let dgdx = (dgdx_cp << 12) as i64 / cross_product as i64;
-    let dgdy = (dgdy_cp << 12) as i64 / cross_product as i64;
-
-    let dbdx = (dbdx_cp << 12) as i64 / cross_product as i64;
-    let dbdy = (dbdy_cp << 12) as i64 / cross_product as i64;
-
-    (drdx, drdy, dgdx, dgdy, dbdx, dbdy)
-
-  }
-
-  fn get_texture_deltas(p: &mut [Coordinates2d], t: &[Coordinates2d], cross_product: i32) -> (i64, i64, i64, i64) {
-    let dudx_cp = GPU::cross_product(
-      Coordinates2d::new(t[0].x, p[0].y),
-      Coordinates2d::new(t[1].x, p[1].y),
-      Coordinates2d::new(t[2].x, p[2].y)
-    );
-
-    let dudy_cp = GPU::cross_product(
-      Coordinates2d::new(p[0].x, t[0].x),
-      Coordinates2d::new(p[1].x, t[1].x),
-      Coordinates2d::new(p[2].x, t[2].x)
-    );
-
-    let dvdx_cp = GPU::cross_product(
-      Coordinates2d::new(t[0].y, p[0].y),
-      Coordinates2d::new(t[1].y, p[1].y),
-      Coordinates2d::new(t[2].y, p[2].y)
-    );
-
-    let dvdy_cp = GPU::cross_product(
-      Coordinates2d::new(p[0].x, t[0].y),
-      Coordinates2d::new(p[1].x, t[1].y),
-      Coordinates2d::new(p[2].x, t[2].y)
-    );
-
-    let dudx = (dudx_cp << 12) as i64 / cross_product as i64;
-    let dudy = (dudy_cp << 12) as i64 / cross_product as i64;
-
-    let dvdx = (dvdx_cp << 12) as i64 / cross_product as i64;
-    let dvdy = (dvdy_cp << 12) as i64 / cross_product as i64;
-
-    (dudx, dudy, dvdx, dvdy)
   }
 
   /**

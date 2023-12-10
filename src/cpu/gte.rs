@@ -32,7 +32,7 @@ struct Rgb {
   c: u8
 }
 
-pub struct COP2 {
+pub struct Gte {
   pub debug_on: bool,
   executed_commands: HashMap<u32, bool>,
   zsf3: i16,
@@ -67,7 +67,7 @@ pub struct COP2 {
   lzcr: i32
 }
 
-impl COP2 {
+impl Gte {
   pub fn new() -> Self {
     Self {
       zsf3: 0,
@@ -916,9 +916,9 @@ impl COP2 {
       23 => self.res1,
       24..=27 => self.mac[destination - 24] as u32,
       28 | 29 => {
-        let r = COP2::to_u5(self.ir[1] >> 7) as u32;
-        let g = COP2::to_u5(self.ir[2] >> 7) as u32;
-        let b = COP2::to_u5(self.ir[3] >> 7) as u32;
+        let r = Gte::to_u5(self.ir[1] >> 7) as u32;
+        let g = Gte::to_u5(self.ir[2] >> 7) as u32;
+        let b = Gte::to_u5(self.ir[3] >> 7) as u32;
 
         r | (g << 5) | (b << 10)
       }
