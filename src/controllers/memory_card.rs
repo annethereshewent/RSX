@@ -1,3 +1,4 @@
+#[derive(PartialEq)]
 pub enum CardState {
   Idle,
   AwaitingCommand,
@@ -5,6 +6,8 @@ pub enum CardState {
   Write,
   GetId
 }
+
+const MEMORY_CARD_SIZE: usize = 0x20000;
 
 pub struct MemoryCard {
   state: CardState,
@@ -15,13 +18,15 @@ pub struct MemoryCard {
   current_byte: u8,
   checksum: u8,
   checksum_match: bool,
-  previous: u8
+  previous: u8,
+  card: Box<[u8]>,
+  flag: u8
 }
 
 impl MemoryCard {
   pub fn new() -> Self {
     Self {
-      state: CardState::AwaitingCommand,
+      state: CardState::Idle,
       read_step: 0,
       write_step: 0,
       id_step: 0,
@@ -29,17 +34,29 @@ impl MemoryCard {
       current_byte: 0,
       checksum: 0,
       previous: 0,
-      checksum_match: false
+      checksum_match: false,
+      card: vec![0; MEMORY_CARD_SIZE].into_boxed_slice(),
+      flag: 0x8
     }
+  }
+
+  pub fn enabled(&self) -> bool {
+    self.state != CardState::Idle
+  }
+
+  pub fn reset_state(&mut self) {
+    self.state = CardState::Idle;
   }
 
   pub fn reply(&mut self, command: u8) -> u8 {
     let mut reply = 0xff;
+
     match self.state {
       CardState::Idle => {
         self.state = CardState::AwaitingCommand;
       }
       CardState::AwaitingCommand => {
+        reply = self.flag;
         match command {
           0x52 => {
             self.state = CardState::Read;
@@ -66,7 +83,7 @@ impl MemoryCard {
     reply
   }
 
-  fn process_get_id_command(&mut self, command: u8) -> u8 {
+  fn process_get_id_command(&mut self, _command: u8) -> u8 {
     let mut reply = 0xff;
 
     let mut should_advance = true;
@@ -101,7 +118,10 @@ impl MemoryCard {
     let mut should_advance = true;
 
     match self.write_step {
-      0 => reply = 0x5a,
+      0 => {
+        reply = 0x5a;
+        self.flag &= !0x8;
+      },
       1 => reply = 0x5d,
       2 => {
         // clear out upper byte then set msb with whatever's in command
@@ -185,6 +205,10 @@ impl MemoryCard {
         self.sector_number &= 0xff00;
         self.sector_number |= command as u16;
 
+        if self.sector_number > 0x3ff {
+          self.sector_number = 0xffff
+        }
+
         self.checksum ^= command;
 
         reply = self.previous;
@@ -192,18 +216,11 @@ impl MemoryCard {
       4 => reply = 0x5c,
       5 => reply = 0x5d,
       6 => {
-        if self.sector_number <= 0x3ff {
-          reply = (self.sector_number >> 8) as u8;
-        } else {
-          reply = 0xff;
-        }
-
+        reply = (self.sector_number >> 8) as u8;
       }
       7 => {
-        if self.sector_number <= 0x3ff {
-          reply = self.sector_number as u8;
-        } else {
-          reply = 0xff;
+        reply = self.sector_number as u8;
+        if self.sector_number > 0x3ff {
           should_advance = false;
 
           self.state = CardState::Idle;
@@ -212,7 +229,7 @@ impl MemoryCard {
       },
       8 => {
         should_advance = false;
-        let sector_address = (self.sector_number * 128) as usize;
+        let sector_address = self.sector_number as usize * 128;
         reply = self.read_byte(sector_address + self.current_byte as usize);
 
         self.checksum ^= reply;
@@ -245,10 +262,10 @@ impl MemoryCard {
   }
 
   fn read_byte(&self, address: usize) -> u8 {
-    0
+    self.card[address]
   }
 
   fn write_byte(&mut self, address: usize, byte: u8) {
-
+    self.card[address] = byte;
   }
 }

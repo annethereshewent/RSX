@@ -68,6 +68,7 @@ impl Controllers {
       self.active_device = ControllerDevice::None;
       self.in_acknowledge = false;
       self.joypad.state = 0;
+      self.memory_card.reset_state();
     }
 
     if self.ctrl.reset() {
@@ -148,17 +149,14 @@ impl Controllers {
 
   pub fn transfer_byte(&mut self) {
     self.currently_transferring = false;
-    if self.tx_fifo.is_empty() {
-      return;
-    }
+
+    let command = self.tx_fifo.pop_front().unwrap();
 
     // controller 2 is unsupported, return back dummy value
     if self.ctrl.desired_slot() == 1 {
       self.rx_fifo.push_back(0xff);
       return;
     }
-
-    let command = self.tx_fifo.pop_front().unwrap();
 
     if self.active_device == ControllerDevice::None {
       if command == 0x1 {
@@ -187,10 +185,17 @@ impl Controllers {
       ControllerDevice::MemoryCard => {
         let response = self.memory_card.reply(command);
 
+        enable = self.memory_card.enabled();
+        self.ack_input = enable;
+
+        if enable {
+          self.cycles += 338;
+          self.in_acknowledge = true;
+        }
 
         response
       }
-      _ => unreachable!("can't happen")
+      ControllerDevice::None => 0xff
     };
 
     self.rx_fifo.push_back(response);

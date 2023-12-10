@@ -108,6 +108,7 @@ impl Bus {
         (self.scratchpad[offset] as u32) | (self.scratchpad[offset + 1] as u32) << 8 | (self.scratchpad[offset + 2] as u32) << 16 | (self.scratchpad[offset + 3] as u32) << 24
       }
       0x1f80_1014 => 0x2009_31e1,
+      0x1f80_1044 => self.controllers.read_stat() as u32,
       0x1f80_1060 => 0xb88,
       0x1f80_1070 => {
         self.interrupts.get().status.read()

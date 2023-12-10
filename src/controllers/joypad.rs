@@ -98,7 +98,12 @@ impl Joypad {
       }
       2 => 0x5a,
       3 => self.low_input,
-      4 => self.high_input,
+      4 => {
+        if self.digital_mode {
+          reset_state = true;
+        }
+        self.high_input
+      }
       5 => self.rx_axis,
       6 => self.ry_axis,
       7 => self.lx_axis,
