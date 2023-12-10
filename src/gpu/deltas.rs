@@ -1,14 +1,14 @@
 use super::{Coordinates2d, GPU, Vertex};
 
 pub struct TextureDeltas {
-  pub dudx: i64,
-  pub dudy: i64,
-  pub dvdx: i64,
-  pub dvdy: i64
+  pub dudx: f32,
+  pub dudy: f32,
+  pub dvdx: f32,
+  pub dvdy: f32
 }
 
 impl TextureDeltas {
-  pub fn new(dudx: i64, dudy: i64, dvdx: i64, dvdy: i64) -> Self {
+  pub fn new(dudx: f32, dudy: f32, dvdx: f32, dvdy: f32) -> Self {
     Self {
       dudx,
       dudy,
@@ -42,27 +42,27 @@ impl TextureDeltas {
       Coordinates2d::new(p[2].x, t[2].y)
     );
 
-    let dudx = (dudx_cp << 12) as i64 / cross_product as i64;
-    let dudy = (dudy_cp << 12) as i64 / cross_product as i64;
+    let dudx = dudx_cp as f32 / cross_product as f32;
+    let dudy = dudy_cp as f32 / cross_product as f32;
 
-    let dvdx = (dvdx_cp << 12) as i64 / cross_product as i64;
-    let dvdy = (dvdy_cp << 12) as i64 / cross_product as i64;
+    let dvdx = dvdx_cp as f32 / cross_product as f32;
+    let dvdy = dvdy_cp as f32 / cross_product as f32;
 
     Self::new(dudx, dudy, dvdx, dvdy)
   }
 }
 
 pub struct ColorDeltas {
-  pub drdx: i64,
-  pub drdy: i64,
-  pub dgdx: i64,
-  pub dgdy: i64,
-  pub dbdx: i64,
-  pub dbdy: i64
+  pub drdx: f32,
+  pub drdy: f32,
+  pub dgdx: f32,
+  pub dgdy: f32,
+  pub dbdx: f32,
+  pub dbdy: f32
 }
 
 impl ColorDeltas {
-  pub fn new(drdx: i64, drdy: i64, dgdx: i64, dgdy: i64, dbdx: i64, dbdy: i64) -> Self {
+  pub fn new(drdx: f32, drdy: f32, dgdx: f32, dgdy: f32, dbdx: f32, dbdy: f32) -> Self {
     Self {
       drdx,
       drdy,
@@ -111,14 +111,14 @@ impl ColorDeltas {
     );
 
 
-    let drdx = (drdx_cp << 12) as i64 / cross_product as i64;
-    let drdy = (drdy_cp << 12) as i64 / cross_product as i64;
+    let drdx = drdx_cp as f32 / cross_product as f32;
+    let drdy = drdy_cp as f32 / cross_product as f32;
 
-    let dgdx = (dgdx_cp << 12) as i64 / cross_product as i64;
-    let dgdy = (dgdy_cp << 12) as i64 / cross_product as i64;
+    let dgdx = dgdx_cp as f32 / cross_product as f32;
+    let dgdy = dgdy_cp as f32 / cross_product as f32;
 
-    let dbdx = (dbdx_cp << 12) as i64 / cross_product as i64;
-    let dbdy = (dbdy_cp << 12) as i64 / cross_product as i64;
+    let dbdx = dbdx_cp as f32 / cross_product as f32;
+    let dbdy = dbdy_cp as f32 / cross_product as f32;
 
     Self::new(drdx, drdy, dgdx, dgdy, dbdx, dbdy)
   }
