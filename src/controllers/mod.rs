@@ -148,11 +148,11 @@ impl Controllers {
 
   pub fn transfer_byte(&mut self) {
     self.currently_transferring = false;
-    // if self.tx_fifo.is_empty() {
-    //   return;
-    // }
+    if self.tx_fifo.is_empty() {
+      return;
+    }
 
-    // controller 2 is currently unsupported, return back dummy value
+    // controller 2 is unsupported, return back dummy value
     if self.ctrl.desired_slot() == 1 {
       self.rx_fifo.push_back(0xff);
       return;
@@ -185,7 +185,10 @@ impl Controllers {
         response
       }
       ControllerDevice::MemoryCard => {
-        0xff
+        let response = self.memory_card.reply(command);
+
+
+        response
       }
       _ => unreachable!("can't happen")
     };
