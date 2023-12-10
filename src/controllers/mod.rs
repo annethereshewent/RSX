@@ -38,6 +38,10 @@ pub struct Controllers {
 
 impl Controllers {
   pub fn new(interrupts: Rc<Cell<InterruptRegisters>>) -> Self {
+    let mut memory_card = MemoryCard::new();
+
+    memory_card.load_file_contents();
+
     Self {
       ctrl: JoyControl::new(),
       baudrate_timer: 0,
@@ -52,7 +56,7 @@ impl Controllers {
       rx_parity_error: false,
       active_device: ControllerDevice::None,
       joypad: Joypad::new(),
-      memory_card: MemoryCard::new(),
+      memory_card,
       in_acknowledge: false,
       ack_input: false,
       interrupts

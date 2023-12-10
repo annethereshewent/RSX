@@ -1,3 +1,5 @@
+use std::{fs::{self, File}, io::{Write, Read, Seek, SeekFrom}, os::unix::fs::FileExt};
+
 #[derive(PartialEq)]
 pub enum CardState {
   Idle,
@@ -20,11 +22,24 @@ pub struct MemoryCard {
   checksum_match: bool,
   previous: u8,
   card: Box<[u8]>,
-  flag: u8
+  flag: u8,
+  card_file: File
 }
 
 impl MemoryCard {
   pub fn new() -> Self {
+    let filename = "../cards/memory_card.mcd";
+
+    fs::create_dir_all("../cards").unwrap();
+
+    let file = fs::OpenOptions::new()
+      .create(true)
+      .read(true)
+      .write(true)
+      .append(true)
+      .open(filename)
+      .unwrap();
+
     Self {
       state: CardState::Idle,
       read_step: 0,
@@ -36,8 +51,13 @@ impl MemoryCard {
       previous: 0,
       checksum_match: false,
       card: vec![0; MEMORY_CARD_SIZE].into_boxed_slice(),
-      flag: 0x8
+      flag: 0x8,
+      card_file: file
     }
+  }
+
+  pub fn load_file_contents(&mut self) {
+    self.card_file.read_exact(&mut self.card).unwrap();
   }
 
   pub fn enabled(&self) -> bool {
@@ -237,6 +257,7 @@ impl MemoryCard {
         self.current_byte += 1;
 
         if self.current_byte == 128 {
+          self.write_to_file();
           should_advance = true;
         }
       }
@@ -267,5 +288,21 @@ impl MemoryCard {
 
   fn write_byte(&mut self, address: usize, byte: u8) {
     self.card[address] = byte;
+  }
+
+  fn write_to_file(&mut self) {
+    self.card_file.write_all_at(&self.card, 0).unwrap();
+    self.card_file.flush().unwrap();
+
+    let mut buffer_copy = [0; MEMORY_CARD_SIZE];
+
+    self.card_file.seek(SeekFrom::Start(0)).unwrap();
+    self.card_file.read_exact(&mut buffer_copy).unwrap();
+
+    for i in 0..buffer_copy.len() {
+      if buffer_copy[i] != self.card[i] {
+        panic!("{} vs {} at index {i}", buffer_copy[i], self.card[i]);
+      }
+    }
   }
 }
