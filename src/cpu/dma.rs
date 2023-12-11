@@ -159,7 +159,7 @@ impl DMA {
             channel.active_address.wrapping_sub(4) & 0x1fffff
           }
         }
-        _ => todo!("channel not supported yet: {channel_id}")
+        _ => panic!("invalid channel specified: {channel_id}")
       };
 
       bus.mem_write_32(masked_address, value);
@@ -238,6 +238,7 @@ impl DMA {
         // this is another hack, basically sometimes the emulator will get stuck because there aren't any cycles to subtract,
         // and it keeps trying to subtract 0 cycles from the gap ticks when chopping is disabled.
         // so to get the emulator moving, we subtract all the gap ticks and get out of the gap.
+        // TODO: refactor this so we don't need this hack
         channel.gap_ticks -= if self.cycles == 0 && !chopping_enabled { channel.gap_ticks } else { self.cycles };
       }
     }

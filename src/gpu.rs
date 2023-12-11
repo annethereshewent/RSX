@@ -874,6 +874,12 @@ impl GPU {
         self.stat.texture_y_base1 != self.current_texture_y_base ||
         self.stat.texture_colors != self.current_texture_colors {
         self.gp0_invalidate_cache();
+
+        self.current_texture_x_base = self.stat.texture_x_base;
+        self.current_texture_y_base = self.stat.texture_y_base1;
+        self.current_texture_colors = self.stat.texture_colors;
+        self.current_clut.x = clut.x;
+        self.current_clut.y = clut.y;
       }
 
       command_pos += 1;
@@ -947,6 +953,12 @@ impl GPU {
       self.stat.texture_y_base1 != self.current_texture_y_base ||
       self.stat.texture_colors != self.current_texture_colors) {
       self.gp0_invalidate_cache();
+
+      self.current_texture_x_base = self.stat.texture_x_base;
+      self.current_texture_y_base = self.stat.texture_y_base1;
+      self.current_texture_colors = self.stat.texture_colors;
+      self.current_clut.x = clut.x;
+      self.current_clut.y = clut.y;
     }
 
     let mut vertices = [
@@ -991,7 +1003,7 @@ impl GPU {
 
     self.drawing_area_top_left = val & 0x7_ffff;
     self.drawing_area_left = (val & 0x3ff) as u16;
-    self.drawing_area_top = ((val >> 10) & 0x3ff) as u16;
+    self.drawing_area_top = ((val >> 10) & 0x1ff) as u16;
   }
 
   fn gp0_draw_area_bottom_right(&mut self) {
@@ -999,7 +1011,7 @@ impl GPU {
 
     self.drawing_area_bottom_right = val & 0x7_ffff;
     self.drawing_area_right = (val & 0x3ff) as u16;
-    self.drawing_area_bottom = ((val >> 10) & 0x3ff) as u16;
+    self.drawing_area_bottom = ((val >> 10) & 0x1ff) as u16;
   }
 
   fn gp0_drawing_offset(&mut self) {
