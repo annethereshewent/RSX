@@ -72,23 +72,6 @@ impl Coordinates2d {
   }
 }
 
-#[derive(Copy, Clone)]
-pub struct Coordinates3d {
-  pub x: i32,
-  pub y: i32,
-  pub z: i32
-}
-
-impl Coordinates3d {
-  pub fn new(x: i32, y: i32, z: i32) -> Self {
-    Self {
-      x,
-      y,
-      z
-    }
-  }
-}
-
 #[derive(Copy, Clone, Debug)]
 pub struct RgbColor {
   pub r: u8,
@@ -162,8 +145,6 @@ pub struct GPU {
   drawing_area_bottom: u16,
   drawing_x_offset: i16,
   drawing_y_offset: i16,
-  drawing_vram_x_start: u16,
-  drawing_vram_y_start: u16,
   display_horizontal_start: u16,
   display_horizontal_end: u16,
   display_line_start: u16,
@@ -242,8 +223,6 @@ impl GPU {
       drawing_area_bottom: 0,
       drawing_x_offset: 0,
       drawing_y_offset: 0,
-      drawing_vram_x_start: 0,
-      drawing_vram_y_start: 0,
       display_horizontal_start: 512,
       display_horizontal_end: 3072,
       display_line_start: 16,
@@ -980,17 +959,15 @@ impl GPU {
   fn gp0_texture_window(&mut self) {
     let val = self.command_buffer[0];
 
-    self.texture_window_x_mask = (val & 0x1f) as u8;
-    self.texture_window_y_mask = ((val >> 5) & 0x1f) as u8;
-    self.texture_window_x_offset = ((val >> 10) & 0x1f) as u8;
-    self.texture_window_y_offset = ((val >> 15) & 0x1f) as u8;
+    self.texture_window_x_mask = ((val & 0x1f) * 8) as u8;
+    self.texture_window_y_mask = (((val >> 5) & 0x1f) * 8) as u8;
+    self.texture_window_x_offset = (((val >> 10) & 0x1f) * 8) as u8;
+    self.texture_window_y_offset = (((val >> 15) & 0x1f) * 8) as u8;
     self.texture_window = val & 0xf_ffff;
   }
 
   fn gp0_draw_mode(&mut self) {
     let val = self.command_buffer[0];
-
-    let previous_dither = self.stat.dither_enabled;
 
     self.stat.update_draw_mode(val);
 

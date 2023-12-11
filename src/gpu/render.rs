@@ -2,7 +2,7 @@ use std::{cmp, mem};
 
 use crate::util;
 
-use super::{GPU, gpu_stat_register::{ColorDepth, TextureColors, SemiTransparency}, RgbColor, Coordinates2d, Coordinates3d, Vertex, deltas::{ColorDeltas, TextureDeltas}};
+use super::{GPU, gpu_stat_register::{ColorDepth, TextureColors, SemiTransparency}, RgbColor, Coordinates2d, Vertex, deltas::{ColorDeltas, TextureDeltas}};
 
 impl GPU {
   pub fn cross_product(a: Coordinates2d, b: Coordinates2d, c: Coordinates2d) -> i32 {
