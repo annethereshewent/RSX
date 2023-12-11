@@ -906,7 +906,7 @@ impl GPU {
 
     let is_textured = (command >> 2) & 0b1 == 1;
     let semi_transparent = (command >> 1) & 0b1 == 1;
-    let is_blended = command & 0b1 == 1;
+    let is_blended = command & 0b1 == 0;
 
     let color = GPU::parse_color(self.command_buffer[0]);
 
