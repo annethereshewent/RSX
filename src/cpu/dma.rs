@@ -232,9 +232,13 @@ impl DMA {
   }
 
   pub fn tick_gap(&mut self) {
+    let chopping_enabled = self.chopping_enabled();
     for channel in &mut self.channels {
       if channel.gap_ticks > 0 {
-        channel.gap_ticks -= self.cycles as i32;
+        // this is another hack, basically sometimes the emulator will get stuck because there aren't any cycles to subtract,
+        // and it keeps trying to subtract 0 cycles from the gap ticks when chopping is disabled.
+        // so to get the emulator moving, we subtract all the gap ticks and get out of the gap.
+        channel.gap_ticks -= if self.cycles == 0 && !chopping_enabled { channel.gap_ticks } else { self.cycles };
       }
     }
     self.cycles = 0;

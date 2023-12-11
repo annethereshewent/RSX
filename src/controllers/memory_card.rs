@@ -174,6 +174,7 @@ impl MemoryCard {
         self.checksum ^= command;
 
         if self.current_byte == 128 {
+          self.write_to_file();
           should_advance = true;
         }
       }
@@ -257,7 +258,6 @@ impl MemoryCard {
         self.current_byte += 1;
 
         if self.current_byte == 128 {
-          self.write_to_file();
           should_advance = true;
         }
       }
@@ -298,11 +298,5 @@ impl MemoryCard {
 
     self.card_file.seek(SeekFrom::Start(0)).unwrap();
     self.card_file.read_exact(&mut buffer_copy).unwrap();
-
-    for i in 0..buffer_copy.len() {
-      if buffer_copy[i] != self.card[i] {
-        panic!("{} vs {} at index {i}", buffer_copy[i], self.card[i]);
-      }
-    }
   }
 }
