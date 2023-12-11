@@ -868,11 +868,11 @@ impl GPU {
 
       clut = GPU::to_clut(self.command_buffer[command_pos]);
 
-      if textured && (clut.x != self.current_clut.x||
+      if clut.x != self.current_clut.x ||
         clut.y != self.current_clut.y ||
         self.stat.texture_x_base != self.current_texture_x_base ||
         self.stat.texture_y_base1 != self.current_texture_y_base ||
-        self.stat.texture_colors != self.current_texture_colors) {
+        self.stat.texture_colors != self.current_texture_colors {
         self.gp0_invalidate_cache();
       }
 
@@ -883,11 +883,11 @@ impl GPU {
       0 => {
         let dimensions = self.command_buffer[command_pos];
 
-        ((dimensions & 0x3ff), ((dimensions >> 16) & 0x1ff))
+        Coordinates2d::new((dimensions & 0x3ff) as i32, ((dimensions >> 16) & 0x1ff) as i32)
       },
-      1 => (1,1),
-      2 => (8,8),
-      3 => (16,16),
+      1 => Coordinates2d::new(1,1),
+      2 => Coordinates2d::new(8, 8),
+      3 => Coordinates2d::new(16,16),
       _ => unreachable!("can't happen")
     };
 

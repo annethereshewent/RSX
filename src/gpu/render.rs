@@ -259,9 +259,9 @@ impl GPU {
     }
   }
 
-  pub fn rasterize_rectangle(&mut self, color: RgbColor, coordinates: Coordinates2d, tex_coordinates: Coordinates2d, clut: Coordinates2d, dimensions: (u32, u32), textured: bool, blended: bool, semi_transparent: bool) {
-    for x in 0..dimensions.0 {
-      for y in 0..dimensions.1 {
+  pub fn rasterize_rectangle(&mut self, color: RgbColor, coordinates: Coordinates2d, tex_coordinates: Coordinates2d, clut: Coordinates2d, dimensions: Coordinates2d, textured: bool, blended: bool, semi_transparent: bool) {
+    for x in 0..dimensions.x {
+      for y in 0..dimensions.y {
         let curr_x = coordinates.x + x as i32;
         let curr_y = coordinates.y + y as i32;
 
@@ -272,7 +272,7 @@ impl GPU {
         let mut output = color;
 
         if textured {
-          let mut uv = Coordinates2d::new(tex_coordinates.x + (x & 0xff) as i32, tex_coordinates.y + (y & 0xff) as i32);
+          let mut uv = Coordinates2d::new((tex_coordinates.x + x as i32) & 0xff, (tex_coordinates.y + y as i32) & 0xff);
           uv = self.mask_texture_coordinates(uv);
 
           if let Some(mut texture) = self.get_texture(uv, clut) {
@@ -523,10 +523,6 @@ impl GPU {
   }
 
   fn blend_colors(&self, texture: &mut RgbColor, color: &RgbColor) {
-    if self.debug_on {
-      println!("{},{},{}", ((texture.r as u32) * (color.r as u32)) >> 7, ((texture.g as u32) * (color.g as u32)) >> 7, ((texture.b as u32) * (color.b as u32)) >> 7);
-      return;
-    }
     texture.r = cmp::min(255,((texture.r as u32) * (color.r as u32)) >> 7) as u8;
     texture.g = cmp::min(255, ((texture.g as u32) * (color.g as u32)) >> 7) as u8;
     texture.b = cmp::min(255, ((texture.b as u32) * (color.b as u32)) >> 7) as u8;
@@ -564,6 +560,9 @@ impl GPU {
   }
 
   fn read_4bit_clut(&mut self, uv: Coordinates2d, clut: Coordinates2d) -> Option<RgbColor> {
+    if self.debug_on {
+      return None;
+    }
     let tex_x_base = (self.stat.texture_x_base as i32) * 64;
     let tex_y_base = (self.stat.texture_y_base1 as i32) * 16;
 
