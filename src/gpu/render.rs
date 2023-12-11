@@ -277,7 +277,7 @@ impl GPU {
 
           if let Some(mut texture) = self.get_texture(uv, clut) {
             if blended {
-              GPU::blend_colors(&mut texture, &color);
+              self.blend_colors(&mut texture, &color);
             }
             output = texture;
           } else {
@@ -398,7 +398,7 @@ impl GPU {
 
     let mut curr_p = Coordinates2d::new(min_x, min_y);
 
-    let mut output = c[0];
+    let mut color = c[0];
 
     while curr_p.y < max_y {
       curr_p.x = min_x;
@@ -414,12 +414,14 @@ impl GPU {
         if curr_p.x >= curr_min_x && curr_p.x < curr_max_x {
           // render the pixel
           if is_shaded {
-            GPU::interpolate_color(&mut output, curr_p, r_base, g_base, b_base, &color_d);
+            GPU::interpolate_color(&mut color, curr_p, r_base, g_base, b_base, &color_d);
 
             if self.stat.dither_enabled {
-              self.dither(curr_p, &mut output);
+              self.dither(curr_p, &mut color);
             }
           }
+
+          let mut output = color;
 
           if is_textured {
             let mut uv = GPU::interpolate_texture_coordinates(curr_p, u_base_fp, v_base_fp, &texture_d);
@@ -428,7 +430,7 @@ impl GPU {
 
             if let Some(mut texture) = self.get_texture(uv, clut) {
               if is_blended {
-                GPU::blend_colors(&mut texture, &output);
+                self.blend_colors(&mut texture, &output);
 
                 if self.stat.dither_enabled {
                   self.dither(curr_p, &mut texture);
@@ -520,7 +522,11 @@ impl GPU {
     (boundary1, boundary2)
   }
 
-  fn blend_colors(texture: &mut RgbColor, color: &RgbColor) {
+  fn blend_colors(&self, texture: &mut RgbColor, color: &RgbColor) {
+    if self.debug_on {
+      println!("{},{},{}", ((texture.r as u32) * (color.r as u32)) >> 7, ((texture.g as u32) * (color.g as u32)) >> 7, ((texture.b as u32) * (color.b as u32)) >> 7);
+      return;
+    }
     texture.r = cmp::min(255,((texture.r as u32) * (color.r as u32)) >> 7) as u8;
     texture.g = cmp::min(255, ((texture.g as u32) * (color.g as u32)) >> 7) as u8;
     texture.b = cmp::min(255, ((texture.b as u32) * (color.b as u32)) >> 7) as u8;
