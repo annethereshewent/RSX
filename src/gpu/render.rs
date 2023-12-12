@@ -168,19 +168,17 @@ impl GPU {
     let end_x = end_position.x;
     let end_y = end_position.y;
 
-
-
     let diff_x = end_x - start_x;
     let diff_y = end_y - start_y;
 
-    if start_x < self.drawing_area_left as i32 ||
-      end_x >= self.drawing_area_right as i32 ||
-      start_y < self.drawing_area_top as i32 ||
-      end_y >= self.drawing_area_bottom as i32 ||
-      start_y >= self.drawing_area_bottom as i32 ||
-      start_y < self.drawing_area_top as i32 ||
-      start_x >= self.drawing_area_right as i32 ||
-      start_x < self.drawing_area_left as i32 {
+    if start_x < 0 ||
+      end_x >= 1024||
+      start_y < 0 ||
+      end_y >= 512 ||
+      start_y >= 512 ||
+      start_y < 0 ||
+      start_x >= 1024
+    {
       return;
     }
 
@@ -223,6 +221,10 @@ impl GPU {
         } else {
           start_x + x
         };
+
+        if curr_x < self.drawing_area_left as i32 || curr_x >= self.drawing_area_right as i32 || curr_y < self.drawing_area_top as i32 || curr_y >= self.drawing_area_bottom as i32 {
+          continue;
+        }
 
         let pixel = Coordinates2d::new(curr_x, curr_y);
 
