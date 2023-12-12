@@ -177,7 +177,7 @@ impl GPU {
     let diff_y = end_y - start_y;
 
     // no need to use .abs() on diff_x, as end_x is guaranteed to be after start_x due to mem swap above
-    if diff_x > 1024 || diff_y.abs() > 512 || (diff_x == 0 && diff_y == 0) {
+    if start_x < self.drawing_area_left as i32 || end_x >= self.drawing_area_right as i32 || start_y < self.drawing_area_top as i32 || end_y >= self.drawing_area_bottom as i32 {
       return;
     }
 
@@ -560,9 +560,6 @@ impl GPU {
   }
 
   fn read_4bit_clut(&mut self, uv: Coordinates2d, clut: Coordinates2d) -> Option<RgbColor> {
-    if self.debug_on {
-      return None;
-    }
     let tex_x_base = (self.stat.texture_x_base as i32) * 64;
     let tex_y_base = (self.stat.texture_y_base1 as i32) * 16;
 
