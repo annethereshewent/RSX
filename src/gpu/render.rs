@@ -161,11 +161,7 @@ impl GPU {
     cmp::min(255, (x as u32 + y as u32) / 4) as u8
   }
 
-  pub fn rasterize_line(&mut self, mut start_position: Coordinates2d, mut end_position: Coordinates2d, colors: &mut [RgbColor], shaded: bool, semi_transparent: bool) {
-    if start_position.x > end_position.x {
-      mem::swap(&mut start_position, &mut end_position);
-    }
-
+  pub fn rasterize_line(&mut self, start_position: Coordinates2d, end_position: Coordinates2d, colors: &mut [RgbColor], shaded: bool, semi_transparent: bool) {
     let start_x = start_position.x;
     let start_y = start_position.y;
 
@@ -173,37 +169,53 @@ impl GPU {
     let end_y = end_position.y;
 
 
+
     let diff_x = end_x - start_x;
     let diff_y = end_y - start_y;
 
-    // no need to use .abs() on diff_x, as end_x is guaranteed to be after start_x due to mem swap above
-    if start_x < self.drawing_area_left as i32 || end_x >= self.drawing_area_right as i32 || start_y < self.drawing_area_top as i32 || end_y >= self.drawing_area_bottom as i32 {
+    if start_x < self.drawing_area_left as i32 ||
+      end_x >= self.drawing_area_right as i32 ||
+      start_y < self.drawing_area_top as i32 ||
+      end_y >= self.drawing_area_bottom as i32 ||
+      start_y >= self.drawing_area_bottom as i32 ||
+      start_y < self.drawing_area_top as i32 ||
+      start_x >= self.drawing_area_right as i32 ||
+      start_x < self.drawing_area_left as i32 {
       return;
     }
 
-    let mut color_r_fp = (colors[0].r as i32) << 12;
-    let mut color_g_fp = (colors[0].g as i32) << 12;
-    let mut color_b_fp = (colors[0].b as i32) << 12;
+    let mut color_r_fp = (colors[0].r as i32) as f32;
+    let mut color_g_fp = (colors[0].g as i32) as f32;
+    let mut color_b_fp = (colors[0].b as i32) as f32;
 
     if diff_x != 0 {
       // so basically, to draw the line, get the slope of the line and follow the slope and render the line that way.
-      // convert to fixed point to be less resource intensive than using floating point
-      let slope = ((diff_y as i64) << 12) / diff_x as i64;
+      // use floating point because it's better anyways
+      let slope = (diff_y / diff_x) as f32;
+
+      if self.debug_on {
+        println!("slope = {:0.16}", slope);
+        return;
+      }
 
       // for the colors we can do something similar and create a "slope" based on the x coordinate and the difference between the rgb color values
-      // use fixed point to make conversion to u8 easier
-      let r_slope = (((colors[1].r - colors[0].r) as i32) << 12) / diff_x;
-      let g_slope = (((colors[1].g - colors[0].g) as i32) << 12) / diff_x;
-      let b_slope = (((colors[1].b - colors[0].b) as i32) << 12) / diff_x;
+      // use floating point because it's more accurate anyways and the performance hit is negligible.
+      let r_slope = ((colors[1].r as i32 - colors[0].r as i32) / diff_x) as f32;
+      let g_slope = ((colors[1].g as i32 - colors[0].g as i32) / diff_x) as f32;
+      let b_slope = ((colors[1].b as i32 - colors[0].b as i32) / diff_x) as f32;
 
       let mut color = colors[0];
 
-      for x in start_x..=end_x {
-        color.r = (color_r_fp >> 12) as u8;
-        color.g = (color_g_fp >> 12) as u8;
-        color.b = (color_b_fp >> 12) as u8;
+      let going_left = start_x > end_x;
 
-        let y = ((x as i64 * slope) >> 12) as i32 + start_y;
+      let diff_x = diff_x.abs();
+
+      for x in 0..=diff_x {
+        color.r = color_r_fp as u8;
+        color.g = color_g_fp as u8;
+        color.b = color_b_fp as u8;
+
+        let curr_y = (x as f32 * slope) as i32 + start_y;
 
         if shaded {
           color_r_fp += r_slope;
@@ -211,25 +223,33 @@ impl GPU {
           color_b_fp += b_slope;
         }
 
+        let curr_x = if going_left {
+          start_x - x
+        } else {
+          start_x + x
+        };
+
+        let pixel = Coordinates2d::new(curr_x, curr_y);
+
         if self.stat.dither_enabled {
-          self.dither(Coordinates2d::new(x, y), &mut color);
+          self.dither(pixel, &mut color);
         }
 
-        self.render_pixel(Coordinates2d::new(x, y), color, false, semi_transparent);
+        self.render_pixel(pixel, color, false, semi_transparent);
       }
     } else {
       // line is vertical, just render from start y to end y
 
       // create a "slope" based on the change in y instead of change in x
-      let diff_y = diff_y.abs();
-
-      let r_slope = (((colors[1].r - colors[0].r) as i32) << 12) / diff_y;
-      let g_slope = (((colors[1].g - colors[0].g) as i32) << 12) / diff_y;
-      let b_slope = (((colors[1].b - colors[0].b) as i32) << 12) / diff_y;
+      let r_slope = (((colors[1].r - colors[0].r) as i32) / diff_y) as f32;
+      let g_slope = (((colors[1].g - colors[0].g) as i32) / diff_y) as f32;
+      let b_slope = (((colors[1].b - colors[0].b) as i32) / diff_y) as f32;
 
       let mut color = colors[0];
 
       let going_up = start_y > end_y;
+
+      let diff_y = diff_y.abs();
 
       for y_offset in 0..=diff_y {
         let y = if going_up {
@@ -238,9 +258,9 @@ impl GPU {
           start_y + y_offset
         };
 
-        color.r = (color_r_fp >> 12) as u8;
-        color.g = (color_g_fp >> 12) as u8;
-        color.b = (color_b_fp >> 12) as u8;
+        color.r = color_r_fp as u8;
+        color.g = color_g_fp as u8;
+        color.b = color_b_fp as u8;
 
         if shaded {
           color_r_fp += r_slope;
@@ -265,7 +285,7 @@ impl GPU {
         let curr_x = coordinates.x + x as i32;
         let curr_y = coordinates.y + y as i32;
 
-        if curr_x < self.drawing_area_left as i32 || curr_y < self.drawing_area_top as i32 || curr_x >= self.drawing_area_right as i32 || curr_y >= self.drawing_area_bottom as i32 {
+        if curr_x < self.drawing_area_left as i32 || curr_y < self.drawing_area_top as i32 || curr_x > self.drawing_area_right as i32 || curr_y > self.drawing_area_bottom as i32 {
           continue;
         }
 

@@ -475,6 +475,8 @@ impl GPU {
 
     if self.polyline {
       self.process_polyline(val);
+
+      return;
     }
 
     self.command_buffer[self.command_index] = val;
