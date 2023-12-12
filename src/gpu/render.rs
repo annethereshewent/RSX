@@ -189,7 +189,7 @@ impl GPU {
     if diff_x != 0 {
       // so basically, to draw the line, get the slope of the line and follow the slope and render the line that way.
       // use floating point because it's better anyways
-      let slope = (diff_y / diff_x) as f32;
+      let slope = (diff_y as f32 / diff_x as f32);
 
       // for the colors we can do something similar and create a "slope" based on the x coordinate and the difference between the rgb color values
       // use floating point because it's more accurate anyways and the performance hit is negligible.

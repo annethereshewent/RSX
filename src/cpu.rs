@@ -310,6 +310,8 @@ impl CPU {
 
       self.r[29] = sp_base + sp_offset;
       self.r[30] = self.r[29];
+    } else {
+      self.r[29] = 0x801ffd88;
     }
 
     index = 0x800;
