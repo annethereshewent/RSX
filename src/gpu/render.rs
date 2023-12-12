@@ -244,9 +244,9 @@ impl GPU {
       // line is vertical, just render from start y to end y
 
       // create a "slope" based on the change in y instead of change in x
-      let mut r_slope = ((colors[1].r - colors[0].r) as f32) / diff_y as f32;
-      let mut g_slope = ((colors[1].g - colors[0].g) as f32) / diff_y as f32;
-      let mut b_slope = ((colors[1].b - colors[0].b) as f32) / diff_y as f32;
+      let mut r_slope = (colors[1].r as f32 - colors[0].r as f32) / diff_y as f32;
+      let mut g_slope = (colors[1].g as f32 - colors[0].g as f32) / diff_y as f32;
+      let mut b_slope = (colors[1].b as f32 - colors[0].b as f32) / diff_y as f32;
 
       let mut color = colors[0];
 

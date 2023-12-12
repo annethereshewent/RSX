@@ -59,7 +59,7 @@ impl SdlFrontend {
 
     let video = sdl_context.video().unwrap();
 
-    let window = video.window("RSX", 640, 480)
+    let window = video.window("RSX", 640 * 2, 480 * 2)
       .position_centered()
       .build()
       .unwrap();
