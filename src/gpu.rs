@@ -652,7 +652,7 @@ impl GPU {
 
     let pixel = GPU::color_to_u16(color);
 
-    // clear out the lower 4 bits of x start per no&psx documents
+    // clear out the lower 4 bits of x start per no$psx documents
     let x_start = destination & 0x3f0;
     let y_start = (destination >> 16) & 0x3ff;
 

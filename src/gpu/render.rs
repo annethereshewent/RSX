@@ -1,4 +1,4 @@
-use std::{cmp, mem};
+use std::cmp;
 
 use crate::util;
 
@@ -192,11 +192,6 @@ impl GPU {
       // so basically, to draw the line, get the slope of the line and follow the slope and render the line that way.
       // use floating point because it's better anyways
       let slope = (diff_y / diff_x) as f32;
-
-      if self.debug_on {
-        println!("slope = {:0.16}", slope);
-        return;
-      }
 
       // for the colors we can do something similar and create a "slope" based on the x coordinate and the difference between the rgb color values
       // use floating point because it's more accurate anyways and the performance hit is negligible.
