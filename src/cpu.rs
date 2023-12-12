@@ -317,7 +317,7 @@ impl CPU {
     index = 0x800;
 
     for i in 0..file_size {
-      self.bus.ram[((file_dest + i) & 0x1fffff) as usize] = bytes[index];
+      self.bus.ram[((file_dest + i) & 0x1f_ffff) as usize] = bytes[index];
       index += 1;
     }
   }

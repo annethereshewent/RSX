@@ -193,13 +193,19 @@ impl GPU {
 
       // for the colors we can do something similar and create a "slope" based on the x coordinate and the difference between the rgb color values
       // use floating point because it's more accurate anyways and the performance hit is negligible.
-      let r_slope = ((colors[1].r as i32 - colors[0].r as i32) / diff_x) as f32;
-      let g_slope = ((colors[1].g as i32 - colors[0].g as i32) / diff_x) as f32;
-      let b_slope = ((colors[1].b as i32 - colors[0].b as i32) / diff_x) as f32;
-
-      let mut color = colors[0];
+      let mut r_slope = (colors[1].r as f32 - colors[0].r as f32) / diff_x as f32;
+      let mut g_slope = (colors[1].g as f32 - colors[0].g as f32) / diff_x as f32;
+      let mut b_slope = (colors[1].b as f32 - colors[0].b as f32) / diff_x as f32;
 
       let going_left = start_x > end_x;
+
+      if going_left {
+        r_slope *= -1.0;
+        g_slope *= -1.0;
+        b_slope *= -1.0;
+      }
+
+      let mut color = colors[0];
 
       let diff_x = diff_x.abs();
 
@@ -238,13 +244,19 @@ impl GPU {
       // line is vertical, just render from start y to end y
 
       // create a "slope" based on the change in y instead of change in x
-      let r_slope = (((colors[1].r - colors[0].r) as i32) / diff_y) as f32;
-      let g_slope = (((colors[1].g - colors[0].g) as i32) / diff_y) as f32;
-      let b_slope = (((colors[1].b - colors[0].b) as i32) / diff_y) as f32;
+      let mut r_slope = ((colors[1].r - colors[0].r) as f32) / diff_y as f32;
+      let mut g_slope = ((colors[1].g - colors[0].g) as f32) / diff_y as f32;
+      let mut b_slope = ((colors[1].b - colors[0].b) as f32) / diff_y as f32;
 
       let mut color = colors[0];
 
       let going_up = start_y > end_y;
+
+      if going_up {
+        r_slope *= -1.0;
+        g_slope *= -1.0;
+        b_slope *= -1.0;
+      }
 
       let diff_y = diff_y.abs();
 
