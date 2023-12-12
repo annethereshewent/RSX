@@ -233,7 +233,6 @@ impl GPU {
       command_buffer: [0; 12],
       command_index: 0,
       words_remaining: 0,
-      // halfwords_remaining: 0,
       cycles: 0,
       num_scanlines: 263,
       current_scanline: 0,
@@ -505,19 +504,23 @@ impl GPU {
       0x00 => (), // NOP,
       0x01 => self.gp0_invalidate_cache(),
       0x02 => self.gp0_fill_vram(),
+      0x03..=0x1e => (), // more NOP,
+      0x1f => self.stat.irq_enabled = true,
       0x20..=0x3f => self.gp0_draw_polygon(),
       0x40..=0x5f => self.gp0_draw_line(),
       0x60..=0x7f => self.gp0_draw_rectangle(),
       0x80..=0x9f => self.gp0_vram_to_vram_transfer(),
       0xa0 => self.gp0_image_transfer_to_vram(),
       0xc0 => self.gp0_image_transfer_to_cpu(),
+      0xe0 => (), // NOP
       0xe1 => self.gp0_draw_mode(),
       0xe2 => self.gp0_texture_window(),
       0xe3 => self.gp0_draw_area_top_left(),
       0xe4 => self.gp0_draw_area_bottom_right(),
       0xe5 => self.gp0_drawing_offset(),
       0xe6 => self.gp0_mask_bit(),
-      _ => todo!("invalid or unsupported GP0 command: {:02x}", op_code)
+      0xe7..=0xff => (), // NOP
+      _ => panic!("invalid or unsupported GP0 command: {:02x}", op_code)
     }
   }
 
@@ -574,7 +577,9 @@ impl GPU {
       0x06 => self.gp1_display_horizontal_range(val),
       0x07 => self.gp1_display_vertical_range(val),
       0x08 => self.gp1_display_mode(val),
+      0x09 => (), // new texture disable
       0x10..=0x1f => self.gp1_set_gpuread(val),
+      0x20 => (), // arcade texture disable
       _ => todo!("Invalid or unsupported GP1 command: {:02x}", op_code)
     }
   }
@@ -613,10 +618,10 @@ impl GPU {
     let mut h = (dimensions >> 16) & 0x1ff;
 
     if w <= 0 {
-      w = 0x400
+      w = 1024
     }
     if h <= 0 {
-      h = 0x200;
+      h = 512;
     }
 
     for x in 0..w {
@@ -677,8 +682,6 @@ impl GPU {
 
     let x = (coordinates & 0x3ff) as u32;
     let y = ((coordinates >> 16) & 0x1ff) as u32;
-
-    // TODO: do something with this data
 
     self.cpu_transfer.h = height;
     self.cpu_transfer.w = width;
