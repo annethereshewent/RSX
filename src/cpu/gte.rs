@@ -130,7 +130,11 @@ impl Gte {
     self.flags = 0;
 
     if self.debug_on {
-      println!("executed {:X}", op_code);
+      if !self.executed_commands.contains_key(&op_code) {
+        println!("executed {:X}", op_code);
+        self.executed_commands.insert(op_code, true);
+      }
+
     }
 
     match op_code {
@@ -156,13 +160,6 @@ impl Gte {
     if (self.flags & 0x7f87e000) != 0 {
       self.flags |= 1 << 31;
     }
-
-    // if self.debug_on {
-    //   println!("{:?}", self.mac);
-    //   println!("{:?}", self.ir);
-    //   println!("{:x}", self.flags);
-    //   println!("{:?}", self.rgb_fifo[2]);
-    // }
 
   }
 
