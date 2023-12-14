@@ -125,7 +125,8 @@ pub struct CPU {
   isolated_cache: [IsolatedCacheLine; 256],
   pub gte: Gte,
   pub debug_on: bool,
-  output: String
+  output: String,
+  pub exe_file: Option<String>
 }
 
 impl CPU {
@@ -156,7 +157,8 @@ impl CPU {
       isolated_cache: [IsolatedCacheLine::new(); 256],
       gte: Gte::new(),
       debug_on: false,
-      output: "".to_string()
+      output: "".to_string(),
+      exe_file: None
     }
   }
 
@@ -214,6 +216,13 @@ impl CPU {
     }
 
     self.current_pc = self.pc;
+
+    if self.current_pc == 0x80030000 {
+      if let Some(exe_file) = &self.exe_file {
+        let exe_file = exe_file.clone();
+        self.load_exe(exe_file.as_str());
+      }
+    }
 
     self.check_irqs();
 
@@ -310,8 +319,6 @@ impl CPU {
 
       self.r[29] = sp_base + sp_offset;
       self.r[30] = self.r[29];
-    } else {
-      self.r[29] = 0x801ffd88;
     }
 
     index = 0x800;

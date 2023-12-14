@@ -25,7 +25,8 @@ pub fn main() {
   let mut frontend = SdlFrontend::new(&sdl_context);
 
   if args.len() == 3 {
-    cpu.load_exe(&args[2]);
+    let exe_file = &args[2];
+    cpu.exe_file = Some(exe_file.clone());
   }
   loop {
     while !cpu.bus.gpu.frame_complete {

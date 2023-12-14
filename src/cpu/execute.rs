@@ -431,6 +431,7 @@ impl CPU {
       12 => self.cop0.sr,
       13 => self.cop0.cause,
       14 => self.cop0.epc,
+      15 => 0x0000_0002,
       _ => panic!("unhandled read from cop0 register: {}", instr.rd())
     };
 
@@ -452,7 +453,7 @@ impl CPU {
       }
       12 => self.cop0.sr = value,
       13 => self.cop0.cause = value,
-      _ => todo!("cop0 register not implemented in mtc0: {}", cop0_reg)
+      _ => panic!("cop0 register not implemented in mtc0: {}", cop0_reg)
     }
   }
 
