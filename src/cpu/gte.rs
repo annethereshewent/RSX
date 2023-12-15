@@ -142,8 +142,10 @@ impl Gte {
       0x06 => self.nclip(),
       0x0c => self.op(),
       0x10 => self.dpcs(),
+      0x11 => self.intpl(),
       0x12 => self.mvmva(),
       0x13 => self.ncds(),
+      0x14 => self.cdp(),
       0x16 => self.ncdt(),
       0x1b => self.nccs(),
       0x1c => self.cc(),
@@ -163,6 +165,92 @@ impl Gte {
 
     if (self.flags & 0x7f87e000) != 0 {
       self.flags |= 1 << 31;
+    }
+  }
+
+  fn cdp(&mut self) {
+    let bk_x = (self.bk.0 as i64) << 12;
+    let bk_y = (self.bk.1 as i64) << 12;
+    let bk_z = (self.bk.2 as i64) << 12;
+
+    let c11 = self.color[0][0] as i64;
+    let c12 = self.color[0][1] as i64;
+    let c13 = self.color[0][2] as i64;
+
+    let c21 = self.color[1][0] as i64;
+    let c22 = self.color[1][1] as i64;
+    let c23 = self.color[1][2] as i64;
+
+    let c31 = self.color[2][0] as i64;
+    let c32 = self.color[2][1] as i64;
+    let c33 = self.color[2][2] as i64;
+
+    let ir1 = self.ir[1] as i64;
+    let ir2 = self.ir[2] as i64;
+    let ir3 = self.ir[3] as i64;
+
+    let mut mac1 = self.set_mac_flags(bk_x + c11 * ir1, 1);
+    let mut mac2 = self.set_mac_flags(bk_y + c21 * ir1, 2);
+    let mut mac3 = self.set_mac_flags(bk_z + c31 * ir1, 3);
+
+    mac1 = self.set_mac_flags(mac1 + c12 * ir2, 1);
+    mac2 = self.set_mac_flags(mac2 + c22 * ir2, 2);
+    mac3 = self.set_mac_flags(mac3 + c32 * ir2, 3);
+
+    mac1 = self.set_mac_flags(mac1 + c13 * ir3, 1);
+    mac2 = self.set_mac_flags(mac2 + c23 * ir3, 2);
+    mac3 = self.set_mac_flags(mac3 + c33 * ir3, 3);
+
+    self.mac[1] = (mac1 >> self.sf) as i32;
+    self.mac[2] = (mac2 >> self.sf) as i32;
+    self.mac[3] = (mac3 >> self.sf) as i32;
+
+    for i in 1..4 {
+      self.ir[i] = self.set_ir_flags(self.mac[i], i, self.lm);
+    }
+
+    let r = (self.rgbc.r as i64) << 4;
+    let g = (self.rgbc.g as i64) << 4;
+    let b = (self.rgbc.b as i64) << 4;
+    let c = self.rgbc.c;
+
+    self.mac[1] = (self.set_mac_flags(r * self.ir[1] as i64, 1) >> self.sf) as i32;
+    self.mac[2] = (self.set_mac_flags(g * self.ir[2] as i64, 2) >> self.sf) as i32;
+    self.mac[3] = (self.set_mac_flags(b * self.ir[3] as i64, 3) >> self.sf) as i32;
+
+    for i in 1..4 {
+      self.ir[i] = self.set_ir_flags(self.mac[i], i, self.lm);
+    }
+
+    let fc_x = (self.fc.0 as i64) << 12;
+    let fc_y = (self.fc.1 as i64) << 12;
+    let fc_z = (self.fc.2 as i64) << 12;
+
+    let ir0 = self.ir[0] as i64;
+    let ir1 = self.ir[1] as i64;
+    let ir2 = self.ir[2] as i64;
+    let ir3 = self.ir[3] as i64;
+
+    self.mac[1] = (self.set_mac_flags(fc_x - r * ir1, 1) >> self.sf) as i32;
+    self.mac[2] = (self.set_mac_flags(fc_y - g * ir2, 2) >> self.sf) as i32;
+    self.mac[3] = (self.set_mac_flags(fc_z - b * ir3, 3) >> self.sf) as i32;
+
+    let temp1 = self.set_ir_flags(self.mac[1], 1, false) as i64;
+    let temp2 = self.set_ir_flags(self.mac[2], 2, false) as i64;
+    let temp3 = self.set_ir_flags(self.mac[3], 3, false) as i64;
+
+    self.mac[1] = (self.set_mac_flags(r * ir1 + ir0 * temp1, 1) >> self.sf) as i32;
+    self.mac[2] = (self.set_mac_flags(g * ir2 + ir0 * temp2, 1) >> self.sf) as i32;
+    self.mac[3] = (self.set_mac_flags(b * ir3 + ir0 * temp3, 1) >> self.sf) as i32;
+
+    let r = self.set_color_fifo_flags(self.mac[1] >> 4, 1);
+    let g = self.set_color_fifo_flags(self.mac[2] >> 4, 2);
+    let b = self.set_color_fifo_flags(self.mac[3] >> 4, 3);
+
+    self.push_rgb(r, g, b, c);
+
+    for i in 1..4 {
+      self.ir[i] = self.set_ir_flags(self.mac[i], i, self.lm);
     }
   }
 
@@ -221,6 +309,10 @@ impl Gte {
     let b = self.set_color_fifo_flags(self.mac[3] >> 4, 3);
 
     self.push_rgb(r, g, b, c);
+
+    for i in 1..4 {
+      self.ir[i] = self.set_ir_flags(self.mac[i], i, self.lm);
+    }
   }
 
   fn dpcl(&mut self) {
@@ -569,6 +661,51 @@ impl Gte {
 
   fn gpf(&mut self) {
     self.interpolate(0, 0, 0);
+  }
+
+  fn intpl(&mut self) {
+    let mac1 = (self.ir[1] as i64) << 12;
+    let mac2 = (self.ir[2] as i64) << 12;
+    let mac3 = (self.ir[3] as i64) << 12;
+
+    let fc_x = self.fc.0 as i64;
+    let fc_y = self.fc.1 as i64;
+    let fc_z = self.fc.2 as i64;
+
+    let ir0 = self.ir[0] as i64;
+
+    self.mac[1] = (self.set_mac_flags(mac1 + (fc_x - mac1) * ir0, 1) >> self.sf) as i32;
+    self.mac[2] = (self.set_mac_flags(mac2 + (fc_y - mac1) * ir0, 2) >> self.sf) as i32;
+    self.mac[3] = (self.set_mac_flags(mac3 + (fc_z - mac1) * ir0, 3) >> self.sf) as i32;
+
+    let prev_ir1 = self.ir[1] as i64;
+    let prev_ir2 = self.ir[2] as i64;
+    let prev_ir3 = self.ir[3] as i64;
+
+    for i in 1..4 {
+      self.ir[i] = self.set_ir_flags(self.mac[i], i, false);
+    }
+
+    let ir0 = self.ir[0] as i64;
+    let ir1 = self.ir[1] as i64;
+    let ir2 = self.ir[2] as i64;
+    let ir3 = self.ir[3] as i64;
+
+    self.mac[1] = (self.set_mac_flags(prev_ir1 + ir1 * ir0, 1) >> self.sf) as i32;
+    self.mac[2] = (self.set_mac_flags(prev_ir2 + ir2 * ir0, 2) >> self.sf) as i32;
+    self.mac[3] = (self.set_mac_flags(prev_ir3 + ir3 * ir0, 3) >> self.sf) as i32;
+
+    let r = self.set_color_fifo_flags(self.mac[1] >> 4, 1);
+    let g = self.set_color_fifo_flags(self.mac[2] >> 4, 2);
+    let b = self.set_color_fifo_flags(self.mac[3] >> 4, 3);
+    let c = self.rgbc.c;
+
+    self.push_rgb(r, g, b, c);
+
+    for i in 1..4 {
+      self.ir[i] = self.set_ir_flags(self.mac[i], i, self.lm);
+    }
+
   }
 
   fn gpl(&mut self) {

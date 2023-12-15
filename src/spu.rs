@@ -398,6 +398,7 @@ impl SPU {
       0x1f80_1db6 => self.external_volume_right as u16,
       0x1f80_1db8 => self.current_volume_left as u16,
       0x1f80_1dba => self.current_volume_right as u16,
+      0x1f801e00..=0x1f801fff => 0xffff,
       _ => panic!("reading from unsupported SPU address: {:X}", address)
     }
   }

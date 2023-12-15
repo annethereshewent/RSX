@@ -1,4 +1,4 @@
-use std::{rc::Rc, cell::Cell, time::{UNIX_EPOCH, SystemTime, Duration}, thread::sleep};
+use std::{rc::Rc, cell::Cell, time::{UNIX_EPOCH, SystemTime, Duration}, thread::sleep, collections::HashMap};
 
 use crate::{cpu::{CPU_FREQUENCY, interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}, timers::timers::Timers}, util};
 
@@ -185,7 +185,8 @@ pub struct GPU {
   polyline_prev_coord: Coordinates2d,
   polyline_prev_color: RgbColor,
   polyline_shaded: bool,
-  polyline_semitransparent: bool
+  polyline_semitransparent: bool,
+  executed_commands: HashMap<u32, bool>
 }
 
 impl GPU {
@@ -264,7 +265,8 @@ impl GPU {
       polyline_prev_coord: Coordinates2d::new(0, 0),
       polyline_prev_color: RgbColor::new(0, 0, 0, false),
       polyline_shaded: false,
-      polyline_semitransparent: false
+      polyline_semitransparent: false,
+      executed_commands: HashMap::new()
     }
   }
 
@@ -500,11 +502,16 @@ impl GPU {
 
     let op_code = command >> 24;
 
+    if self.debug_on && !self.executed_commands.contains_key(&op_code) {
+      println!("executing command {:X}", op_code);
+      self.executed_commands.insert(op_code, true);
+    }
+
     match op_code {
-      0x00 => (), // NOP,
+      0x00 => (), // NOP
       0x01 => self.gp0_invalidate_cache(),
       0x02 => self.gp0_fill_vram(),
-      0x03..=0x1e => (), // more NOP,
+      0x03..=0x1e => (), // more NOP
       0x1f => self.stat.irq_enabled = true,
       0x20..=0x3f => self.gp0_draw_polygon(),
       0x40..=0x5f => self.gp0_draw_line(),
@@ -736,7 +743,7 @@ impl GPU {
     self.stat.texture_colors = match (texture_data >> 7) & 0b11 {
       0 => TextureColors::FourBit,
       1 => TextureColors::EightBit,
-      2 => TextureColors::FifteenBit,
+      2 | 3 => TextureColors::FifteenBit,
       n => panic!("invalid value received: {n}")
     };
 
