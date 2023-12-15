@@ -10,11 +10,8 @@ impl GPU {
   }
 
   pub fn update_picture(&mut self) {
-    let mut x_start = self.display_vram_x_start as u32;
-    let mut y_start = self.display_vram_y_start as u32;
-
-    x_start += ((self.display_horizontal_start as u32) - 608) / (self.get_dotclock() as u32);
-    y_start += ((self.display_line_start as u32) - 16) * 2;
+    let x_start = self.display_vram_x_start as u32;
+    let y_start = self.display_vram_y_start as u32;
 
     let (w, h) = self.get_dimensions();
 

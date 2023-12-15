@@ -154,7 +154,7 @@ impl Gte {
       0x3d => self.gpf(),
       0x3e => self.gpl(),
       0x3f => self.ncct(),
-      _ => panic!("unimplemented op code for gte: {:x}", op_code)
+      _ => println!("unimplemented op code for gte: {:x}", op_code)
     }
 
     if (self.flags & 0x7f87e000) != 0 {
@@ -353,9 +353,9 @@ impl Gte {
       self.ir[i] = self.set_ir_flags(self.mac[i], i, self.lm);
     }
 
-    let r = self.set_color_fifo_flags(self.mac[1] / 16, 1);
-    let g = self.set_color_fifo_flags(self.mac[2] / 16, 2);
-    let b = self.set_color_fifo_flags(self.mac[3] / 16, 3);
+    let r = self.set_color_fifo_flags(self.mac[1] >> 4, 1);
+    let g = self.set_color_fifo_flags(self.mac[2] >> 4, 2);
+    let b = self.set_color_fifo_flags(self.mac[3] >> 4, 3);
     let c = self.rgbc.c;
 
     self.push_rgb(r, g, b, c);
@@ -388,9 +388,9 @@ impl Gte {
     self.mac[2] = (temp2 >> self.sf) as i32;
     self.mac[3] = (temp3 >> self.sf) as i32;
 
-    let r = self.set_color_fifo_flags(self.mac[1] / 16, 1);
-    let g = self.set_color_fifo_flags(self.mac[2] / 16, 2);
-    let b = self.set_color_fifo_flags(self.mac[3] / 16, 3);
+    let r = self.set_color_fifo_flags(self.mac[1] >> 4, 1);
+    let g = self.set_color_fifo_flags(self.mac[2] >> 4, 2);
+    let b = self.set_color_fifo_flags(self.mac[3] >> 4, 3);
     let c = self.rgbc.c;
 
     self.push_rgb(r, g, b, c);
@@ -407,7 +407,9 @@ impl Gte {
 
     self.mac[0] = value as i32;
 
-    self.otz = self.set_sz3_or_otz_flags(value / 0x1000);
+    let otz = value >> 12;
+
+    self.otz = self.set_sz3_or_otz_flags(otz);
   }
 
   fn avsz4(&mut self) {
@@ -417,7 +419,9 @@ impl Gte {
 
     self.mac[0] = value as i32;
 
-    self.otz = self.set_sz3_or_otz_flags(value / 0x1000);
+    let otz = value >> 12;
+
+    self.otz = self.set_sz3_or_otz_flags(otz);
   }
 
   fn nclip(&mut self) {

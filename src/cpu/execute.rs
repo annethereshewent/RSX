@@ -130,6 +130,7 @@ impl CPU {
     if address & 0b1 == 0 {
       self.store_16(address, value as u16);
     } else {
+      self.cop0.bad_vaddr = address;
       self.exception(Cause::StoreAddressError);
     }
   }
@@ -167,6 +168,7 @@ impl CPU {
       let value = self.load_16(address);
       self.update_load(instr.rt(), value as u32);
     } else {
+      self.cop0.bad_vaddr = address;
       self.execute_load_delay();
       self.exception(Cause::LoadAddressError);
     }
@@ -180,6 +182,7 @@ impl CPU {
 
       self.update_load(instr.rt(), value as i16 as u32);
     } else {
+      self.cop0.bad_vaddr = address;
       self.execute_load_delay();
       self.exception(Cause::LoadAddressError);
     }
@@ -277,6 +280,7 @@ impl CPU {
 
       self.gte.write_data(instr.rt(), value);
     } else {
+      self.cop0.bad_vaddr = address;
       self.exception(Cause::LoadAddressError);
     }
   }
@@ -428,6 +432,9 @@ impl CPU {
   fn mfc0(&mut self, instr: Instruction) {
     let delayed_register = instr.rt();
     let delayed_load = match instr.rd() {
+      6 => self.cop0.jumpdest,
+      7 => self.cop0.dcic,
+      8 => self.cop0.bad_vaddr,
       12 => self.cop0.sr,
       13 => self.cop0.cause,
       14 => self.cop0.epc,
@@ -446,11 +453,12 @@ impl CPU {
     self.execute_load_delay();
 
     match cop0_reg {
-      3 | 5 | 6 | 7 | 9 | 11 => {
+      3 | 5 | 6 | 9 | 11 => {
         if value != 0 {
           panic!("unhandled write to debug registers");
         }
       }
+      7 => self.cop0.dcic = value,
       12 => self.cop0.sr = value,
       13 => self.cop0.cause = value,
       _ => panic!("cop0 register not implemented in mtc0: {}", cop0_reg)
@@ -464,6 +472,7 @@ impl CPU {
       let val = self.load_32(address);
       self.update_load(instr.rt(), val);
     } else {
+      self.cop0.bad_vaddr = address;
       self.execute_load_delay();
       self.exception(Cause::LoadAddressError);
     }
@@ -862,6 +871,7 @@ impl CPU {
     if address & 0b11 == 0 {
       self.store_32(address, value);
     } else {
+      self.cop0.bad_vaddr = address;
       self.exception(Cause::StoreAddressError);
     }
   }

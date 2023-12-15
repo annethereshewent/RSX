@@ -55,7 +55,9 @@ pub struct COP0 {
   pub sr: u32,
   pub cause: u32,
   pub epc: u32,
-  pub jumpdest: u32
+  pub jumpdest: u32,
+  pub bad_vaddr: u32,
+  pub dcic: u32
 }
 
 impl COP0 {
@@ -149,7 +151,9 @@ impl CPU {
         sr: 0,
         cause: 0,
         epc: 0,
-        jumpdest: 0
+        jumpdest: 0,
+        bad_vaddr: 0,
+        dcic: 0
       },
       dma,
       interrupts,
@@ -233,6 +237,7 @@ impl CPU {
     self.branch = false;
 
     if self.current_pc & 0b11 != 0 {
+      self.cop0.bad_vaddr = self.current_pc;
       self.exception(Cause::LoadAddressError);
 
       self.execute_load_delay();
