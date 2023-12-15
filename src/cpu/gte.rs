@@ -898,7 +898,7 @@ impl Gte {
       2 => (self.v[1].0 as u16 as u32) | (self.v[1].1 as u16 as u32) << 16,
       3 => self.v[1].2 as u32,
       4 => (self.v[2].0 as u16 as u32) | (self.v[2].1 as u16 as u32) << 16,
-      5 => self.v[1].2 as u32,
+      5 => self.v[2].2 as u32,
       6 => {
         (self.rgbc.r as u32) | (self.rgbc.g as u32) << 8 | (self.rgbc.b as u32) << 16 | (self.rgbc.c as u32) << 24
       }
@@ -1133,7 +1133,7 @@ impl Gte {
       23 => self.fc.2 as u32,
       24 => self.ofx as u32,
       25 => self.ofy as u32,
-      26 => self.h as u32,
+      26 => self.h as i16 as u32,
       27 => self.dqa as u32,
       28 => self.dqb as u32,
       29 => self.zsf3 as u32,
