@@ -549,7 +549,7 @@ impl GPU {
   }
 
   fn blend_colors(&self, texture: &mut RgbColor, color: &RgbColor) {
-    texture.r = cmp::min(255,((texture.r as u32) * (color.r as u32)) >> 7) as u8;
+    texture.r = cmp::min(255, ((texture.r as u32) * (color.r as u32)) >> 7) as u8;
     texture.g = cmp::min(255, ((texture.g as u32) * (color.g as u32)) >> 7) as u8;
     texture.b = cmp::min(255, ((texture.b as u32) * (color.b as u32)) >> 7) as u8;
   }
