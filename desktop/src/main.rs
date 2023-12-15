@@ -11,7 +11,7 @@ pub fn main() {
   let args: Vec<String> = env::args().collect();
 
   if args.len() < 2 {
-    panic!("please specify a file");
+    panic!("please specify a path to a game.");
   }
 
   let filepath = &args[1];

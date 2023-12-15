@@ -154,7 +154,7 @@ impl Gte {
       0x3d => self.gpf(),
       0x3e => self.gpl(),
       0x3f => self.ncct(),
-      _ => println!("unimplemented op code for gte: {:x}", op_code)
+      _ => panic!("unimplemented op code for gte: {:x}", op_code)
     }
 
     if (self.flags & 0x7f87e000) != 0 {
@@ -202,32 +202,35 @@ impl Gte {
       self.rgbc
     };
 
-    let r = rgbc.r as i64;
-    let g = rgbc.g as i64;
-    let b = rgbc.b as i64;
-    let c = rgbc.c;
-
-    self.mac[1] = (self.set_mac_flags(r << 16, 1) >> self.sf) as i32;
-    self.mac[2] = (self.set_mac_flags(g << 16, 2) >> self.sf) as i32;
-    self.mac[3] = (self.set_mac_flags(b << 16, 3) >> self.sf) as i32;
-
-    let mac1 = self.mac[1] as i64;
-    let mac2 = self.mac[2] as i64;
-    let mac3 = self.mac[3] as i64;
+    let r = (rgbc.r as i64) << 16;
+    let g = (rgbc.g as i64) << 16;
+    let b = (rgbc.b as i64) << 16;
+    let c = self.rgbc.c;
 
     let fc_x = (self.fc.0 as i64) << 12;
     let fc_y = (self.fc.1 as i64) << 12;
     let fc_z = (self.fc.2 as i64) << 12;
 
+    self.mac[1] = (self.set_mac_flags(fc_x - r, 1) >> self.sf) as i32;
+    self.mac[2] = (self.set_mac_flags(fc_y - g, 2) >> self.sf) as i32;
+    self.mac[3] = (self.set_mac_flags(fc_z - b, 3) >> self.sf) as i32;
+
+    for i in 1..4 {
+      self.ir[i] = self.set_ir_flags(self.mac[i], i, false);
+    }
+
     let ir0 = self.ir[0] as i64;
+    let ir1 = self.ir[1] as i64;
+    let ir2 = self.ir[2] as i64;
+    let ir3 = self.ir[3] as i64;
 
-    self.mac[1] = (self.set_mac_flags(mac1 + (fc_x - mac1) * ir0, 1) >> self.sf) as i32;
-    self.mac[2] = (self.set_mac_flags(mac2 + (fc_y - mac2) * ir0, 2) >> self.sf) as i32;
-    self.mac[3] = (self.set_mac_flags(mac3 + (fc_z - mac3) * ir0, 3) >> self.sf) as i32;
+    self.mac[1] = (self.set_mac_flags(r + ir1 * ir0, 1) >> self.sf) as i32;
+    self.mac[2] = (self.set_mac_flags(g + ir2 * ir0, 2) >> self.sf) as i32;
+    self.mac[3] = (self.set_mac_flags(b + ir3 * ir0, 3) >> self.sf) as i32;
 
-    let r = self.set_color_fifo_flags(self.mac[1] / 16, 1);
-    let g = self.set_color_fifo_flags(self.mac[2] / 16, 2);
-    let b = self.set_color_fifo_flags(self.mac[3] / 16, 3);
+    let r = self.set_color_fifo_flags(self.mac[1] >> 4, 1);
+    let g = self.set_color_fifo_flags(self.mac[2] >> 4, 2);
+    let b = self.set_color_fifo_flags(self.mac[3] >> 4, 3);
 
     self.push_rgb(r, g, b, c);
 
@@ -452,7 +455,12 @@ impl Gte {
       0 => self.rotation,
       1 => self.light,
       2 => self.color,
-      _ => panic!("unsupported or unreachable value for mx: {}", self.mx)
+      3 => [
+        [-((self.rgbc.r as i16)  << 4), (self.rgbc.r as i16) << 4, self.ir[0] as i16],
+        [self.rotation[0][2], self.rotation[0][2], self.rotation[0][2]],
+        [self.rotation[1][1], self.rotation[1][1], self.rotation[1][1]]
+      ],
+      _ => unreachable!("can't happen")
     };
 
     let vx = match self.sv {
@@ -487,14 +495,24 @@ impl Gte {
     let vx_y = vx.1 as i64;
     let vx_z = vx.2 as i64;
 
-    let tx_x = tx.0 as i64;
-    let tx_y = tx.1 as i64;
-    let tx_z = tx.2 as i64;
+    let tx_x = (tx.0 as i64) << 12;
+    let tx_y = (tx.1 as i64) << 12;
+    let tx_z = (tx.2 as i64) << 12;
 
 
-    let mut mac1 = self.set_mac_flags(tx_x * 0x1000 + mx_m11 * vx_x, 1);
-    let mut mac2 = self.set_mac_flags(tx_y * 0x1000 + mx_m21 * vx_x, 2);
-    let mut mac3 = self.set_mac_flags(tx_z * 0x1000 + mx_m31 * vx_x, 3);
+    let mut mac1 = self.set_mac_flags(tx_x + mx_m11 * vx_x, 1);
+    let mut mac2 = self.set_mac_flags(tx_y + mx_m21 * vx_x, 2);
+    let mut mac3 = self.set_mac_flags(tx_z + mx_m31 * vx_x, 3);
+
+    if self.cv == 2 {
+      self.set_ir_flags((mac1 >> 12) as i32, 1, false);
+      self.set_ir_flags((mac2 >> 12) as i32, 2, false);
+      self.set_ir_flags((mac3 >> 12) as i32, 3, false);
+
+      mac1 = 0;
+      mac2 = 0;
+      mac3 = 0;
+    }
 
     mac1 = self.set_mac_flags(mac1 + mx_m12 * vx_y, 1);
     mac2 = self.set_mac_flags(mac2 + mx_m22 * vx_y, 2);
@@ -503,10 +521,6 @@ impl Gte {
     mac1 = self.set_mac_flags(mac1 + mx_m13 * vx_z, 1);
     mac2 = self.set_mac_flags(mac2 + mx_m23 * vx_z, 2);
     mac3 = self.set_mac_flags(mac3 + mx_m33 * vx_z, 3);
-
-    if self.cv == 2 {
-      todo!("bugged cv mode 2 not implemented yet");
-    }
 
     self.mac[1] = (mac1 >> self.sf) as i32;
     self.mac[2] = (mac2 >> self.sf) as i32;
@@ -707,7 +721,6 @@ impl Gte {
     ssy = self.set_mac_flags(ssy + r23 * vz, 2);
     ssz = self.set_mac_flags(ssz + r33 * vz, 3);
 
-
     tr_z = ssz;
 
     let zs = tr_z >> 12;
@@ -728,7 +741,7 @@ impl Gte {
     self.push_sz(sz3);
 
     // per https://psx-spx.consoledev.net/geometrytransformationenginegte/#gte-division-inaccuracy
-    let h_divided_by_sz: u32 = if self.h < sz3 * 2 {
+    let h_divided_by_sz: u32 = if sz3 > (self.h / 2) {
       let leading_zeros = sz3.leading_zeros();
       let n = (self.h as u64) << leading_zeros;
       let mut d = (sz3 as u64) << leading_zeros;
@@ -749,8 +762,8 @@ impl Gte {
     self.set_mac0_flags(sx2);
     self.set_mac0_flags(sy2);
 
-    sx2 = sx2 / 0x10000;
-    sy2 = sy2 / 0x10000;
+    sx2 = sx2 >> 16;
+    sy2 = sy2 >> 16;
 
     // finally saturate sx2 and sy2 to -0x400 to 0x3ff
     let sx2_saturated = self.set_sn_flags(sx2, 1);
@@ -763,7 +776,7 @@ impl Gte {
       let p = self.dqb as i64 + self.dqa as i64 * h_divided_by_sz as i64;
       self.set_mac0_flags(p);
       self.mac[0] = p as i32;
-      self.ir[0] = self.set_ir0_flags(p / 0x1000);
+      self.ir[0] = self.set_ir0_flags(p >> 12);
     }
   }
 
