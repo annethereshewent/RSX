@@ -57,7 +57,9 @@ pub struct COP0 {
   pub epc: u32,
   pub jumpdest: u32,
   pub bad_vaddr: u32,
-  pub dcic: u32
+  pub dcic: u32,
+  pub bdam: u32,
+  pub bpcm: u32
 }
 
 impl COP0 {
@@ -153,7 +155,9 @@ impl CPU {
         epc: 0,
         jumpdest: 0,
         bad_vaddr: 0,
-        dcic: 0
+        dcic: 0,
+        bdam: 0,
+        bpcm: 0
       },
       dma,
       interrupts,
@@ -248,6 +252,10 @@ impl CPU {
     // check if we need to handle an interrupt by checking cop0 status register and interrupt mask bits in cause and sr
     if self.cop0.interrupts_ready() {
       self.exception(Cause::Interrupt);
+
+      if (instr >> 25) == 0x25 {
+        self.cop2_command(Instruction::new(instr));
+      }
 
       self.execute_load_delay();
 

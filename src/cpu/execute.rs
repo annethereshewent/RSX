@@ -251,7 +251,7 @@ impl CPU {
     self.execute_load_delay();
   }
 
-  fn cop2_command(&mut self, instr: Instruction) {
+  pub fn cop2_command(&mut self, instr: Instruction) {
     self.gte.execute_command(instr);
 
     self.execute_load_delay();
@@ -422,6 +422,8 @@ impl CPU {
       6 => self.cop0.jumpdest,
       7 => self.cop0.dcic,
       8 => self.cop0.bad_vaddr,
+      9 => self.cop0.bdam,
+      11 => self.cop0.bpcm,
       12 => self.cop0.sr,
       13 => self.cop0.cause,
       14 => self.cop0.epc,
@@ -440,12 +442,14 @@ impl CPU {
     self.execute_load_delay();
 
     match cop0_reg {
-      3 | 5 | 6 | 9 | 11 => {
+      3 | 5 | 6 => {
         if value != 0 {
-          panic!("unhandled write to debug registers");
+          panic!("unhandled write to debug registers: {cop0_reg}");
         }
       }
       7 => self.cop0.dcic = value,
+      9 => self.cop0.bdam = value,
+      11 => self.cop0.bpcm = value,
       12 => self.cop0.sr = value,
       13 => self.cop0.cause = value,
       _ => panic!("cop0 register not implemented in mtc0: {}", cop0_reg)
