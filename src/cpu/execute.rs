@@ -439,8 +439,6 @@ impl CPU {
     let cop0_reg = instr.rd();
     let value = self.r[instr.rt()];
 
-    self.execute_load_delay();
-
     let prev_iec = self.cop0.sr & 0b1;
 
     match cop0_reg {
@@ -456,6 +454,8 @@ impl CPU {
       13 => self.cop0.cause = value,
       _ => panic!("cop0 register not implemented in mtc0: {}", cop0_reg)
     }
+
+    self.execute_load_delay();
 
     let curr_iec = self.cop0.sr & 0b1;
 
