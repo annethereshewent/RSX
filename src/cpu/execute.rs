@@ -441,6 +441,8 @@ impl CPU {
 
     self.execute_load_delay();
 
+    let prev_iec = self.cop0.sr & 0b1;
+
     match cop0_reg {
       3 | 5 | 6 => {
         if value != 0 {
@@ -453,6 +455,13 @@ impl CPU {
       12 => self.cop0.sr = value,
       13 => self.cop0.cause = value,
       _ => panic!("cop0 register not implemented in mtc0: {}", cop0_reg)
+    }
+
+    let curr_iec = self.cop0.sr & 0b1;
+
+    if prev_iec != curr_iec && self.cop0.interrupts_ready() {
+      self.pc = self.next_pc;
+      self.exception(Cause::Interrupt);
     }
   }
 

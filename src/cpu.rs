@@ -37,7 +37,7 @@ impl IsolatedCacheLine {
   }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Cause {
   Interrupt = 0x0,
   LoadAddressError = 0x4,
@@ -232,8 +232,6 @@ impl CPU {
       }
     }
 
-    self.check_irqs();
-
     if self.current_pc & 0b11 != 0 {
       self.cop0.bad_vaddr = self.current_pc;
       self.exception(Cause::LoadAddressError);
@@ -242,6 +240,8 @@ impl CPU {
 
       return;
     }
+
+    self.check_irqs();
 
     let instr = self.fetch_instruction();
     self.current_instruction = instr;
