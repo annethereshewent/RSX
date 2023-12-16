@@ -86,7 +86,7 @@ impl Bus {
 
   pub fn mem_read_32(&mut self, address: u32) -> u32 {
     if (address & 0b11) != 0 {
-      panic!("unaligned address received: {:032b}", address);
+      panic!("unaligned address received: {:08x}", address);
     }
 
     let address = Bus::translate_address(address);

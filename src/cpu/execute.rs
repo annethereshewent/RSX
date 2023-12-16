@@ -95,10 +95,21 @@ impl CPU {
   }
 
   fn bcondz(&mut self, instr: Instruction) {
-    match instr.bcond() {
-      0 => self.bltz(instr),
-      1 => self.bgez(instr),
-      _ => unreachable!("can't happen")
+    let result = (((self.r[instr.rs()] as i32) < 0) as u32) ^ instr.bcond();
+
+    let link = (instr.rt() & 0x1e) == 0x10;
+
+    self.execute_load_delay();
+
+    if link {
+      let ra = self.next_pc;
+      self.set_reg(31, ra);
+    }
+
+    self.branch = true;
+
+    if result == 1 {
+      self.branch(instr.immediate_signed());
     }
   }
 
@@ -319,30 +330,6 @@ impl CPU {
     let offset = instr.immediate_signed();
 
     self.branch_if(offset, self.r[instr.rs()] != self.r[instr.rt()], true);
-  }
-
-  fn bltz(&mut self, instr: Instruction) {
-    let offset = instr.immediate_signed();
-
-    self.execute_load_delay();
-
-    if instr.should_link() {
-      self.set_reg(RA_REGISTER, self.next_pc);
-    }
-
-    self.branch_if(offset, (self.r[instr.rs()] as i32) < 0, false);
-  }
-
-  fn bgez(&mut self, instr: Instruction) {
-    let offset = instr.immediate_signed();
-
-    self.execute_load_delay();
-
-    if instr.should_link() {
-      self.set_reg(RA_REGISTER, self.next_pc);
-    }
-
-    self.branch_if(offset, (self.r[instr.rs()] as i32) >= 0, false);
   }
 
   fn bgtz(&mut self, instr: Instruction) {

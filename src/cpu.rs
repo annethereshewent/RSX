@@ -230,12 +230,6 @@ impl CPU {
 
     self.check_irqs();
 
-    let instr = self.fetch_instruction();
-    self.current_instruction = instr;
-
-    self.delay_slot = self.branch;
-    self.branch = false;
-
     if self.current_pc & 0b11 != 0 {
       self.cop0.bad_vaddr = self.current_pc;
       self.exception(Cause::LoadAddressError);
@@ -244,6 +238,12 @@ impl CPU {
 
       return;
     }
+
+    let instr = self.fetch_instruction();
+    self.current_instruction = instr;
+
+    self.delay_slot = self.branch;
+    self.branch = false;
 
     // check if we need to handle an interrupt by checking cop0 status register and interrupt mask bits in cause and sr
     if self.cop0.interrupts_ready() {
