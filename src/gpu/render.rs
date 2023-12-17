@@ -332,8 +332,8 @@ impl GPU {
     let mut min_x = cmp::min(p[0].x, cmp::min(p[1].x, p[2].x));
     let mut min_y = cmp::min(p[0].y, cmp::min(p[1].y, p[2].y));
 
-    let mut max_x = cmp::min(p[0].x, cmp::min(p[1].x, p[2].x));
-    let mut max_y = cmp::min(p[0].y, cmp::min(p[1].y, p[2].y));
+    let mut max_x = cmp::max(p[0].x, cmp::max(p[1].x, p[2].x));
+    let mut max_y = cmp::max(p[0].y, cmp::max(p[1].y, p[2].y));
 
     if (max_x >= 1024 && min_x >= 1024) || (max_x < 0 && min_x < 0) {
         return;
