@@ -19,11 +19,3 @@ pub fn clamp<T: PartialOrd>(val: T, min_val: T, max_val: T) -> T {
 
   val
 }
-
-pub fn min3<T: Ord>(a: T, b: T, c: T) -> T {
-  cmp::min(a, cmp::min(b, c))
-}
-
-pub fn max3<T: Ord>(a: T, b: T, c: T) -> T {
-  cmp::max(a, cmp::max(b, c))
-}
