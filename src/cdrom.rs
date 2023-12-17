@@ -741,6 +741,17 @@ impl Cdrom {
       0x0a => self.init(),
       0x0b | 0x0c => self.push_stat(),
       0x0e => self.setmode(),
+      0x13 => {
+        self.push_stat();
+
+        self.controller_response_buffer.push_back(1);
+        self.controller_response_buffer.push_back(1);
+      }
+      0x14 => {
+        self.push_stat();
+        self.controller_response_buffer.push_back(0);
+        self.controller_response_buffer.push_back(0);
+      }
       0x15 | 0x16 => self.seek(),
       0x19 => {
         let sub_function = self.controller_param_buffer.pop_front().unwrap();

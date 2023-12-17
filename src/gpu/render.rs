@@ -329,39 +329,33 @@ impl GPU {
       return;
     }
 
-    let mut min_x = cmp::min(p[0].x, cmp::min(p[1].x, p[2].x));
-    let mut min_y = cmp::min(p[0].y, cmp::min(p[1].y, p[2].y));
+    let mut min_x = util::min3(p[0].x, p[1].x, p[2].x);
+    let mut min_y = util::min3(p[0].y, p[1].y, p[2].y);
 
-    let mut max_x = cmp::max(p[0].x, cmp::max(p[1].x, p[2].x));
-    let mut max_y = cmp::max(p[0].y, cmp::max(p[1].y, p[2].y));
+    let mut max_x = util::max3(p[0].x, p[1].x, p[2].x);
+    let mut max_y = util::max3(p[0].y, p[1].y, p[2].y);
 
-    let diff_x = max_x - min_y;
-    let diff_y = max_y - min_y;
-
-    if min_x < 0 || min_y < 0 || max_x >= 1024 || max_y >= 512 || (diff_x == 0 && diff_y == 0) {
-      return;
+    if (max_x >= 1024 && min_x >= 1024) || (max_x < 0 && min_x < 0) {
+        return;
     }
 
-    let drawing_area_left = self.drawing_area_left as i32;
-    let drawing_area_top = self.drawing_area_top as i32;
-    let drawing_area_right = self.drawing_area_right as i32;
-    let drawing_area_bottom = self.drawing_area_bottom as i32;
-
-    if min_x < drawing_area_left {
-      min_x = drawing_area_left;
+    if (max_y >= 512 && min_y >= 512) || (max_y < 0 && min_y < 0) {
+        return;
     }
 
-    if min_y < drawing_area_top {
-      min_y = drawing_area_top;
+    if (max_x - min_x) >= 1024 {
+        return;
     }
 
-    if max_x > drawing_area_right {
-      max_x = drawing_area_right;
+    if (max_y - min_y) >= 512 {
+        return;
     }
 
-    if max_y > drawing_area_bottom {
-      max_y = drawing_area_bottom;
-    }
+    min_x = cmp::max(min_x, self.drawing_area_left as i32);
+    min_y = cmp::max(min_y, self.drawing_area_top as i32);
+
+    max_x = cmp::min(max_x, self.drawing_area_right as i32);
+    max_y = cmp::min(max_y, self.drawing_area_bottom as i32);
 
     let mut color_d = ColorDeltas::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
 

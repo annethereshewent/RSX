@@ -321,7 +321,7 @@ impl GPU {
     self.cycles += elapsed_gpu_cycles;
     self.dotclock_cycles += elapsed_gpu_cycles;
 
-    timers.tick_dotclock(elapsed_gpu_cycles / dotclock);
+    timers.tick_dotclock(self.dotclock_cycles / dotclock);
 
     self.dotclock_cycles %= dotclock;
 
