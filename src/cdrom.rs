@@ -25,6 +25,33 @@ pub const ZIGZAG_INTERPOLATION_TABLE: [[i32; 29]; 7] = [
   [-0x5, 0x11, -0x23, 0x46, -0x17, -0x44, 0x15b, -0x347, 0x80e, -0x1249, 0x3c07, 0x53e0, -0x16fa, 0xafa, -0x548, 0x27b, -0xeb, 0x1a, 0x2b, -0x23, 0x10, -0x8, 0x2, 0, 0, 0, 0, 0, 0],
 ];
 
+
+pub struct SubchannelQ {
+  pub track: u8,
+  pub index: u8,
+  pub mm: u8,
+  pub ss: u8,
+  pub sect: u8,
+  pub amm: u8,
+  pub ass: u8,
+  pub asect: u8
+}
+
+impl SubchannelQ {
+  pub fn new() -> Self {
+    Self {
+      track: 0,
+      index: 0,
+      mm: 0,
+      ss: 0,
+      sect: 0,
+      amm: 0,
+      ass: 0,
+      asect: 0
+    }
+  }
+}
+
 #[derive(PartialEq)]
 pub enum CdSubheaderMode {
   Video,
@@ -199,7 +226,8 @@ pub struct Cdrom {
   sample_buffer: [Vec<i16>; 2],
 
   sixstep: usize,
-  ringbuf: [[i16; 0x20]; 2]
+  ringbuf: [[i16; 0x20]; 2],
+  subq: SubchannelQ
 }
 
 impl Cdrom {
@@ -265,7 +293,8 @@ impl Cdrom {
         Vec::new()
       ],
       sixstep: 6,
-      ringbuf: [[0; 0x20]; 2]
+      ringbuf: [[0; 0x20]; 2],
+      subq: SubchannelQ::new()
     }
   }
 
@@ -362,6 +391,17 @@ impl Cdrom {
     self.current_ss = self.ss;
     self.current_sect = self.sect;
 
+    self.subq.track = 1;
+    self.subq.index = 1;
+
+    self.subq.mm = self.mm;
+    self.subq.ss = self.ss - 2;
+    self.subq.sect = self.sect;
+
+    self.subq.amm = self.mm;
+    self.subq.ass = self.ss;
+    self.subq.asect = self.sect;
+
     self.is_playing = false;
     self.is_seeking = false;
     self.is_reading = false;
@@ -409,6 +449,17 @@ impl Cdrom {
 
     let header = CdHeader::new(&mut buf);
     let subheader = CdSubheader::new(&mut buf);
+
+    self.subq.track = 1;
+    self.subq.index = 1;
+
+    self.subq.mm = header.mm;
+    self.subq.ss = header.ss - 2;
+    self.subq.sect = header.sect;
+
+    self.subq.amm = header.mm;
+    self.subq.ass = header.ss;
+    self.subq.asect = header.sect;
 
     if header.mm != self.current_mm || header.ss != self.current_ss || header.sect != self.current_sect {
       panic!("mismatched sector info between header and controller");
@@ -737,10 +788,20 @@ impl Cdrom {
       0x01 => self.push_stat(),
       0x02 => self.setloc(),
       0x06 => self.readn(),
+      0x07 => {
+        self.push_stat();
+
+        self.controller_response_buffer.push_back(0x20);
+
+        interrupt = 0x5;
+      },
       0x09 => self.pause(),
       0x0a => self.init(),
       0x0b | 0x0c => self.push_stat(),
+      0x0d => self.setfilter(),
       0x0e => self.setmode(),
+      0x10 => self.getloc_l(),
+      0x11 => self.getloc_p(),
       0x13 => {
         self.push_stat();
 
@@ -784,6 +845,40 @@ impl Cdrom {
     }
 
     self.controller_interrupt_flags = interrupt;
+  }
+
+  fn getloc_p(&mut self) {
+    self.controller_response_buffer.push_back(self.subq.track);
+    self.controller_response_buffer.push_back(self.subq.index);
+
+    self.controller_response_buffer.push_back(Self::u8_to_bcd(self.subq.mm));
+    self.controller_response_buffer.push_back(Self::u8_to_bcd(self.subq.ss));
+    self.controller_response_buffer.push_back(Self::u8_to_bcd(self.subq.sect));
+
+    self.controller_response_buffer.push_back(Self::u8_to_bcd(self.subq.amm));
+    self.controller_response_buffer.push_back(Self::u8_to_bcd(self.subq.ass));
+    self.controller_response_buffer.push_back(Self::u8_to_bcd(self.subq.asect));
+
+  }
+
+  fn getloc_l(&mut self) {
+    self.controller_response_buffer.push_back(Self::u8_to_bcd(self.sector_header.mm));
+    self.controller_response_buffer.push_back(Self::u8_to_bcd(self.sector_header.ss));
+    self.controller_response_buffer.push_back(self.sector_header.sect);
+
+    self.controller_response_buffer.push_back(self.sector_header.mode);
+    self.controller_response_buffer.push_back(self.sector_subheader.file);
+    self.controller_response_buffer.push_back(self.sector_subheader.channel);
+    self.controller_response_buffer.push_back(self.sector_subheader.sub_mode);
+    self.controller_response_buffer.push_back(self.sector_subheader.coding_info);
+  }
+
+  fn setfilter(&mut self) {
+    let file = self.controller_param_buffer.pop_front().unwrap();
+    let filter = self.controller_param_buffer.pop_front().unwrap();
+
+    self.filter_file = file;
+    self.filter_channel = filter & 0x1f;
   }
 
   fn init(&mut self) {
