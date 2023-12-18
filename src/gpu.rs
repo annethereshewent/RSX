@@ -502,10 +502,10 @@ impl GPU {
 
     let op_code = command >> 24;
 
-    if self.debug_on && !self.executed_commands.contains_key(&op_code) {
-      println!("executing command {:X}", op_code);
-      self.executed_commands.insert(op_code, true);
-    }
+    // if self.debug_on && !self.executed_commands.contains_key(&op_code) {
+    //   println!("executing command {:X}", op_code);
+    //   self.executed_commands.insert(op_code, true);
+    // }
 
     match op_code {
       0x00 => (), // NOP
