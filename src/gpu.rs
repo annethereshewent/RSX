@@ -312,7 +312,7 @@ impl GPU {
   }
 
   fn tick(&mut self, cycles: i32, timers: &mut Timers) {
-    let elapsed_gpu_cycles = ((cycles as f64) * GPU_CYCLES_TO_CPU_CYCLES).round() as i32;
+    let elapsed_gpu_cycles = ((cycles as f64) * GPU_CYCLES_TO_CPU_CYCLES) as i32;
 
     let dotclock = self.get_dotclock();
 
