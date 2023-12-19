@@ -317,9 +317,9 @@ impl Gte {
     let ir2 = self.ir[2] as i64;
     let ir3 = self.ir[3] as i64;
 
-    let fc_x = self.fc.0 as i64;
-    let fc_y = self.fc.1 as i64;
-    let fc_z = self.fc.2 as i64;
+    let fc_x = (self.fc.0 as i64) << 12;
+    let fc_y = (self.fc.1 as i64) << 12;
+    let fc_z = (self.fc.2 as i64) << 12;
 
     self.mac[1] = (self.set_mac_flags(fc_x - r * ir1, 1) >> self.sf) as i32;
     self.mac[2] = (self.set_mac_flags(fc_y - g * ir2, 2) >> self.sf) as i32;

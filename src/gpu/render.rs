@@ -155,7 +155,7 @@ impl GPU {
   }
 
   fn add_quarter_semitransparency(x: u8, y: u8) -> u8 {
-    cmp::min(255, (x as u32 + y as u32) / 4) as u8
+    cmp::min(255, x as u32 + (y as u32) / 4) as u8
   }
 
   pub fn rasterize_line(&mut self, start_position: Coordinates2d, end_position: Coordinates2d, colors: &mut [RgbColor], shaded: bool, semi_transparent: bool) {
