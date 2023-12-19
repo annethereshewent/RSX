@@ -79,16 +79,16 @@ impl GPU {
   pub fn render_pixel(&mut self, position: Coordinates2d, color: RgbColor, textured: bool, semi_transparent: bool) {
     let vram_address = GPU::get_vram_address(position.x as u32, position.y as u32);
 
+    let val = util::read_half(&self.vram, vram_address);
+    let prev_color = GPU::translate_15bit_to_24(val);
+
     let mut color = color;
 
-    if self.stat.preserved_masked_pixels && color.a {
+    if self.stat.preserved_masked_pixels && prev_color.a {
       return;
     }
 
     if (!textured || color.a) && semi_transparent {
-      let val = util::read_half(&self.vram, vram_address);
-      let prev_color = GPU::translate_15bit_to_24(val);
-
       let (r,g, b) = match self.stat.semi_transparency {
         SemiTransparency::Half => {
           (
@@ -145,13 +145,7 @@ impl GPU {
   }
 
   fn subtract_semitransparency(x: u8, y: u8) -> u8 {
-    let result = x as i32 - y as i32;
-
-    if result < 0 {
-      return 0;
-    }
-
-    result as u8
+    util::clamp(x as i32 - y as i32, 0, 255) as u8
   }
 
   fn add_quarter_semitransparency(x: u8, y: u8) -> u8 {
