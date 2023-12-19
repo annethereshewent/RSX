@@ -136,8 +136,6 @@
         if (game != null) {
           gameData = new Uint8Array(game)
 
-          console.log(gameData)
-
           // finally initialize the emulator!
           emulator = new WasmEmulator(biosData, gameData)
         }

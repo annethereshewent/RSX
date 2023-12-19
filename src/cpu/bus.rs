@@ -51,7 +51,7 @@ pub struct Bus {
 }
 
 impl Bus {
-  pub fn new(bios: Vec<u8>, interrupts: Rc<Cell<InterruptRegisters>>, dma: Rc<Cell<DMA>>, game_file: Vec<u8>) -> Self {
+  pub fn new(bios: Vec<u8>, interrupts: Rc<Cell<InterruptRegisters>>, dma: Rc<Cell<DMA>>, game_file: Vec<u8>, is_wasm: bool) -> Self {
     Self {
       bios,
       ram: vec![0; RAM_SIZE].into_boxed_slice(),
@@ -59,7 +59,7 @@ impl Bus {
       spu: SPU::new(),
       timers: Timers::new(interrupts.clone()),
       cdrom: Cdrom::new(interrupts.clone(), game_file),
-      controllers: Controllers::new(interrupts.clone()),
+      controllers: Controllers::new(interrupts.clone(), is_wasm),
       counter: Counter::new(),
       interrupts,
       dma,

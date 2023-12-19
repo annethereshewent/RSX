@@ -1,7 +1,9 @@
 extern crate rsx;
+extern crate console_error_panic_hook;
 
 use rsx::cpu::CPU;
 use wasm_bindgen::prelude::*;
+use std::panic;
 
 #[wasm_bindgen]
 extern "C" {
@@ -23,8 +25,9 @@ pub struct WasmEmulator {
 impl WasmEmulator {
   #[wasm_bindgen(constructor)]
   pub fn new(bios: &[u8], game_data: &[u8]) -> Self {
+    panic::set_hook(Box::new(console_error_panic_hook::hook));
     Self {
-      cpu: CPU::new(bios.to_vec(), game_data.to_vec())
+      cpu: CPU::new(bios.to_vec(), game_data.to_vec(), true)
     }
   }
   pub fn run_frame(&mut self) {

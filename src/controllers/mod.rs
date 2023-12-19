@@ -37,8 +37,8 @@ pub struct Controllers {
 }
 
 impl Controllers {
-  pub fn new(interrupts: Rc<Cell<InterruptRegisters>>) -> Self {
-    let mut memory_card = MemoryCard::new();
+  pub fn new(interrupts: Rc<Cell<InterruptRegisters>>, is_wasm: bool) -> Self {
+    let mut memory_card = MemoryCard::new(is_wasm);
 
     memory_card.load_file_contents();
 

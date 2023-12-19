@@ -134,7 +134,7 @@ pub struct CPU {
 }
 
 impl CPU {
-  pub fn new(bios: Vec<u8>, game_file: Vec<u8>) -> Self {
+  pub fn new(bios: Vec<u8>, game_file: Vec<u8>, is_wasm: bool) -> Self {
     let interrupts = Rc::new(Cell::new(InterruptRegisters::new()));
     let dma = Rc::new(Cell::new(DMA::new()));
 
@@ -145,7 +145,7 @@ impl CPU {
       r: [0; 32],
       hi: 0,
       low: 0,
-      bus: Bus::new(bios, interrupts.clone(), dma.clone(), game_file),
+      bus: Bus::new(bios, interrupts.clone(), dma.clone(), game_file, is_wasm),
       load: None,
       branch: false,
       delay_slot: false,

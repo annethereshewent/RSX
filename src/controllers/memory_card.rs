@@ -24,20 +24,25 @@ pub struct MemoryCard {
   previous: u8,
   card: Box<[u8]>,
   flag: u8,
-  card_file: File
+  card_file: Option<File>,
 }
 
 impl MemoryCard {
-  pub fn new() -> Self {
-    fs::create_dir_all("../cards").unwrap();
+  pub fn new(is_wasm: bool) -> Self {
+    let mut file = None;
 
-    let file = fs::OpenOptions::new()
-      .create(true)
-      .read(true)
-      .write(true)
-      .append(true)
-      .open(FILENAME)
-      .unwrap();
+    if !is_wasm {
+      fs::create_dir_all("../cards").unwrap();
+
+      file = Some(fs::OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .append(true)
+        .open(FILENAME)
+        .unwrap());
+    }
+
 
     Self {
       state: CardState::Idle,
@@ -56,7 +61,9 @@ impl MemoryCard {
   }
 
   pub fn load_file_contents(&mut self) {
-    self.card_file.read_exact(&mut self.card).unwrap();
+    if let Some(card_file) = &mut self.card_file {
+      card_file.read_exact(&mut self.card).unwrap();
+    }
   }
 
   pub fn enabled(&self) -> bool {
@@ -290,13 +297,15 @@ impl MemoryCard {
   }
 
   fn write_to_file(&mut self) {
-    // self.card_file.write_all_at(&self.card, 0).unwrap();
-    fs::write(FILENAME, &self.card).unwrap();
-    self.card_file.flush().unwrap();
+    if let Some(card_file) = &mut self.card_file {
+      fs::write(FILENAME, &self.card).unwrap();
+      card_file.flush().unwrap();
 
-    let mut buffer_copy = [0; MEMORY_CARD_SIZE];
+      let mut buffer_copy = [0; MEMORY_CARD_SIZE];
 
-    self.card_file.seek(SeekFrom::Start(0)).unwrap();
-    self.card_file.read_exact(&mut buffer_copy).unwrap();
+      card_file.seek(SeekFrom::Start(0)).unwrap();
+      card_file.read_exact(&mut buffer_copy).unwrap();
+    }
+
   }
 }
