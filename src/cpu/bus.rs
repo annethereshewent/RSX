@@ -9,6 +9,26 @@ const RAM_SIZE: usize = 2 * 1024 * 1024;
 const EXP2_WRITE_ADDR: u32 = 0x1f802021;
 const EXP2_READ_ADDR: u32 = 0x1f802023;
 
+#[derive(Copy, Clone)]
+pub enum Device {
+  Timers = 0,
+  Controllers = 1,
+  SPU = 2,
+  GPU = 3
+}
+
+impl Device {
+  pub fn from(index: usize) -> Self {
+    match index {
+      0 => Device::Timers,
+      1 => Device::Controllers,
+      2 => Device::SPU,
+      3 => Device::GPU,
+      _ => panic!("invalid device specified: {index}")
+    }
+  }
+}
+
 // @TODO: Refactor all of the mem_read and mem_loads into one generic method
 pub struct Bus {
   bios: Vec<u8>,
@@ -26,7 +46,7 @@ pub struct Bus {
   pub cache_control: u32,
   exp2_buffer: Vec<u8>,
   scratchpad: Box<[u8]>,
-  last_timer_sync: i32,
+  last_device_sync: [i32; 4],
   pub last_sync: i32
 }
 
@@ -48,7 +68,7 @@ impl Bus {
       exp2_buffer: Vec::new(),
       mdec: Mdec::new(),
       scratchpad: vec![0; 0x400].into_boxed_slice(),
-      last_timer_sync: 0,
+      last_device_sync: [0; 4],
       last_sync: 0
     }
   }
@@ -73,7 +93,12 @@ impl Bus {
 
         self.scratchpad[offset]
       }
-      0x1f80_1040 => self.controllers.read_byte(),
+      0x1f80_1040 => {
+        self.tick_device(Device::GPU);
+        self.tick_device(Device::Controllers);
+
+        self.controllers.read_byte()
+      }
       0x1f80_1080..=0x1f80_10ff => self.dma.get().read(address) as u8,
       0x1f80_1800..=0x1f80_1803 => self.cdrom.read(address),
       0x1fc0_0000..=0x1fc7_ffff => self.bios[(address - 0x1fc0_0000) as usize],
@@ -108,7 +133,12 @@ impl Bus {
         (self.scratchpad[offset] as u32) | (self.scratchpad[offset + 1] as u32) << 8 | (self.scratchpad[offset + 2] as u32) << 16 | (self.scratchpad[offset + 3] as u32) << 24
       }
       0x1f80_1014 => 0x2009_31e1,
-      0x1f80_1044 => self.controllers.read_stat() as u32,
+      0x1f80_1044 => {
+        self.tick_device(Device::GPU);
+        self.tick_device(Device::Controllers);
+
+        self.controllers.read_stat() as u32
+      }
       0x1f80_1060 => 0xb88,
       0x1f80_1070 => {
         self.interrupts.get().status.read()
@@ -118,8 +148,7 @@ impl Bus {
       }
       0x1f80_1080..=0x1f80_10ff => self.dma.get().read(address),
       0x1f80_1100..=0x1f80_112b => {
-        self.timers.tick(self.cycles - self.last_timer_sync);
-        self.last_timer_sync = self.cycles;
+        self.tick_device(Device::Timers);
 
         self.timers.read(address) as u32
       }
@@ -128,13 +157,23 @@ impl Bus {
         let offset = address - 0x1f80_1810;
 
         match offset {
-          0 => self.gpu.gpuread(),
-          4 => self.gpu.stat_value(),
+          0 => {
+            self.tick_device(Device::GPU);
+
+            self.gpu.gpuread()
+          }
+          4 => {
+            self.tick_device(Device::GPU);
+
+            self.gpu.stat_value()
+          }
           _ => panic!("invalid GPU register: {offset}")
         }
       }
       0x1f80_1824 => self.mdec.read_status(),
       0x1f80_1c00..=0x1f80_1e7f => {
+        self.tick_device(Device::SPU);
+
         self.spu.read_32(address)
       }
       _ => panic!("not implemented: {:08x}", address)
@@ -161,8 +200,7 @@ impl Bus {
         (self.scratchpad[offset] as u16) | (self.scratchpad[offset + 1] as u16) << 8
       }
       0x1f80_1100..=0x1f80_112b => {
-        self.timers.tick(self.cycles - self.last_timer_sync);
-        self.last_timer_sync = self.cycles;
+        self.tick_device(Device::Timers);
 
         self.timers.read(address) as u16
       }
@@ -172,10 +210,22 @@ impl Bus {
       }
 
       0x1f80_1c00..=0x1f80_1e7f => {
+        self.tick_device(Device::SPU);
+
         self.spu.read_16(address)
       }
-      0x1f80_1044 => self.controllers.read_stat() as u16,
-      0x1f80_104a => self.controllers.read_control(),
+      0x1f80_1044 => {
+        self.tick_device(Device::GPU);
+        self.tick_device(Device::Controllers);
+
+        self.controllers.read_stat() as u16
+      }
+      0x1f80_104a => {
+        self.tick_device(Device::GPU);
+        self.tick_device(Device::Controllers);
+
+        self.controllers.read_control()
+      }
       0x1f80_1070 => {
 
         self.interrupts.get().status.read() as u16
@@ -199,7 +249,12 @@ impl Bus {
         self.scratchpad[offset] = value;
       }
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
-      0x1f80_1040 => self.controllers.queue_byte(value),
+      0x1f80_1040 => {
+        self.tick_device(Device::GPU);
+        self.tick_device(Device::Controllers);
+
+        self.controllers.queue_byte(value);
+      }
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070..=0x1f80_1074 => panic!("unimplemented writes to interrupt registers"),
       0x1f80_1080..=0x1f80_10ff => {
@@ -211,8 +266,7 @@ impl Bus {
       }
       0x1f80_1800..=0x1f80_1803 => self.cdrom.write(address, value),
       0x1f80_1100..=0x1f80_112b => {
-        self.timers.tick(self.cycles - self.last_timer_sync);
-        self.last_timer_sync = self.cycles;
+        self.tick_device(Device::Timers);
 
         self.timers.write(address, value as u32);
       }
@@ -243,11 +297,30 @@ impl Bus {
         self.scratchpad[offset] = value as u8;
         self.scratchpad[offset + 1] = (value >> 8) as u8;
       }
-      0x1f80_1c00..=0x1f80_1e80 => self.spu.write_16(address, value),
+      0x1f80_1c00..=0x1f80_1e80 => {
+        self.tick_device(Device::SPU);
+
+        self.spu.write_16(address, value);
+      }
       0x1f80_1000..=0x1f80_1023 => println!("ignoring store to MEMCTRL address {:08x}", address),
-      0x1f80_1048 => self.controllers.write_joy_mode(value),
-      0x1f80_104a => self.controllers.write_joy_control(value),
-      0x1f80_104e => self.controllers.write_reload_value(value),
+      0x1f80_1048 => {
+        self.tick_device(Device::GPU);
+        self.tick_device(Device::Controllers);
+
+        self.controllers.write_joy_mode(value);
+      }
+      0x1f80_104a => {
+        self.tick_device(Device::GPU);
+        self.tick_device(Device::Controllers);
+
+        self.controllers.write_joy_control(value);
+      }
+      0x1f80_104e => {
+        self.tick_device(Device::GPU);
+        self.tick_device(Device::Controllers);
+
+        self.controllers.write_reload_value(value)
+      }
       0x1f80_1060 => println!("ignoring write to RAM_SIZE register at address 0x1f80_1060"),
       0x1f80_1070 => {
         let mut interrupts = self.interrupts.get();
@@ -264,8 +337,7 @@ impl Bus {
         self.interrupts.set(interrupts);
       }
       0x1f80_1100..=0x1f80_112b => {
-        self.timers.tick(self.cycles - self.last_timer_sync);
-        self.last_timer_sync = self.cycles;
+        self.tick_device(Device::Timers);
 
         self.timers.write(address, value as u32);
       }
@@ -322,13 +394,14 @@ impl Bus {
         self.dma.set(dma);
       }
       0x1f80_1100..=0x1f80_112b => {
-        self.timers.tick(self.cycles - self.last_timer_sync);
-        self.last_timer_sync = self.cycles;
+        self.tick_device(Device::Timers);
 
         self.timers.write(address, value);
       }
       0x1f80_1810..=0x1f80_1817 => {
         let offset = address - 0x1f80_1810;
+
+        self.tick_device(Device::GPU);
 
         match offset {
           0 => self.gpu.gp0(value),
@@ -346,16 +419,8 @@ impl Bus {
   pub fn tick(&mut self, cycles: i32) {
     self.cycles += cycles;
 
-    self.gpu.tick_counter(cycles, &mut self.timers);
+    // syncing cdrom and dma on every tick since it was causing issues otherwise.
     self.cdrom.tick_counter(cycles, &mut self.spu);
-
-    self.controllers.tick(cycles);
-
-    let mut interrupts = self.interrupts.get();
-
-    self.spu.tick_counter(cycles, &mut interrupts);
-
-    self.interrupts.set(interrupts);
 
     let mut dma = self.dma.get();
     dma.tick_counter(cycles);
@@ -366,15 +431,40 @@ impl Bus {
     let cycles = self.cycles;
     self.cycles = 0;
 
-    self.last_timer_sync -= cycles;
+    for i in 0..self.last_device_sync.len() {
+      self.last_device_sync[i] -= cycles;
+    }
+
     self.last_sync -= cycles;
   }
 
-  pub fn sync_timers(&mut self) {
-    self.timers.tick(self.cycles - self.last_timer_sync);
-    self.last_timer_sync = self.cycles;
+  pub fn sync_devices(&mut self) {
+    for i in 0..self.last_device_sync.len() {
+      let device = Device::from(i);
+
+      self.tick_device(device);
+    }
 
     self.last_sync = self.cycles;
+  }
+
+  fn tick_device(&mut self, device: Device) {
+    let cycles = self.cycles - self.last_device_sync[device as usize];
+
+    match device {
+      Device::Timers => self.timers.tick(cycles),
+      Device::Controllers => self.controllers.tick(cycles),
+      Device::SPU => {
+        let mut interrupts = self.interrupts.get();
+
+        self.spu.tick_counter(cycles, &mut interrupts);
+
+        self.interrupts.set(interrupts);
+      }
+      Device::GPU => self.gpu.tick_counter(cycles, &mut self.timers)
+    }
+
+    self.last_device_sync[device as usize] = self.cycles;
   }
 
   fn write_expansion_2(&mut self, address: u32, val: u8) {

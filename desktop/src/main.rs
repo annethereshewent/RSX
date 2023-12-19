@@ -34,7 +34,7 @@ pub fn main() {
         cpu.step();
       }
 
-      cpu.bus.sync_timers();
+      cpu.bus.sync_devices();
     }
 
     cpu.bus.gpu.frame_complete = false;
