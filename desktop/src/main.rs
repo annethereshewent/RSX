@@ -29,15 +29,7 @@ pub fn main() {
     cpu.exe_file = Some(exe_file.clone());
   }
   loop {
-    while !cpu.bus.gpu.frame_complete {
-      while cpu.bus.cycles - cpu.bus.last_sync < 128 {
-        cpu.step();
-      }
-
-      cpu.bus.sync_devices();
-    }
-
-    cpu.bus.gpu.frame_complete = false;
+    cpu.run_frame();
 
     cpu.bus.reset_cycles();
 

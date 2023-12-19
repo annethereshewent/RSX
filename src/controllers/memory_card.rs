@@ -1,4 +1,4 @@
-use std::{fs::{self, File}, io::{Write, Read, Seek, SeekFrom}, os::unix::fs::FileExt};
+use std::{fs::{self, File}, io::{Write, Read, Seek, SeekFrom}};
 
 #[derive(PartialEq)]
 pub enum CardState {
@@ -10,6 +10,7 @@ pub enum CardState {
 }
 
 const MEMORY_CARD_SIZE: usize = 0x20000;
+const FILENAME: &str = "../cards/memory_card.mcd";
 
 pub struct MemoryCard {
   state: CardState,
@@ -28,8 +29,6 @@ pub struct MemoryCard {
 
 impl MemoryCard {
   pub fn new() -> Self {
-    let filename = "../cards/memory_card.mcd";
-
     fs::create_dir_all("../cards").unwrap();
 
     let file = fs::OpenOptions::new()
@@ -37,7 +36,7 @@ impl MemoryCard {
       .read(true)
       .write(true)
       .append(true)
-      .open(filename)
+      .open(FILENAME)
       .unwrap();
 
     Self {
@@ -291,7 +290,8 @@ impl MemoryCard {
   }
 
   fn write_to_file(&mut self) {
-    self.card_file.write_all_at(&self.card, 0).unwrap();
+    // self.card_file.write_all_at(&self.card, 0).unwrap();
+    fs::write(FILENAME, &self.card).unwrap();
     self.card_file.flush().unwrap();
 
     let mut buffer_copy = [0; MEMORY_CARD_SIZE];
