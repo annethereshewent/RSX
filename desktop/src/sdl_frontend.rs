@@ -51,6 +51,7 @@ pub struct SdlFrontend {
   canvas: Canvas<Window>,
   _controller: Option<GameController>,
   button_map: HashMap<Button, (bool, u8)>,
+  key_map: HashMap<Keycode, (bool, u8)>,
   device: AudioDevice<PsxAudioCallback>
 }
 
@@ -124,12 +125,27 @@ impl SdlFrontend {
     button_map.insert(Button::LeftStick, (false, LowInput::ButtonL3 as u8));
     button_map.insert(Button::RightStick, (false, LowInput::ButtonR3 as u8));
 
+    let mut key_map = HashMap::new();
+
+    key_map.insert(Keycode::W, (false, LowInput::ButtonUp as u8));
+    key_map.insert(Keycode::S, (false, LowInput::ButtonDown as u8));
+    key_map.insert(Keycode::D, (false, LowInput::ButtonRight as u8));
+    key_map.insert(Keycode::A, (false, LowInput::ButtonLeft as u8));
+
+    key_map.insert(Keycode::I, (true, HighInput::ButtonTriangle as u8));
+    key_map.insert(Keycode::K, (true, HighInput::ButtonCross as u8));
+    key_map.insert(Keycode::J, (true, HighInput::ButtonSquare as u8));
+    key_map.insert(Keycode::L, (true, HighInput::ButtonCircle as u8));
+
+    key_map.insert(Keycode::Tab, (false, LowInput::ButtonSelect as u8));
+    key_map.insert(Keycode::Return, (false, LowInput::ButtonStart as u8));
 
     Self {
       event_pump,
       canvas,
       _controller,
       button_map,
+      key_map,
       device
     }
   }
@@ -140,17 +156,53 @@ impl SdlFrontend {
     for event in self.event_pump.poll_iter() {
       match event {
         Event::KeyDown { keycode: Some(k), .. } => {
-          if k == Keycode::T {
-            println!("toggling cpu debug");
-            cpu.debug_on = !cpu.debug_on;
-          } else if k ==  Keycode::G {
-            println!("toggling gpu debug");
-            cpu.bus.gpu.debug_on = !cpu.bus.gpu.debug_on;
-          } else if k == Keycode::U {
-            cpu.gte.debug_on = !cpu.gte.debug_on;
+          // if k == Keycode::T {
+          //   println!("toggling cpu debug");
+          //   cpu.debug_on = !cpu.debug_on;
+          // } else if k ==  Keycode::G {
+          //   println!("toggling gpu debug");
+          //   cpu.bus.gpu.debug_on = !cpu.bus.gpu.debug_on;
+          // } else if k == Keycode::U {
+          //   cpu.gte.debug_on = !cpu.gte.debug_on;
+          // }
+
+          match k {
+            Keycode::T => {
+              cpu.debug_on = !cpu.debug_on;
+              println!("toggling cpu debug to {}", cpu.debug_on);
+            }
+            Keycode::G => {
+              cpu.bus.gpu.debug_on = !cpu.bus.gpu.debug_on;
+              println!("toggling gpu debug to {}", cpu.bus.gpu.debug_on);
+            }
+            Keycode::U => {
+              cpu.gte.debug_on = !cpu.gte.debug_on;
+              println!("toggling gte debug to {}", cpu.gte.debug_on);
+            }
+            _ => {
+              if let Some(input) = self.key_map.get(&k) {
+                let (is_high_input, input) = *input;
+
+                if !is_high_input {
+                  joypad.set_low_input(input, true)
+                } else {
+                  joypad.set_high_input(input, true);
+                }
+              }
+            }
           }
         },
-        Event::KeyUp { keycode: Some(_k), .. } => (),
+        Event::KeyUp { keycode: Some(k), .. } => {
+          if let Some(input) = self.key_map.get(&k) {
+            let (is_high_input, input) = *input;
+
+            if !is_high_input {
+              joypad.set_low_input(input, false)
+            } else {
+              joypad.set_high_input(input, false);
+            }
+          }
+        },
         Event::Quit { .. } => std::process::exit(0),
         Event::ControllerButtonDown { button, ..} => {
           if button == Button::Touchpad {

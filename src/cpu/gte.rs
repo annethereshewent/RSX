@@ -214,14 +214,6 @@ impl Gte {
     let b = (self.rgbc.b as i64) << 4;
     let c = self.rgbc.c;
 
-    self.mac[1] = (self.set_mac_flags(r * self.ir[1] as i64, 1) >> self.sf) as i32;
-    self.mac[2] = (self.set_mac_flags(g * self.ir[2] as i64, 2) >> self.sf) as i32;
-    self.mac[3] = (self.set_mac_flags(b * self.ir[3] as i64, 3) >> self.sf) as i32;
-
-    for i in 1..4 {
-      self.ir[i] = self.set_ir_flags(self.mac[i], i, self.lm);
-    }
-
     let fc_x = (self.fc.0 as i64) << 12;
     let fc_y = (self.fc.1 as i64) << 12;
     let fc_z = (self.fc.2 as i64) << 12;
@@ -325,26 +317,19 @@ impl Gte {
     let ir2 = self.ir[2] as i64;
     let ir3 = self.ir[3] as i64;
 
-    self.mac[1] = (self.set_mac_flags(r * ir1, 1) >> self.sf) as i32;
-    self.mac[2] = (self.set_mac_flags(g * ir2, 2) >> self.sf) as i32;
-    self.mac[3] = (self.set_mac_flags(b * ir3, 3) >> self.sf) as i32;
-
     let fc_x = self.fc.0 as i64;
     let fc_y = self.fc.1 as i64;
     let fc_z = self.fc.2 as i64;
 
-    let mac1 = self.mac[1] as i64;
-    let mac2 = self.mac[2] as i64;
-    let mac3 = self.mac[3] as i64;
-    let ir0 = self.ir[0] as i64;
-
-    self.mac[1] = (self.set_mac_flags(mac1 + (fc_x - mac1) * ir0, 1) >> self.sf) as i32;
-    self.mac[2] = (self.set_mac_flags(mac2 + (fc_y - mac2) * ir0, 2) >> self.sf) as i32;
-    self.mac[3] = (self.set_mac_flags(mac3 + (fc_z - mac3) * ir0, 3) >> self.sf) as i32;
+    self.mac[1] = (self.set_mac_flags(fc_x - r * ir1, 1) >> self.sf) as i32;
+    self.mac[2] = (self.set_mac_flags(fc_y - g * ir2, 2) >> self.sf) as i32;
+    self.mac[3] = (self.set_mac_flags(fc_z - b * ir3, 3) >> self.sf) as i32;
 
     let temp1 = self.set_ir_flags(self.mac[1], 1, false) as i64;
     let temp2 = self.set_ir_flags(self.mac[2], 2, false) as i64;
     let temp3 = self.set_ir_flags(self.mac[3], 3, false) as i64;
+
+    let ir0 = self.ir[0] as i64;
 
     self.mac[1] = (self.set_mac_flags(r * ir1 + ir0 * temp1, 1) >> self.sf) as i32;
     self.mac[2] = (self.set_mac_flags(g * ir2 + ir0 * temp2, 2) >> self.sf) as i32;
@@ -668,32 +653,28 @@ impl Gte {
     let mac2 = (self.ir[2] as i64) << 12;
     let mac3 = (self.ir[3] as i64) << 12;
 
-    let fc_x = self.fc.0 as i64;
-    let fc_y = self.fc.1 as i64;
-    let fc_z = self.fc.2 as i64;
+    let fc_x = (self.fc.0 as i64) << 12;
+    let fc_y = (self.fc.1 as i64) << 12;
+    let fc_z = (self.fc.2 as i64) << 12;
 
     let ir0 = self.ir[0] as i64;
 
-    self.mac[1] = (self.set_mac_flags(mac1 + (fc_x - mac1) * ir0, 1) >> self.sf) as i32;
-    self.mac[2] = (self.set_mac_flags(mac2 + (fc_y - mac1) * ir0, 2) >> self.sf) as i32;
-    self.mac[3] = (self.set_mac_flags(mac3 + (fc_z - mac1) * ir0, 3) >> self.sf) as i32;
-
-    let prev_ir1 = self.ir[1] as i64;
-    let prev_ir2 = self.ir[2] as i64;
-    let prev_ir3 = self.ir[3] as i64;
+    self.mac[1] = (self.set_mac_flags(fc_x - mac1, 1) >> self.sf) as i32;
+    self.mac[2] = (self.set_mac_flags(fc_y - mac2, 2) >> self.sf) as i32;
+    self.mac[3] = (self.set_mac_flags(fc_z - mac3, 3) >> self.sf) as i32;
 
     for i in 1..4 {
       self.ir[i] = self.set_ir_flags(self.mac[i], i, false);
     }
 
-    let ir0 = self.ir[0] as i64;
     let ir1 = self.ir[1] as i64;
     let ir2 = self.ir[2] as i64;
     let ir3 = self.ir[3] as i64;
 
-    self.mac[1] = (self.set_mac_flags(prev_ir1 + ir1 * ir0, 1) >> self.sf) as i32;
-    self.mac[2] = (self.set_mac_flags(prev_ir2 + ir2 * ir0, 2) >> self.sf) as i32;
-    self.mac[3] = (self.set_mac_flags(prev_ir3 + ir3 * ir0, 3) >> self.sf) as i32;
+    self.mac[1] = (self.set_mac_flags(mac1 + ir1 * ir0, 1) >> self.sf) as i32;
+    self.mac[2] = (self.set_mac_flags(mac2 + ir2 * ir0, 2) >> self.sf) as i32;
+    self.mac[3] = (self.set_mac_flags(mac3 + ir3 * ir0, 3) >> self.sf) as i32;
+
 
     let r = self.set_color_fifo_flags(self.mac[1] >> 4, 1);
     let g = self.set_color_fifo_flags(self.mac[2] >> 4, 2);
@@ -904,7 +885,6 @@ impl Gte {
     self.mac[2] = (mac2 >> self.sf) as i32;
     self.mac[3] = (mac3 >> self.sf) as i32;
 
-
     self.ir[1] = self.set_ir_flags(self.mac[1], 1, self.lm);
     self.ir[2] = self.set_ir_flags(self.mac[2], 2, self.lm);
     self.ir[3] = self.set_ir_flags(self.mac[3], 3, self.lm);
@@ -930,8 +910,8 @@ impl Gte {
     let ir3 = self.ir[3] as i64;
 
     let mut mac1 = self.set_mac_flags(rbk + c11 * ir1, 1);
-    let mut mac2 = self.set_mac_flags(bbk + c21 * ir1, 2);
-    let mut mac3 = self.set_mac_flags(gbk + c31 * ir1, 3);
+    let mut mac2 = self.set_mac_flags(gbk + c21 * ir1, 2);
+    let mut mac3 = self.set_mac_flags(bbk + c31 * ir1, 3);
 
     mac1 = self.set_mac_flags(mac1 + c12 * ir2, 1);
     mac2 = self.set_mac_flags(mac2 + c22 * ir2, 2);
