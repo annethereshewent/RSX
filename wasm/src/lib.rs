@@ -19,7 +19,14 @@ pub struct WasmEmulator {
   cpu: CPU
 }
 
+#[wasm_bindgen]
 impl WasmEmulator {
+  #[wasm_bindgen(constructor)]
+  pub fn new() -> Self {
+    Self {
+      cpu: CPU::new(None, None)
+    }
+  }
   pub fn run_frame(&mut self) {
     self.cpu.run_frame();
   }
@@ -30,5 +37,9 @@ impl WasmEmulator {
 
   pub fn update_audio_buffers() {
 
+  }
+
+  pub fn load_bios(&mut self, bios: &[u8]) {
+    console_log!("received bios {:?}", bios);
   }
 }

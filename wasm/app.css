@@ -1,0 +1,18 @@
+.logo {
+  font-size: 38px;
+  margin-right: 20px;
+}
+.fa-solid {
+  font-size: 20px;
+}
+.file-input {
+  display: none;
+}
+
+.show {
+  display: block;
+}
+
+.hide {
+  display: none;
+}
