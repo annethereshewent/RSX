@@ -13,28 +13,28 @@
       <div class="navbar-start">
         <div class="navbar-item">
           <div class="buttons">
-            <a id="bios-button" class="button is-warning">
+            <button id="bios-button" class="button is-warning">
               <i class="fa-solid fa-upload"></i>
               Load BIOS
-            </a>
-            <a id="game-button" class="button is-primary">
+            </button>
+            <button disabled id="game-button" class="button is-primary">
               <i class="fa-solid fa-upload"></i>
               Load Game
-            </a>
+            </button>
           </div>
         </div>
       </div>
       <div class="navbar-end">
         <div class="navbar-item">
           <div class="buttons">
-            <a class="button is-info" onclick="displayHelpModal()">
+            <button class="button is-info" onclick="displayHelpModal()">
               <i class="fa-solid fa-circle-info"></i>
               Help
-            </a>
-            <a class="button is-danger" onclick="enterFullscreen()">
+            </button>
+            <button class="button is-danger" onclick="enterFullscreen()">
               <i class="fa-solid fa-expand"></i>
               Full Screen
-            </a>
+            </button>
           </div>
         </div>
       </div>
@@ -104,6 +104,11 @@
     import init, { WasmEmulator } from "./pkg/rsx_wasm.js"
 
     async function main() {
+      let emulator = null
+      let biosData = null
+      let fileName = ""
+      let gameData = null
+
       document.getElementById("bios-button").addEventListener("click", () => document.getElementById("bios-input").click())
       document.getElementById("game-button").addEventListener("click", () => document.getElementById("game-input").click())
 
@@ -114,22 +119,29 @@
 
       const wasm = await init(path)
 
-      const emulator = new WasmEmulator()
+
 
       async function handleBiosChange(e) {
         const bios = await getBinaryData(e)
 
         if (bios != null) {
-          console.log(new Uint8Array(bios))
-          emulator.load_bios(new Uint8Array(bios))
+          biosData = new Uint8Array(bios)
+          document.getElementById("game-button").removeAttribute("disabled")
         }
       }
 
       async function handleGameChange(e) {
+        const game = await getBinaryData(e)
 
+        if (game != null) {
+          gameData = new Uint8Array(game)
+
+          console.log(gameData)
+
+          // finally initialize the emulator!
+          emulator = new WasmEmulator(biosData, gameData)
+        }
       }
-
-      let fileName = ""
 
       async function getBinaryData(e, setFilename) {
         let data = null

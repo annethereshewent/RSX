@@ -134,7 +134,7 @@ pub struct CPU {
 }
 
 impl CPU {
-  pub fn new(bios: Vec<u8>, game_file: File) -> Self {
+  pub fn new(bios: Vec<u8>, game_file: Vec<u8>) -> Self {
     let interrupts = Rc::new(Cell::new(InterruptRegisters::new()));
     let dma = Rc::new(Cell::new(DMA::new()));
 

@@ -16,11 +16,9 @@ pub fn main() {
 
   let filepath = &args[1];
 
-  let game_file = File::open(filepath).unwrap();
-
   let sdl_context = sdl2::init().unwrap();
 
-  let mut cpu = CPU::new(fs::read("../SCPH1001.BIN").unwrap(), game_file);
+  let mut cpu = CPU::new(fs::read("../SCPH1001.BIN").unwrap(), fs::read(filepath).unwrap());
 
   let mut frontend = SdlFrontend::new(&sdl_context);
 

@@ -51,7 +51,7 @@ pub struct Bus {
 }
 
 impl Bus {
-  pub fn new(bios: Vec<u8>, interrupts: Rc<Cell<InterruptRegisters>>, dma: Rc<Cell<DMA>>, game_file: File) -> Self {
+  pub fn new(bios: Vec<u8>, interrupts: Rc<Cell<InterruptRegisters>>, dma: Rc<Cell<DMA>>, game_file: Vec<u8>) -> Self {
     Self {
       bios,
       ram: vec![0; RAM_SIZE].into_boxed_slice(),

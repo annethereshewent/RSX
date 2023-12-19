@@ -204,7 +204,7 @@ pub struct Cdrom {
   report_interrupts: bool,
   xa_filter: bool,
   sector_size: bool,
-  game_file: File,
+  game_file: Vec<u8>,
   sector_header: CdHeader,
   sector_subheader: CdSubheader,
   sector_buffer: Vec<u8>,
@@ -227,11 +227,13 @@ pub struct Cdrom {
 
   sixstep: usize,
   ringbuf: [[i16; 0x20]; 2],
-  subq: SubchannelQ
+  subq: SubchannelQ,
+
+  file_pointer: usize
 }
 
 impl Cdrom {
-  pub fn new(interrupts: Rc<Cell<InterruptRegisters>>, game_file: File) -> Self {
+  pub fn new(interrupts: Rc<Cell<InterruptRegisters>>, game_file: Vec<u8>) -> Self {
     Self {
       interrupts,
       index: 0,
@@ -294,7 +296,8 @@ impl Cdrom {
       ],
       sixstep: 6,
       ringbuf: [[0; 0x20]; 2],
-      subq: SubchannelQ::new()
+      subq: SubchannelQ::new(),
+      file_pointer: 0
     }
   }
 
@@ -440,12 +443,10 @@ impl Cdrom {
     }
     self.push_stat();
 
-    let file_pointer = self.get_seek_pointer();
+    self.file_pointer = self.get_seek_pointer() as usize;
+    let end_length = self.file_pointer + 24;
 
-    let mut buf = [0u8; 24];
-
-    self.game_file.seek(SeekFrom::Start(file_pointer)).unwrap();
-    self.game_file.read_exact(&mut buf).unwrap();
+    let mut buf = self.game_file[self.file_pointer..end_length].to_vec();
 
     let header = CdHeader::new(&mut buf);
     let subheader = CdSubheader::new(&mut buf);
@@ -498,7 +499,7 @@ impl Cdrom {
 
     match mode {
       CdReadMode::Audio => self.read_audio(spu),
-      CdReadMode::Data => self.read_data(file_pointer),
+      CdReadMode::Data => self.read_data(),
       CdReadMode::Skip => ()
     }
 
@@ -511,8 +512,11 @@ impl Cdrom {
       todo!("unimplemented bits per sample given")
     }
 
-    let mut buffer = [0u8; 0x914];
-    self.game_file.read_exact(&mut buffer).unwrap();
+    // accomodate for having reading the header data
+    self.file_pointer += 24;
+
+    let end_length = self.file_pointer + 0x914;
+    let buffer = self.game_file[self.file_pointer..end_length].to_vec();
 
     let channels = self.sector_subheader.channels();
 
@@ -629,9 +633,10 @@ impl Cdrom {
     }
   }
 
-  fn read_data(&mut self, file_pointer: u64) {
-    self.game_file.seek(SeekFrom::Start(file_pointer)).unwrap();
-    self.game_file.read_exact(&mut self.sector_buffer).unwrap();
+  fn read_data(&mut self) {
+    let end_length = self.file_pointer + self.sector_buffer.len();
+
+    self.sector_buffer = self.game_file[self.file_pointer..end_length].to_vec();
 
     if self.interrupt_flags == 0 {
       self.interrupt_flags = 0x1;
