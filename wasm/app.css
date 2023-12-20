@@ -49,6 +49,9 @@ label {
   background: #D70040;
   border-radius: 20px;
 }
+.modal-content {
+  margin-top: 40px;
+}
 @media all and (display-mode: fullscreen)  {
   body {
     top: 0;
