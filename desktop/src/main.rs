@@ -16,11 +16,9 @@ pub fn main() {
 
   let filepath = &args[1];
 
-  let game_file = File::open(filepath).unwrap();
-
   let sdl_context = sdl2::init().unwrap();
 
-  let mut cpu = CPU::new(fs::read("../SCPH1001.BIN").unwrap(), game_file);
+  let mut cpu = CPU::new(fs::read("../SCPH1001.BIN").unwrap(), fs::read(filepath).unwrap(), false);
 
   let mut frontend = SdlFrontend::new(&sdl_context);
 
@@ -29,15 +27,8 @@ pub fn main() {
     cpu.exe_file = Some(exe_file.clone());
   }
   loop {
-    while !cpu.bus.gpu.frame_complete {
-      while cpu.bus.cycles - cpu.bus.last_sync < 128 {
-        cpu.step();
-      }
-
-      cpu.bus.sync_devices();
-    }
-
-    cpu.bus.gpu.frame_complete = false;
+    cpu.run_frame();
+    cpu.bus.gpu.cap_fps();
 
     cpu.bus.reset_cycles();
 

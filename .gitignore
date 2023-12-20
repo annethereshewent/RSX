@@ -1,6 +1,7 @@
 /target
 SCPH1001.bin
 /desktop/target
+/wasm/target
 *.log
 .vscode/
 /cards

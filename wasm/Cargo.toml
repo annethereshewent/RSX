@@ -1,0 +1,16 @@
+[package]
+name = "rsx-wasm"
+version = "0.1.0"
+authors = ["Anne Castrillon <anne.castrillon@gmail.com>"]
+edition = "2021"
+
+[lib]
+path="src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies.rsx]
+path = "../"
+
+[dependencies]
+wasm-bindgen = "0.2.89"
+console_error_panic_hook = "0.1.7"

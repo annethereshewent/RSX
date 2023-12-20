@@ -140,6 +140,14 @@ impl SdlFrontend {
     key_map.insert(Keycode::Tab, (false, LowInput::ButtonSelect as u8));
     key_map.insert(Keycode::Return, (false, LowInput::ButtonStart as u8));
 
+    key_map.insert(Keycode::C, (true, HighInput::ButtonL1 as u8));
+    key_map.insert(Keycode::V, (true, HighInput::ButtonR1 as u8));
+    key_map.insert(Keycode::Z, (true, HighInput::ButtonL2 as u8));
+    key_map.insert(Keycode::X, (true, HighInput::ButtonR2 as u8));
+
+
+    key_map.insert(Keycode::Num1, (false, LowInput::ButtonL3 as u8));
+    key_map.insert(Keycode::Num2, (false, LowInput::ButtonR3 as u8));
     Self {
       event_pump,
       canvas,

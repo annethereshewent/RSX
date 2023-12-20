@@ -1,0 +1,404 @@
+<head>
+  <link rel="stylesheet" href="bulma.min.css">
+  <link rel="stylesheet" href="app.css">
+  <script src="https://kit.fontawesome.com/2c3ddc949d.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <nav class="navbar is-link">
+    <div class="navbar-brand">
+      <a class="navbar-item" href="https://www.github.com/annethereshewent"><i class="fa-brands logo fa-github"></i>RSX</a>
+    </div>
+
+    <div id="navbar-main" class="navbar-menu">
+      <div class="navbar-start">
+        <div class="navbar-item">
+          <div class="buttons">
+            <button id="bios-button" class="button is-warning">
+              <i class="fa-solid fa-upload"></i>
+              Load BIOS
+            </button>
+            <button disabled id="game-button" class="button is-primary">
+              <i class="fa-solid fa-upload"></i>
+              Load Game
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="navbar-end">
+        <div class="navbar-item">
+          <div class="buttons">
+            <button class="button is-info" onclick="displayHelpModal()">
+              <i class="fa-solid fa-circle-info"></i>
+              Help
+            </button>
+            <button class="button is-danger" onclick="enterFullscreen()">
+              <i class="fa-solid fa-expand"></i>
+              Full Screen
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+  <div id="analog-mode" class="card">
+    <div class="card-content">
+      <div class="content">
+        <div id="analog-mode-status-icon"></div>
+        <label>Analog Mode: </label>
+        <span id="analog-mode-status">Off</span>
+      </div>
+    </div>
+  </div>
+  <div id="emulator">
+    <input type="file" id="bios-input" class="file-input">
+    <input type="file" id="game-input" class="file-input">
+    <p id="fps-counter"></p>
+    <canvas width="640" height="480" id="canvas" />
+  </div>
+  <div id="help-modal" class="modal hide">
+    <div class="modal-background"></div>
+    <div class="modal-content">
+      <div class="card">
+        <header class="card-header">
+          <p class="card-header-title">
+            RSX Emulator Help
+          </p>
+        </header>
+        <div class="card-content">
+          <div class="content">
+            <button class="modal-close" aria-label="close" onclick="hideHelpModal()">Close</button>
+            <h3 class="content-title">Controls</h3>
+            <h3>Keyboard:</h3>
+            <ul>
+              <li><label>Up:</label> W key</li>
+              <li><label>Down:</label> S key</li>
+              <li><label>Left:</label> A key</li>
+              <li><label>Right:</label> D key</li>
+              <li><label>Cross button:</label> K key</li>
+              <li><label>Circle button:</label> L key</li>
+              <li><label>Square button:</label> J key</li>
+              <li><label>Triangle button:</label> I key</li>
+              <li><label>L1 button:</label> C key</li>
+              <li><label>R1 button:</label> V key</li>
+              <li><label>L2 button:</label> Z key</li>
+              <li><label>R2 button:</label> X key</li>
+              <li><label>L3 button:</label> 1 key</li>
+              <li><label>R3 button:</label> 2 key</li>
+              <li><label>Select:</label> Tab</li>
+              <li><label>Start:</label> Enter</li>
+            </ul>
+            <h3>PS5 Controller:</h3>
+            <p>Same buttons as Playstation controller. Select and Start buttons are remapped to "Share" and "Options". The touchpad button switches between digital and analog mode.</p>
+
+            <p>Emulator written by <a href="https://www.github.com/annethereshewent">annethereshewent</a></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="bios-notification" class="notification is-primary">
+    BIOS successfully loaded
+  </div>
+  <script src="jszip.min.js"></script>
+  <script>
+    function enterFullscreen() {
+      document.documentElement.requestFullscreen()
+    }
+    function displayHelpModal() {
+      document.getElementById("help-modal").className = "modal show"
+    }
+
+    function hideHelpModal() {
+      document.getElementById("help-modal").className = "modal hide"
+    }
+  </script>
+  <script type="module">
+    const FPS_INTERVAL = 1000 / 60
+    const SAMPLE_RATE = 44100
+    const BUFFER_SIZE = 1024
+
+    import init, { WasmEmulator, HighInput, LowInput } from "./pkg/rsx_wasm.js"
+
+    async function main() {
+
+      let emulator = null
+      let biosData = null
+      let fileName = ""
+      let gameData = null
+
+      let biosJson = JSON.parse(localStorage.getItem("bios"))
+
+      if (biosJson != null) {
+        biosData = new Uint8Array(biosJson)
+        document.getElementById("game-button").removeAttribute("disabled")
+
+        document.getElementById("bios-notification").style.display = "block"
+
+        const biosNotification = document.getElementById("bios-notification")
+
+        let opacity = 1.0
+
+        let interval = setInterval(() => {
+          opacity -= 0.1
+
+          biosNotification.style.opacity = opacity
+
+          if (opacity <= 0) {
+            clearInterval(interval)
+          }
+        }, 100)
+      }
+
+      document.getElementById("bios-button").addEventListener("click", () => document.getElementById("bios-input").click())
+      document.getElementById("game-button").addEventListener("click", () => document.getElementById("game-input").click())
+
+      document.getElementById("bios-input").addEventListener("change", handleBiosChange)
+      document.getElementById("game-input").addEventListener("change", handleGameChange)
+
+      const path = "pkg/rsx_wasm_bg.wasm"
+
+      const wasm = await init(path)
+
+      const canvas = document.getElementById("canvas")
+      const context = canvas.getContext("2d")
+
+      const analogModeStatus = document.getElementById("analog-mode-status")
+      const analogIcon = document.getElementById("analog-mode-status-icon")
+
+      async function handleBiosChange(e) {
+        const bios = await getBinaryData(e)
+
+        if (bios != null) {
+          biosData = new Uint8Array(bios)
+
+          localStorage.setItem("bios", JSON.stringify(Array.from(biosData)))
+
+          const biosNotification = document.getElementById("bios-notification")
+
+          let opacity = 1.0
+
+          let interval = setInterval(() => {
+            opacity -= 0.1
+
+            biosNotification.style.opacity = opacity
+
+            if (opacity <= 0) {
+              clearInterval(interval)
+            }
+          }, 100)
+
+          document.getElementById("game-button").removeAttribute("disabled")
+        }
+      }
+
+      async function handleGameChange(e) {
+        const game = await getBinaryData(e)
+
+        if (game != null) {
+          gameData = new Uint8Array(game)
+
+          // finally initialize the emulator!
+          emulator = new WasmEmulator(biosData, gameData)
+
+          const memoryCardJson = JSON.parse(localStorage.getItem("memory-card"))
+
+          if (memoryCardJson != null) {
+            emulator.load_card(new Uint8Array(memoryCardJson))
+          }
+
+          startAudio()
+
+          requestAnimationFrame((time) => run(time))
+        }
+      }
+
+      function startAudio() {
+        const audioContext = new AudioContext({ sampleRate: SAMPLE_RATE })
+
+        const scriptProcessor = audioContext.createScriptProcessor(BUFFER_SIZE, 0, 2)
+
+        scriptProcessor.onaudioprocess = (e) => {
+          const leftData = e.outputBuffer.getChannelData(0)
+          const rightData = e.outputBuffer.getChannelData(1)
+
+          emulator.update_audio_buffers(leftData, rightData)
+        }
+
+        scriptProcessor.connect(audioContext.destination)
+      }
+
+      const CROSS_BUTTON = 0
+      const CIRCLE_BUTTON = 1
+      const SQUARE_BUTTON = 2
+      const TRIANGLE_BUTTON = 3
+
+      const L1_BUTTON = 4
+      const R1_BUTTON = 5
+
+      const L2_BUTTON = 6
+      const R2_BUTTON = 7
+
+      const L3_BUTTON = 10
+      const R3_BUTTON = 11
+
+      const SELECT = 8
+      const START = 9
+
+      const UP = 12
+      const DOWN = 13
+      const LEFT = 14
+      const RIGHT = 15
+
+      const TOUCHPAD = 17
+
+      let switchingDigitalMode = false
+      function handleJoypadInput() {
+        const gamepad = navigator.getGamepads()[0]
+
+        emulator.update_input(LowInput.ButtonSelect, gamepad?.buttons[SELECT].pressed == true, false)
+        emulator.update_input(LowInput.ButtonL3, gamepad?.buttons[L3_BUTTON].pressed == true, false)
+        emulator.update_input(LowInput.ButtonR3, gamepad?.buttons[R3_BUTTON].pressed == true, false)
+        emulator.update_input(LowInput.ButtonStart, gamepad?.buttons[START].pressed == true, false)
+        emulator.update_input(LowInput.ButtonUp, gamepad?.buttons[UP].pressed == true, false)
+        emulator.update_input(LowInput.ButtonRight, gamepad?.buttons[RIGHT].pressed == true, false)
+        emulator.update_input(LowInput.ButtonDown, gamepad?.buttons[DOWN].pressed == true, false)
+        emulator.update_input(LowInput.ButtonLeft, gamepad?.buttons[LEFT].pressed == true, false)
+
+        emulator.update_input(HighInput.ButtonL2, gamepad?.buttons[L2_BUTTON].pressed == true, true)
+        emulator.update_input(HighInput.ButtonR2, gamepad?.buttons[R2_BUTTON].pressed == true, true)
+        emulator.update_input(HighInput.ButtonL1, gamepad?.buttons[L1_BUTTON].pressed == true, true)
+        emulator.update_input(HighInput.ButtonR1, gamepad?.buttons[R1_BUTTON].pressed == true, true)
+        emulator.update_input(HighInput.ButtonTriangle, gamepad?.buttons[TRIANGLE_BUTTON].pressed == true, true)
+        emulator.update_input(HighInput.ButtonCircle, gamepad?.buttons[CIRCLE_BUTTON].pressed == true, true)
+        emulator.update_input(HighInput.ButtonCross, gamepad?.buttons[CROSS_BUTTON].pressed == true, true)
+        emulator.update_input(HighInput.ButtonSquare, gamepad?.buttons[SQUARE_BUTTON].pressed == true, true)
+
+        if (gamepad?.buttons[TOUCHPAD].pressed && !switchingDigitalMode) {
+          switchingDigitalMode = true
+          const digitalMode = emulator.toggle_digital_mode()
+
+          if (!digitalMode) {
+            analogIcon.style.background = "#50C878"
+            analogModeStatus.innerHTML = "On"
+          } else {
+            analogIcon.style.background = "#D70040"
+            analogModeStatus.innerHTML = "Off"
+          }
+
+          setTimeout(() => {
+            switchingDigitalMode = false
+          }, 250)
+        }
+      }
+
+      function updatePicture() {
+        const framebuffer = new Uint8Array(wasm.memory.buffer, emulator.get_framebuffer(), emulator.framebuffer_size())
+
+        const [width, height] = emulator.get_dimensions()
+        const imageData = context.getImageData(0, 0, width, height)
+
+        canvas.width = width
+        canvas.height = height
+
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const rustIndex = x * 3 + y * 3 * width
+            const imageIndex = x * 4 + y * 4 * width
+
+            imageData.data[imageIndex] = framebuffer[rustIndex]
+            imageData.data[imageIndex+1] = framebuffer[rustIndex+1]
+            imageData.data[imageIndex+2] = framebuffer[rustIndex+2]
+            imageData.data[imageIndex+3] = 255
+          }
+        }
+
+        context.putImageData(imageData, 0, 0)
+      }
+
+      let previousTime = 0
+      let realPreviousTime = 0
+      let frames = 0
+      async function run(time) {
+        const diff = time - previousTime
+        const realDiff = time - realPreviousTime
+
+        if (frames == 60) {
+          frames = 0
+          document.getElementById("fps-counter").innerHTML = `FPS = ${1000 / diff}`
+        }
+
+        realPreviousTime = time
+
+        if (diff >= FPS_INTERVAL || previousTime == 0) {
+          emulator.run_frame()
+
+          frames++
+          previousTime = time - (diff % FPS_INTERVAL)
+
+          handleJoypadInput()
+          updatePicture()
+          checkSave()
+        }
+
+        requestAnimationFrame((time) => run(time))
+      }
+
+      function checkSave() {
+        if (emulator.has_saved()) {
+          const memoryCard = new Uint8Array(wasm.memory.buffer, emulator.get_memory_card(), emulator.memory_card_size())
+          localStorage.setItem("memory-card", JSON.stringify(Array.from(memoryCard)))
+        }
+      }
+
+      async function getBinaryData(e, setFilename) {
+        let data = null
+        if (e.target.files != null) {
+          const file = e.target.files[0]
+
+          if (setFilename) {
+            fileName = file.name
+          }
+          if (file.name.indexOf(".zip") !== -1) {
+            // unzip the file first
+            const zipFile = await JSZip.loadAsync(file)
+            const zipFileName = Object.keys(zipFile.files)[0]
+
+            data = await zipFile?.file(zipFileName)?.async('arraybuffer')
+          } else {
+            data = await fileToArrayBuffer(file)
+          }
+        }
+
+        return data
+      }
+
+      function fileToArrayBuffer(file){
+        const fileReader = new FileReader()
+
+        return new Promise((resolve, reject) => {
+          fileReader.onload = () => resolve(fileReader.result)
+
+          fileReader.onerror = () => {
+            fileReader.abort()
+            reject(new Error("Error parsing file"))
+          }
+
+          fileReader.readAsArrayBuffer(file)
+        })
+      }
+
+      document.addEventListener("keydown", (e) => {
+        e.preventDefault()
+
+        switch (e.key) {
+          case "Escape":
+            document.getElementById("help-modal").className = "modal hide"
+            break
+        }
+      })
+
+    }
+
+    main()
+  </script>
+</body>

@@ -1,4 +1,4 @@
-use std::{fs::{self, File}, io::{Write, Read, Seek, SeekFrom}, os::unix::fs::FileExt};
+use std::{fs::{self, File}, io::{Write, Read, Seek, SeekFrom}};
 
 #[derive(PartialEq)]
 pub enum CardState {
@@ -10,8 +10,10 @@ pub enum CardState {
 }
 
 const MEMORY_CARD_SIZE: usize = 0x20000;
+const FILENAME: &str = "../cards/memory_card.mcd";
 
 pub struct MemoryCard {
+  pub has_saved: bool,
   state: CardState,
   read_step: u8,
   write_step: u8,
@@ -23,24 +25,28 @@ pub struct MemoryCard {
   previous: u8,
   card: Box<[u8]>,
   flag: u8,
-  card_file: File
+  card_file: Option<File>,
 }
 
 impl MemoryCard {
-  pub fn new() -> Self {
-    let filename = "../cards/memory_card.mcd";
+  pub fn new(is_wasm: bool) -> Self {
+    let mut file = None;
 
-    fs::create_dir_all("../cards").unwrap();
+    if !is_wasm {
+      fs::create_dir_all("../cards").unwrap();
 
-    let file = fs::OpenOptions::new()
-      .create(true)
-      .read(true)
-      .write(true)
-      .append(true)
-      .open(filename)
-      .unwrap();
+      file = Some(fs::OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .append(true)
+        .open(FILENAME)
+        .unwrap());
+    }
+
 
     Self {
+      has_saved: false,
       state: CardState::Idle,
       read_step: 0,
       write_step: 0,
@@ -57,7 +63,21 @@ impl MemoryCard {
   }
 
   pub fn load_file_contents(&mut self) {
-    self.card_file.read_exact(&mut self.card).unwrap();
+    if let Some(card_file) = &mut self.card_file {
+      card_file.read_exact(&mut self.card).unwrap();
+    }
+  }
+
+  pub fn load_card(&mut self, card: &[u8]) {
+    self.card = card.into();
+  }
+
+  pub fn card_pointer(&self) -> *const u8 {
+    self.card.as_ptr()
+  }
+
+  pub fn card_size(&self) -> usize {
+    self.card.len()
   }
 
   pub fn enabled(&self) -> bool {
@@ -291,12 +311,16 @@ impl MemoryCard {
   }
 
   fn write_to_file(&mut self) {
-    self.card_file.write_all_at(&self.card, 0).unwrap();
-    self.card_file.flush().unwrap();
+    if let Some(card_file) = &mut self.card_file {
+      fs::write(FILENAME, &self.card).unwrap();
+      card_file.flush().unwrap();
 
-    let mut buffer_copy = [0; MEMORY_CARD_SIZE];
+      let mut buffer_copy = [0; MEMORY_CARD_SIZE];
 
-    self.card_file.seek(SeekFrom::Start(0)).unwrap();
-    self.card_file.read_exact(&mut buffer_copy).unwrap();
+      card_file.seek(SeekFrom::Start(0)).unwrap();
+      card_file.read_exact(&mut buffer_copy).unwrap();
+    } else {
+      self.has_saved = true;
+    }
   }
 }

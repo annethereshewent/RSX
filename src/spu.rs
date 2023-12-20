@@ -328,7 +328,7 @@ impl SPU {
     }
   }
 
-  fn to_f32(value: i16) -> f32 {
+  pub fn to_f32(value: i16) -> f32 {
     if value >= 0 {
       f32::from(value) / f32::from(i16::max_value())
     } else {
