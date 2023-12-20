@@ -6,6 +6,32 @@ use wasm_bindgen::prelude::*;
 use std::{panic, collections::VecDeque};
 
 #[wasm_bindgen]
+#[derive(Clone, Copy)]
+pub enum HighInput {
+  ButtonL2 = 0,
+  ButtonR2 = 1,
+  ButtonL1 = 2,
+  ButtonR1 = 3,
+  ButtonTriangle = 4,
+  ButtonCircle = 5,
+  ButtonCross = 6,
+  ButtonSquare = 7
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy)]
+pub enum LowInput {
+  ButtonSelect = 0,
+  ButtonL3 = 1,
+  ButtonR3 = 2,
+  ButtonStart = 3,
+  ButtonUp = 4,
+  ButtonRight = 5,
+  ButtonDown = 6,
+  ButtonLeft = 7
+}
+
+#[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = console)]
     fn log(s: &str);
@@ -75,7 +101,7 @@ impl WasmEmulator {
     }
   }
 
-  pub fn push_samples(&mut self) {
+  fn push_samples(&mut self) {
     let samples: Vec<i16> = self.cpu.bus.spu.audio_buffer.drain(..).collect();
 
     for sample in samples.iter() {
@@ -84,6 +110,24 @@ impl WasmEmulator {
 
     while self.audio_samples.len() > 32768 {
       self.audio_samples.pop_front().unwrap();
+    }
+  }
+
+  pub fn toggle_digital_mode(&mut self) -> bool {
+    let joypad = &mut self.cpu.bus.controllers.joypad;
+
+    joypad.digital_mode = !joypad.digital_mode;
+
+    joypad.digital_mode
+  }
+
+  pub fn update_input(&mut self, button: u8, value: bool, is_high_input: bool) {
+    let joypad = &mut self.cpu.bus.controllers.joypad;
+
+    if !is_high_input {
+      joypad.set_low_input(button, value);
+    } else {
+      joypad.set_high_input(button, value);
     }
   }
 

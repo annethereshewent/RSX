@@ -27,7 +27,7 @@
 }
 #bios-notification {
   position: fixed;
-  bottom: 0;
+  top: 100px;
   left: 25%;
   display: none;
   width: 60%;

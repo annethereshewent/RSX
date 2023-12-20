@@ -108,7 +108,7 @@
     const SAMPLE_RATE = 44100
     const BUFFER_SIZE = 512
 
-    import init, { WasmEmulator } from "./pkg/rsx_wasm.js"
+    import init, { WasmEmulator, HighInput, LowInput } from "./pkg/rsx_wasm.js"
 
     async function main() {
 
@@ -209,6 +209,82 @@
         scriptProcessor.connect(audioContext.destination)
       }
 
+      /**
+       * pub enum HighInput {
+          ButtonL2 = 0,
+          ButtonR2 = 1,
+          ButtonL1 = 2,
+          ButtonR1 = 3,
+          ButtonTriangle = 4,
+          ButtonCircle = 5,
+          ButtonCross = 6,
+          ButtonSquare = 7
+        }
+
+        #[wasm_bindgen]
+        #[derive(Clone, Copy)]
+        pub enum LowInput {
+          ButtonSelect = 0,
+          ButtonL3 = 1,
+          ButtonR3 = 2,
+          ButtonStart = 3,
+          ButtonUp = 4,
+          ButtonRight = 5,
+          ButtonDown = 6,
+          ButtonLeft = 7
+        }
+       */
+
+      const CROSS_BUTTON = 0
+      const CIRCLE_BUTTON = 1
+      const SQUARE_BUTTON = 2
+      const TRIANGLE_BUTTON = 3
+
+      const L1_BUTTON = 4
+      const R1_BUTTON = 5
+
+      const L2_BUTTON = 6
+      const R2_BUTTON = 7
+
+      const L3_BUTTON = 10
+      const R3_BUTTON = 11
+
+      const SELECT = 8
+      const START = 9
+
+      const UP = 12
+      const DOWN = 13
+      const LEFT = 14
+      const RIGHT = 15
+
+      const TOUCHPAD = 17
+
+      function handleJoypadInput() {
+        const gamepad = navigator.getGamepads()[0]
+
+        emulator.update_input(LowInput.ButtonSelect, gamepad?.buttons[SELECT].pressed == true, false)
+        emulator.update_input(LowInput.ButtonL3, gamepad?.buttons[L3_BUTTON].pressed == true, false)
+        emulator.update_input(LowInput.ButtonR3, gamepad?.buttons[R3_BUTTON].pressed == true, false)
+        emulator.update_input(LowInput.ButtonStart, gamepad?.buttons[START].pressed == true, false)
+        emulator.update_input(LowInput.ButtonUp, gamepad?.buttons[UP].pressed == true, false)
+        emulator.update_input(LowInput.ButtonRight, gamepad?.buttons[RIGHT].pressed == true, false)
+        emulator.update_input(LowInput.ButtonDown, gamepad?.buttons[DOWN].pressed == true, false)
+        emulator.update_input(LowInput.ButtonLeft, gamepad?.buttons[LEFT].pressed == true, false)
+
+        emulator.update_input(HighInput.ButtonL2, gamepad?.buttons[L2_BUTTON].pressed == true, true)
+        emulator.update_input(HighInput.ButtonR2, gamepad?.buttons[R2_BUTTON].pressed == true, true)
+        emulator.update_input(HighInput.ButtonL1, gamepad?.buttons[L1_BUTTON].pressed == true, true)
+        emulator.update_input(HighInput.ButtonR1, gamepad?.buttons[R1_BUTTON].pressed == true, true)
+        emulator.update_input(HighInput.ButtonTriangle, gamepad?.buttons[TRIANGLE_BUTTON].pressed == true, true)
+        emulator.update_input(HighInput.ButtonCircle, gamepad?.buttons[CIRCLE_BUTTON].pressed == true, true)
+        emulator.update_input(HighInput.ButtonCross, gamepad?.buttons[CROSS_BUTTON].pressed == true, true)
+        emulator.update_input(HighInput.ButtonSquare, gamepad?.buttons[SQUARE_BUTTON].pressed == true, true)
+
+        if (gamepad?.buttons[TOUCHPAD].pressed) {
+          emulator.toggle_digital_mode()
+        }
+      }
+
       function updatePicture() {
         const framebuffer = new Uint8Array(wasm.memory.buffer, emulator.get_framebuffer(), emulator.framebuffer_size())
 
@@ -243,6 +319,8 @@
 
           frames++
           previousTime = time - (diff % FPS_INTERVAL)
+
+          handleJoypadInput()
           updatePicture()
 
           if (frames == 60) {
