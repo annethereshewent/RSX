@@ -1,0 +1,17 @@
+{
+  "name": "rsx-wasm",
+  "collaborators": [
+    "Anne Castrillon <anne.castrillon@gmail.com>"
+  ],
+  "version": "0.1.0",
+  "files": [
+    "rsx_wasm_bg.wasm",
+    "rsx_wasm.js",
+    "rsx_wasm.d.ts"
+  ],
+  "module": "rsx_wasm.js",
+  "types": "rsx_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
