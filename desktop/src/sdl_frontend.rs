@@ -39,10 +39,6 @@ impl PsxAudioCallback {
     for sample in samples.iter() {
       self.audio_samples.push_back(*sample);
     }
-
-    while self.audio_samples.len() > 32768 {
-      self.audio_samples.pop_front().unwrap();
-    }
   }
 }
 
