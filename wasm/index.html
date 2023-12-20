@@ -201,7 +201,6 @@
           emulator = new WasmEmulator(biosData, gameData)
 
           startAudio()
-          document.getElementById("analog-mode").style.display = "block"
 
           requestAnimationFrame((time) => run(time))
         }
