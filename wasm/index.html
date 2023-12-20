@@ -43,6 +43,7 @@
   <div id="emulator">
     <input type="file" id="bios-input" class="file-input">
     <input type="file" id="game-input" class="file-input">
+    <p id="fps-counter"></p>
     <canvas width="640" height="480" id="canvas" />
   </div>
   <div id="help-modal" class="modal hide">
@@ -102,6 +103,8 @@
   </script>
   <script type="module">
     const FPS_INTERVAL = 1000 / 60
+    const SAMPLE_RATE = 44100
+    const BUFFER_SIZE = 512
 
     import init, { WasmEmulator } from "./pkg/rsx_wasm.js"
 
@@ -142,9 +145,25 @@
           // finally initialize the emulator!
           emulator = new WasmEmulator(biosData, gameData)
 
+          startAudio()
 
           requestAnimationFrame((time) => run(time))
         }
+      }
+
+      function startAudio() {
+        const audioContext = new AudioContext({ sampleRate: SAMPLE_RATE })
+
+        const scriptProcessor = audioContext.createScriptProcessor(BUFFER_SIZE, 0, 2)
+
+        scriptProcessor.onaudioprocess = (e) => {
+          const leftData = e.outputBuffer.getChannelData(0)
+          const rightData = e.outputBuffer.getChannelData(1)
+
+          emulator.update_audio_buffers(leftData, rightData)
+        }
+
+        scriptProcessor.connect(audioContext.destination)
       }
 
       function updatePicture() {
@@ -153,13 +172,13 @@
         const [width, height] = emulator.get_dimensions()
         const imageData = context.getImageData(0, 0, width, height)
 
-        canvas.width = width;
-        canvas.height = height;
+        canvas.width = width
+        canvas.height = height
 
         for (let y = 0; y < height; y++) {
           for (let x = 0; x < width; x++) {
-            const rustIndex = x * 3 + y * 3 * width;
-            const imageIndex = x * 4 + y * 4 * width;
+            const rustIndex = x * 3 + y * 3 * width
+            const imageIndex = x * 4 + y * 4 * width
 
             imageData.data[imageIndex] = framebuffer[rustIndex]
             imageData.data[imageIndex+1] = framebuffer[rustIndex+1]
@@ -173,18 +192,15 @@
 
       let previousTime = 0
       async function run(time) {
-        let diff = time - previousTime
+        const diff = time - previousTime
 
-        emulator.run_frame()
-        updatePicture()
+        if (diff >= FPS_INTERVAL || previousTime == 0) {
+          emulator.run_frame()
+          previousTime = time - (diff % FPS_INTERVAL)
+          updatePicture()
+        }
 
         requestAnimationFrame((time) => run(time))
-      }
-
-      async function sleep(time) {
-        return new Promise((resolve, reject) => {
-          setTimeout(() => resolve(), time)
-        })
       }
 
       async function getBinaryData(e, setFilename) {
