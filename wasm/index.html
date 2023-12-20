@@ -6,7 +6,7 @@
 <body>
   <nav class="navbar is-link">
     <div class="navbar-brand">
-      <a class="navbar-item" href="https://www.github.com/annethereshewent"><i class="fa-brands logo fa-github"></i>RSX Emulator</a>
+      <a class="navbar-item" href="https://www.github.com/annethereshewent"><i class="fa-brands logo fa-github"></i>RSX</a>
     </div>
 
     <div id="navbar-main" class="navbar-menu">
@@ -47,7 +47,7 @@
     <canvas width="640" height="480" id="canvas" />
   </div>
   <div id="help-modal" class="modal hide">
-    <div class="modal-background" />
+    <div class="modal-background"></div>
     <div class="modal-content">
       <div class="card">
         <header class="card-header">
@@ -58,7 +58,7 @@
         <div class="card-content">
           <div class="content">
             <button class="modal-close" aria-label="close" onclick="hideHelpModal()">Close</button>
-            <h3 class="content-title">Controls</h4>
+            <h3 class="content-title">Controls</h3>
             <h3>Keyboard:</h3>
             <ul>
               <li><label>Up:</label> W key</li>
@@ -82,11 +82,13 @@
             <p>Same buttons as Playstation controller. Select and Start buttons are remapped to "Share" and "Options". The touchpad button switches between digital and analog mode.</p>
 
             <p>Emulator written by <a href="https://www.github.com/annethereshewent">annethereshewent</a></p>
-
           </div>
         </div>
       </div>
     </div>
+  </div>
+  <div id="bios-notification" class="notification is-primary">
+    BIOS successfully loaded
   </div>
   <script src="jszip.min.js"></script>
   <script>
@@ -109,10 +111,34 @@
     import init, { WasmEmulator } from "./pkg/rsx_wasm.js"
 
     async function main() {
+
       let emulator = null
       let biosData = null
       let fileName = ""
       let gameData = null
+
+      let biosJson = JSON.parse(localStorage.getItem("bios"))
+
+      if (biosJson != null) {
+        biosData = new Uint8Array(biosJson)
+        document.getElementById("game-button").removeAttribute("disabled")
+
+        document.getElementById("bios-notification").style.display = "block"
+
+        const biosNotification = document.getElementById("bios-notification")
+
+        let opacity = 1.0
+
+        let interval = setInterval(() => {
+          opacity -= 0.1
+
+          biosNotification.style.opacity = opacity
+
+          if (opacity <= 0) {
+            clearInterval(interval)
+          }
+        }, 100)
+      }
 
       document.getElementById("bios-button").addEventListener("click", () => document.getElementById("bios-input").click())
       document.getElementById("game-button").addEventListener("click", () => document.getElementById("game-input").click())
@@ -132,6 +158,23 @@
 
         if (bios != null) {
           biosData = new Uint8Array(bios)
+
+          localStorage.setItem("bios", JSON.stringify(Array.from(biosData)))
+
+          const biosNotification = document.getElementById("bios-notification")
+
+          let opacity = 1.0
+
+          let interval = setInterval(() => {
+            opacity -= 0.1
+
+            biosNotification.style.opacity = opacity
+
+            if (opacity <= 0) {
+              clearInterval(interval)
+            }
+          }, 100)
+
           document.getElementById("game-button").removeAttribute("disabled")
         }
       }

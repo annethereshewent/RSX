@@ -173,20 +173,20 @@ impl GPU {
       return;
     }
 
-    let mut color_r_fp = (colors[0].r as i32) as f64;
-    let mut color_g_fp = (colors[0].g as i32) as f64;
-    let mut color_b_fp = (colors[0].b as i32) as f64;
+    let mut color_r_fp = (colors[0].r as i32) as f32;
+    let mut color_g_fp = (colors[0].g as i32) as f32;
+    let mut color_b_fp = (colors[0].b as i32) as f32;
 
     if diff_x != 0 {
       // so basically, to draw the line, get the slope of the line and follow the slope and render the line that way.
       // use floating point because it's better anyways
-      let slope = diff_y as f64 / diff_x as f64;
+      let slope = diff_y as f32 / diff_x as f32;
 
       // for the colors we can do something similar and create a "slope" based on the x coordinate and the difference between the rgb color values
       // use floating point because it's more accurate anyways and the performance hit is negligible.
-      let mut r_slope = (colors[1].r as f64 - colors[0].r as f64) / diff_x as f64;
-      let mut g_slope = (colors[1].g as f64 - colors[0].g as f64) / diff_x as f64;
-      let mut b_slope = (colors[1].b as f64 - colors[0].b as f64) / diff_x as f64;
+      let mut r_slope = (colors[1].r as f32 - colors[0].r as f32) / diff_x as f32;
+      let mut g_slope = (colors[1].g as f32 - colors[0].g as f32) / diff_x as f32;
+      let mut b_slope = (colors[1].b as f32 - colors[0].b as f32) / diff_x as f32;
 
       let going_left = start_x > end_x;
 
@@ -205,7 +205,7 @@ impl GPU {
         color.g = color_g_fp as u8;
         color.b = color_b_fp as u8;
 
-        let curr_y_fp = x as f64 * slope;
+        let curr_y_fp = x as f32 * slope;
 
         let curr_y = curr_y_fp as i32 + start_y;
 
@@ -245,9 +245,9 @@ impl GPU {
       // line is vertical, just render from start y to end y
 
       // create a "slope" based on the change in y instead of change in x
-      let mut r_slope = (colors[1].r as f64 - colors[0].r as f64) / diff_y as f64;
-      let mut g_slope = (colors[1].g as f64 - colors[0].g as f64) / diff_y as f64;
-      let mut b_slope = (colors[1].b as f64 - colors[0].b as f64) / diff_y as f64;
+      let mut r_slope = (colors[1].r as f32 - colors[0].r as f32) / diff_y as f32;
+      let mut g_slope = (colors[1].g as f32 - colors[0].g as f32) / diff_y as f32;
+      let mut b_slope = (colors[1].b as f32 - colors[0].b as f32) / diff_y as f32;
 
       let mut color = colors[0];
 
@@ -376,44 +376,44 @@ impl GPU {
     // get the base u/v and rgb colors based on first vertex, then "shift" to 0,0 so it's easier to convert from absolute coordinates.
     // using floating point for better accuracy and less texture related bugs. seems to be working better than using fixed point without
     // too much of a performance hit.
-    let mut r_base = c[0].r as f64;
-    let mut g_base = c[0].g as f64;
-    let mut b_base = c[0].b as f64;
+    let mut r_base = c[0].r as f32;
+    let mut g_base = c[0].g as f32;
+    let mut b_base = c[0].b as f32;
 
     let uv_base = t[0];
 
-    let mut u_base_fp = uv_base.x as f64;
-    let mut v_base_fp = uv_base.y as f64;
+    let mut u_base_fp = uv_base.x as f32;
+    let mut v_base_fp = uv_base.y as f32;
 
-    r_base -= color_d.drdx * p[0].x as f64;
-    r_base -= color_d.drdy * p[0].y as f64;
+    r_base -= color_d.drdx * p[0].x as f32;
+    r_base -= color_d.drdy * p[0].y as f32;
 
-    g_base -= color_d.dgdx * p[0].x as f64;
-    g_base -= color_d.dgdy * p[0].y as f64;
+    g_base -= color_d.dgdx * p[0].x as f32;
+    g_base -= color_d.dgdy * p[0].y as f32;
 
-    b_base -= color_d.dbdx * p[0].x as f64;
-    b_base -= color_d.dbdy * p[0].y as f64;
+    b_base -= color_d.dbdx * p[0].x as f32;
+    b_base -= color_d.dbdy * p[0].y as f32;
 
-    u_base_fp -= texture_d.dudx * p[0].x as f64 + texture_d.dudy * p[0].y as f64;
-    v_base_fp -= texture_d.dvdx * p[0].x as f64 + texture_d.dvdy * p[0].y as f64;
+    u_base_fp -= texture_d.dudx * p[0].x as f32 + texture_d.dudy * p[0].y as f32;
+    v_base_fp -= texture_d.dvdx * p[0].x as f32 + texture_d.dvdy * p[0].y as f32;
 
     let p01_slope = if p[0].y != p[1].y {
-      let dx_fp = (p[1].x - p[0].x) as f64;
-      Some(dx_fp / (p[1].y - p[0].y) as f64)
+      let dx_fp = (p[1].x - p[0].x) as f32;
+      Some(dx_fp / (p[1].y - p[0].y) as f32)
     } else {
       None
     };
 
     let p02_slope = if p[0].y != p[2].y {
-      let dx_fp = ((p[2].x - p[0].x)) as f64;
-      Some(dx_fp / (p[2].y - p[0].y) as f64)
+      let dx_fp = ((p[2].x - p[0].x)) as f32;
+      Some(dx_fp / (p[2].y - p[0].y) as f32)
     } else {
       None
     };
 
     let p12_slope = if p[1].y != p[2].y {
-      let dx_fp = (p[2].x - p[1].x) as f64;
-      Some(dx_fp / (p[2].y - p[1].y) as f64)
+      let dx_fp = (p[2].x - p[1].x) as f32;
+      Some(dx_fp / (p[2].y - p[1].y) as f32)
     } else {
       None
     };
@@ -476,21 +476,21 @@ impl GPU {
     }
   }
 
-  fn interpolate_color(output: &mut RgbColor, curr_p: Coordinates2d, r_base: f64, g_base: f64, b_base: f64, color_d: &ColorDeltas) {
-    output.r = (color_d.drdx * curr_p.x as f64 + color_d.drdy * curr_p.y as f64 + r_base) as u8;
-    output.g = (color_d.dgdx * curr_p.x as f64 + color_d.dgdy * curr_p.y as f64 + g_base) as u8;
-    output.b = (color_d.dbdx * curr_p.x as f64 + color_d.dbdy * curr_p.y as f64 + b_base) as u8;
+  fn interpolate_color(output: &mut RgbColor, curr_p: Coordinates2d, r_base: f32, g_base: f32, b_base: f32, color_d: &ColorDeltas) {
+    output.r = (color_d.drdx * curr_p.x as f32 + color_d.drdy * curr_p.y as f32 + r_base) as u8;
+    output.g = (color_d.dgdx * curr_p.x as f32 + color_d.dgdy * curr_p.y as f32 + g_base) as u8;
+    output.b = (color_d.dbdx * curr_p.x as f32 + color_d.dbdy * curr_p.y as f32 + b_base) as u8;
   }
 
-  fn interpolate_texture_coordinates(curr_p: Coordinates2d, u_base_fp: f64, v_base_fp: f64, texture_d: &TextureDeltas) -> Coordinates2d {
+  fn interpolate_texture_coordinates(curr_p: Coordinates2d, u_base_fp: f32, v_base_fp: f32, texture_d: &TextureDeltas) -> Coordinates2d {
     // converting to u8 is a really crappy hack that will ensure that texture coordinates
     // aren't ever out of bounds. this will definitely cause rendering issues,
     // but I'm not sure of a way around it atm
     // TODO: find a way around this hack
 
-    let u = (curr_p.x as f64 * texture_d.dudx + curr_p.y as f64 * texture_d.dudy + u_base_fp) as u8 as i32;
+    let u = (curr_p.x as f32 * texture_d.dudx + curr_p.y as f32 * texture_d.dudy + u_base_fp) as u8 as i32;
 
-    let v = (curr_p.x as f64 * texture_d.dvdx + curr_p.y as f64 * texture_d.dvdy + v_base_fp) as u8 as i32;
+    let v = (curr_p.x as f32 * texture_d.dvdx + curr_p.y as f32 * texture_d.dvdy + v_base_fp) as u8 as i32;
 
     Coordinates2d::new(u, v)
   }
@@ -501,7 +501,7 @@ impl GPU {
    * to get the min/max for either side, just switch the boundaries. (ie: if
    * p02 is on the left, then max is boundary2, min is boundary1, other way otherwise).
    */
-  fn get_triangle_boundaries(&self, p: &[Coordinates2d], p01_slope: Option<f64>, p12_slope: Option<f64>, p02_slope: Option<f64>, curr_p: Coordinates2d) -> (i32, i32) {
+  fn get_triangle_boundaries(&self, p: &[Coordinates2d], p01_slope: Option<f32>, p12_slope: Option<f32>, p02_slope: Option<f32>, curr_p: Coordinates2d) -> (i32, i32) {
     // consider the following cases:
 
     // p01 is horizontal
@@ -509,13 +509,13 @@ impl GPU {
     // neither are horizontal
     // p02 can't be horizontal because vertices are always sorted by y coordinate, hence line p02 is always either vertical or diagonal.
     let boundary2 = if p01_slope.is_none() {
-      let rel_y = (curr_p.y - p[1].y) as f64;
+      let rel_y = (curr_p.y - p[1].y) as f32;
       // use p12 slope
       let slope = p12_slope.unwrap();
 
       ((slope * rel_y)) as i32 + p[1].x
     } else if p12_slope.is_none() {
-      let rel_y = (curr_p.y - p[0].y) as f64;
+      let rel_y = (curr_p.y - p[0].y) as f32;
 
       let slope = p01_slope.unwrap();
 
@@ -524,13 +524,13 @@ impl GPU {
       // determine what slope to use based on y coordinate
       if curr_p.y <= p[1].y {
         // use p01 slope
-        let rel_y = (curr_p.y - p[0].y) as f64;
+        let rel_y = (curr_p.y - p[0].y) as f32;
         let slope = p01_slope.unwrap();
 
         (slope * rel_y) as i32 + p[0].x
       } else {
         // use p12 slope
-        let rel_y = (curr_p.y - p[1].y) as f64;
+        let rel_y = (curr_p.y - p[1].y) as f32;
 
         let slope = p12_slope.unwrap();
 
@@ -538,7 +538,7 @@ impl GPU {
       }
     };
 
-    let rel_y = (curr_p.y - p[0].y) as f64;
+    let rel_y = (curr_p.y - p[0].y) as f32;
     let slope = p02_slope.unwrap();
 
     let boundary1 = (slope * rel_y) as i32 + p[0].x;
