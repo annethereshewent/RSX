@@ -13,6 +13,7 @@ const MEMORY_CARD_SIZE: usize = 0x20000;
 const FILENAME: &str = "../cards/memory_card.mcd";
 
 pub struct MemoryCard {
+  pub has_saved: bool,
   state: CardState,
   read_step: u8,
   write_step: u8,
@@ -45,6 +46,7 @@ impl MemoryCard {
 
 
     Self {
+      has_saved: false,
       state: CardState::Idle,
       read_step: 0,
       write_step: 0,
@@ -64,6 +66,18 @@ impl MemoryCard {
     if let Some(card_file) = &mut self.card_file {
       card_file.read_exact(&mut self.card).unwrap();
     }
+  }
+
+  pub fn load_card(&mut self, card: &[u8]) {
+    self.card = card.into();
+  }
+
+  pub fn card_pointer(&self) -> *const u8 {
+    self.card.as_ptr()
+  }
+
+  pub fn card_size(&self) -> usize {
+    self.card.len()
   }
 
   pub fn enabled(&self) -> bool {
@@ -305,7 +319,8 @@ impl MemoryCard {
 
       card_file.seek(SeekFrom::Start(0)).unwrap();
       card_file.read_exact(&mut buffer_copy).unwrap();
+    } else {
+      self.has_saved = true;
     }
-
   }
 }

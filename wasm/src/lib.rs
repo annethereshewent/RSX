@@ -68,6 +68,14 @@ impl WasmEmulator {
     self.cpu.bus.gpu.picture.as_ptr()
   }
 
+  pub fn get_memory_card(&self) -> *const u8 {
+    self.cpu.bus.controllers.memory_card.card_pointer()
+  }
+
+  pub fn load_card(&mut self, memory_card: &[u8]) {
+    self.cpu.bus.controllers.memory_card.load_card(memory_card)
+  }
+
   pub fn update_audio_buffers(&mut self, left: &mut [f32], right: &mut [f32]) {
     let len = self.audio_samples.len();
 
@@ -121,6 +129,17 @@ impl WasmEmulator {
     joypad.digital_mode
   }
 
+  pub fn has_saved(&mut self) -> bool {
+    let memory_card = &mut self.cpu.bus.controllers.memory_card;
+
+    let has_saved = memory_card.has_saved;
+
+    memory_card.has_saved = false;
+
+
+    has_saved
+  }
+
   pub fn update_input(&mut self, button: u8, value: bool, is_high_input: bool) {
     let joypad = &mut self.cpu.bus.controllers.joypad;
 
@@ -133,6 +152,10 @@ impl WasmEmulator {
 
   pub fn framebuffer_size(&self) -> usize {
     self.cpu.bus.gpu.picture.len()
+  }
+
+  pub fn memory_card_size(&self) -> usize {
+    self.cpu.bus.controllers.memory_card.card_size()
   }
 
   pub fn get_dimensions(&self) -> Vec<u32> {

@@ -200,6 +200,12 @@
           // finally initialize the emulator!
           emulator = new WasmEmulator(biosData, gameData)
 
+          const memoryCardJson = JSON.parse(localStorage.getItem("memory-card"))
+
+          if (memoryCardJson != null) {
+            emulator.load_card(new Uint8Array(memoryCardJson))
+          }
+
           startAudio()
 
           requestAnimationFrame((time) => run(time))
@@ -220,32 +226,6 @@
 
         scriptProcessor.connect(audioContext.destination)
       }
-
-      /**
-       * pub enum HighInput {
-          ButtonL2 = 0,
-          ButtonR2 = 1,
-          ButtonL1 = 2,
-          ButtonR1 = 3,
-          ButtonTriangle = 4,
-          ButtonCircle = 5,
-          ButtonCross = 6,
-          ButtonSquare = 7
-        }
-
-        #[wasm_bindgen]
-        #[derive(Clone, Copy)]
-        pub enum LowInput {
-          ButtonSelect = 0,
-          ButtonL3 = 1,
-          ButtonR3 = 2,
-          ButtonStart = 3,
-          ButtonUp = 4,
-          ButtonRight = 5,
-          ButtonDown = 6,
-          ButtonLeft = 7
-        }
-       */
 
       const CROSS_BUTTON = 0
       const CIRCLE_BUTTON = 1
@@ -336,9 +316,18 @@
       }
 
       let previousTime = 0
+      let realPreviousTime = 0
       let frames = 0
       async function run(time) {
         const diff = time - previousTime
+        const realDiff = time - realPreviousTime
+
+        if (frames == 60) {
+          frames = 0
+          document.getElementById("fps-counter").innerHTML = `FPS = ${1000 / diff}`
+        }
+
+        realPreviousTime = time
 
         if (diff >= FPS_INTERVAL || previousTime == 0) {
           emulator.run_frame()
@@ -348,14 +337,17 @@
 
           handleJoypadInput()
           updatePicture()
-
-          if (frames == 60) {
-            frames = 0
-            document.getElementById("fps-counter").innerHTML = `FPS = ${1000 / diff}`
-          }
+          checkSave()
         }
 
         requestAnimationFrame((time) => run(time))
+      }
+
+      function checkSave() {
+        if (emulator.has_saved()) {
+          const memoryCard = new Uint8Array(wasm.memory.buffer, emulator.get_memory_card(), emulator.memory_card_size())
+          localStorage.setItem("memory-card", JSON.stringify(Array.from(memoryCard)))
+        }
       }
 
       async function getBinaryData(e, setFilename) {
