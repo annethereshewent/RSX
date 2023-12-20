@@ -191,13 +191,21 @@
       }
 
       let previousTime = 0
+      let frames = 0
       async function run(time) {
         const diff = time - previousTime
 
         if (diff >= FPS_INTERVAL || previousTime == 0) {
           emulator.run_frame()
+
+          frames++
           previousTime = time - (diff % FPS_INTERVAL)
           updatePicture()
+
+          if (frames == 60) {
+            frames = 0
+            document.getElementById("fps-counter").innerHTML = `FPS = ${1000 / diff}`
+          }
         }
 
         requestAnimationFrame((time) => run(time))
