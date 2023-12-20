@@ -32,6 +32,7 @@ impl WasmEmulator {
   }
   pub fn run_frame(&mut self) {
     self.cpu.run_frame();
+    self.cpu.bus.gpu.update_picture();
   }
 
   pub fn get_framebuffer(&self) -> *const u8 {
@@ -40,5 +41,15 @@ impl WasmEmulator {
 
   pub fn update_audio_buffers() {
 
+  }
+
+  pub fn framebuffer_size(&self) -> usize {
+    self.cpu.bus.gpu.picture.len()
+  }
+
+  pub fn get_dimensions(&self) -> Vec<u32> {
+    let (width, height) = self.cpu.bus.gpu.get_dimensions();
+
+    vec![width, height]
   }
 }

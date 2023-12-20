@@ -101,6 +101,8 @@
     }
   </script>
   <script type="module">
+    const FPS_INTERVAL = 1000 / 60
+
     import init, { WasmEmulator } from "./pkg/rsx_wasm.js"
 
     async function main() {
@@ -119,7 +121,8 @@
 
       const wasm = await init(path)
 
-
+      const canvas = document.getElementById("canvas")
+      const context = canvas.getContext("2d")
 
       async function handleBiosChange(e) {
         const bios = await getBinaryData(e)
@@ -138,7 +141,50 @@
 
           // finally initialize the emulator!
           emulator = new WasmEmulator(biosData, gameData)
+
+
+          requestAnimationFrame((time) => run(time))
         }
+      }
+
+      function updatePicture() {
+        const framebuffer = new Uint8Array(wasm.memory.buffer, emulator.get_framebuffer(), emulator.framebuffer_size())
+
+        const [width, height] = emulator.get_dimensions()
+        const imageData = context.getImageData(0, 0, width, height)
+
+        canvas.width = width;
+        canvas.height = height;
+
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const rustIndex = x * 3 + y * 3 * width;
+            const imageIndex = x * 4 + y * 4 * width;
+
+            imageData.data[imageIndex] = framebuffer[rustIndex]
+            imageData.data[imageIndex+1] = framebuffer[rustIndex+1]
+            imageData.data[imageIndex+2] = framebuffer[rustIndex+2]
+            imageData.data[imageIndex+3] = 255
+          }
+        }
+
+        context.putImageData(imageData, 0, 0)
+      }
+
+      let previousTime = 0
+      async function run(time) {
+        let diff = time - previousTime
+
+        emulator.run_frame()
+        updatePicture()
+
+        requestAnimationFrame((time) => run(time))
+      }
+
+      async function sleep(time) {
+        return new Promise((resolve, reject) => {
+          setTimeout(() => resolve(), time)
+        })
       }
 
       async function getBinaryData(e, setFilename) {

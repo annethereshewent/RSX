@@ -28,6 +28,7 @@ pub fn main() {
   }
   loop {
     cpu.run_frame();
+    cpu.bus.gpu.cap_fps();
 
     cpu.bus.reset_cycles();
 

@@ -16,3 +16,12 @@
 .hide {
   display: none;
 }
+#canvas {
+  width: 640px;
+  height: 480px;
+  image-rendering: pixelated;
+}
+#emulator {
+  width: 640px;
+  margin: 50px auto;
+}
