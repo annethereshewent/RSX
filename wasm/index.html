@@ -40,6 +40,15 @@
       </div>
     </div>
   </nav>
+  <div id="analog-mode" class="card">
+    <div class="card-content">
+      <div class="content">
+        <div id="analog-mode-status-icon"></div>
+        <label>Analog Mode: </label>
+        <span id="analog-mode-status">Off</span>
+      </div>
+    </div>
+  </div>
   <div id="emulator">
     <input type="file" id="bios-input" class="file-input">
     <input type="file" id="game-input" class="file-input">
@@ -153,6 +162,9 @@
       const canvas = document.getElementById("canvas")
       const context = canvas.getContext("2d")
 
+      const analogModeStatus = document.getElementById("analog-mode-status")
+      const analogIcon = document.getElementById("analog-mode-status-icon")
+
       async function handleBiosChange(e) {
         const bios = await getBinaryData(e)
 
@@ -189,6 +201,7 @@
           emulator = new WasmEmulator(biosData, gameData)
 
           startAudio()
+          document.getElementById("analog-mode").style.display = "block"
 
           requestAnimationFrame((time) => run(time))
         }
@@ -259,6 +272,7 @@
 
       const TOUCHPAD = 17
 
+      let switchingDigitalMode = false
       function handleJoypadInput() {
         const gamepad = navigator.getGamepads()[0]
 
@@ -280,8 +294,21 @@
         emulator.update_input(HighInput.ButtonCross, gamepad?.buttons[CROSS_BUTTON].pressed == true, true)
         emulator.update_input(HighInput.ButtonSquare, gamepad?.buttons[SQUARE_BUTTON].pressed == true, true)
 
-        if (gamepad?.buttons[TOUCHPAD].pressed) {
-          emulator.toggle_digital_mode()
+        if (gamepad?.buttons[TOUCHPAD].pressed && !switchingDigitalMode) {
+          switchingDigitalMode = true
+          const digitalMode = emulator.toggle_digital_mode()
+
+          if (!digitalMode) {
+            analogIcon.style.background = "#50C878"
+            analogModeStatus.innerHTML = "On"
+          } else {
+            analogIcon.style.background = "#D70040"
+            analogModeStatus.innerHTML = "Off"
+          }
+
+          setTimeout(() => {
+            switchingDigitalMode = false
+          }, 250)
         }
       }
 
