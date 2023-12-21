@@ -24,6 +24,7 @@
 #emulator {
   width: 640px;
   margin: 50px auto;
+  text-align: center;
 }
 #bios-notification {
   position: fixed;

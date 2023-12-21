@@ -276,6 +276,30 @@ export class WasmEmulator {
             wasm.__wbindgen_add_to_stack_pointer(16);
         }
     }
+    /**
+    * @param {number} val
+    */
+    update_leftx(val) {
+        wasm.wasmemulator_update_leftx(this.__wbg_ptr, val);
+    }
+    /**
+    * @param {number} val
+    */
+    update_lefty(val) {
+        wasm.wasmemulator_update_lefty(this.__wbg_ptr, val);
+    }
+    /**
+    * @param {number} val
+    */
+    update_rightx(val) {
+        wasm.wasmemulator_update_rightx(this.__wbg_ptr, val);
+    }
+    /**
+    * @param {number} val
+    */
+    update_righty(val) {
+        wasm.wasmemulator_update_righty(this.__wbg_ptr, val);
+    }
 }
 
 async function __wbg_load(module, imports) {

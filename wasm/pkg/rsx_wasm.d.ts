@@ -79,6 +79,22 @@ export class WasmEmulator {
 * @returns {Uint32Array}
 */
   get_dimensions(): Uint32Array;
+/**
+* @param {number} val
+*/
+  update_leftx(val: number): void;
+/**
+* @param {number} val
+*/
+  update_lefty(val: number): void;
+/**
+* @param {number} val
+*/
+  update_rightx(val: number): void;
+/**
+* @param {number} val
+*/
+  update_righty(val: number): void;
 }
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
@@ -98,6 +114,10 @@ export interface InitOutput {
   readonly wasmemulator_framebuffer_size: (a: number) => number;
   readonly wasmemulator_memory_card_size: (a: number) => number;
   readonly wasmemulator_get_dimensions: (a: number, b: number) => void;
+  readonly wasmemulator_update_leftx: (a: number, b: number) => void;
+  readonly wasmemulator_update_lefty: (a: number, b: number) => void;
+  readonly wasmemulator_update_rightx: (a: number, b: number) => void;
+  readonly wasmemulator_update_righty: (a: number, b: number) => void;
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_add_to_stack_pointer: (a: number) => number;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
