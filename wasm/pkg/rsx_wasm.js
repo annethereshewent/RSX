@@ -154,10 +154,10 @@ function passStringToWasm0(arg, malloc, realloc) {
 }
 /**
 */
-export const HighInput = Object.freeze({ ButtonL2:0,"0":"ButtonL2",ButtonR2:1,"1":"ButtonR2",ButtonL1:2,"2":"ButtonL1",ButtonR1:3,"3":"ButtonR1",ButtonTriangle:4,"4":"ButtonTriangle",ButtonCircle:5,"5":"ButtonCircle",ButtonCross:6,"6":"ButtonCross",ButtonSquare:7,"7":"ButtonSquare", });
+export const LowInput = Object.freeze({ ButtonSelect:0,"0":"ButtonSelect",ButtonL3:1,"1":"ButtonL3",ButtonR3:2,"2":"ButtonR3",ButtonStart:3,"3":"ButtonStart",ButtonUp:4,"4":"ButtonUp",ButtonRight:5,"5":"ButtonRight",ButtonDown:6,"6":"ButtonDown",ButtonLeft:7,"7":"ButtonLeft", });
 /**
 */
-export const LowInput = Object.freeze({ ButtonSelect:0,"0":"ButtonSelect",ButtonL3:1,"1":"ButtonL3",ButtonR3:2,"2":"ButtonR3",ButtonStart:3,"3":"ButtonStart",ButtonUp:4,"4":"ButtonUp",ButtonRight:5,"5":"ButtonRight",ButtonDown:6,"6":"ButtonDown",ButtonLeft:7,"7":"ButtonLeft", });
+export const HighInput = Object.freeze({ ButtonL2:0,"0":"ButtonL2",ButtonR2:1,"1":"ButtonR2",ButtonL1:2,"2":"ButtonL1",ButtonR1:3,"3":"ButtonR1",ButtonTriangle:4,"4":"ButtonTriangle",ButtonCircle:5,"5":"ButtonCircle",ButtonCross:6,"6":"ButtonCross",ButtonSquare:7,"7":"ButtonSquare", });
 /**
 */
 export class WasmEmulator {
@@ -276,6 +276,30 @@ export class WasmEmulator {
             wasm.__wbindgen_add_to_stack_pointer(16);
         }
     }
+    /**
+    * @param {number} val
+    */
+    update_leftx(val) {
+        wasm.wasmemulator_update_leftx(this.__wbg_ptr, val);
+    }
+    /**
+    * @param {number} val
+    */
+    update_lefty(val) {
+        wasm.wasmemulator_update_lefty(this.__wbg_ptr, val);
+    }
+    /**
+    * @param {number} val
+    */
+    update_rightx(val) {
+        wasm.wasmemulator_update_rightx(this.__wbg_ptr, val);
+    }
+    /**
+    * @param {number} val
+    */
+    update_righty(val) {
+        wasm.wasmemulator_update_righty(this.__wbg_ptr, val);
+    }
 }
 
 async function __wbg_load(module, imports) {
@@ -312,6 +336,9 @@ async function __wbg_load(module, imports) {
 function __wbg_get_imports() {
     const imports = {};
     imports.wbg = {};
+    imports.wbg.__wbg_log_292fc32d74713202 = function(arg0, arg1) {
+        console.log(getStringFromWasm0(arg0, arg1));
+    };
     imports.wbg.__wbindgen_copy_to_typed_array = function(arg0, arg1, arg2) {
         new Uint8Array(getObject(arg2).buffer, getObject(arg2).byteOffset, getObject(arg2).byteLength).set(getArrayU8FromWasm0(arg0, arg1));
     };

@@ -120,7 +120,7 @@
   <script type="module">
     const FPS_INTERVAL = 1000 / 60
     const SAMPLE_RATE = 44100
-    const BUFFER_SIZE = 1024
+    const BUFFER_SIZE = 512
 
     import init, { WasmEmulator, HighInput, LowInput } from "./pkg/rsx_wasm.js"
 
@@ -206,7 +206,6 @@
         if (game != null) {
           gameData = new Uint8Array(game)
 
-          // finally initialize the emulator!
           emulator = new WasmEmulator(biosData, gameData)
 
           const memoryCardJson = JSON.parse(localStorage.getItem("memory-card"))
@@ -281,6 +280,12 @@
         emulator.update_input(HighInput.ButtonCircle, gamepad?.buttons[CIRCLE_BUTTON].pressed == true || keyboardButtons[CIRCLE_BUTTON], true)
         emulator.update_input(HighInput.ButtonCross, gamepad?.buttons[CROSS_BUTTON].pressed == true || keyboardButtons[CROSS_BUTTON], true)
         emulator.update_input(HighInput.ButtonSquare, gamepad?.buttons[SQUARE_BUTTON].pressed == true || keyboardButtons[SQUARE_BUTTON], true)
+
+        emulator.update_leftx(gamepad?.axes[0] || 0.0);
+        emulator.update_lefty(gamepad?.axes[1] || 0.0);
+
+        emulator.update_rightx(gamepad?.axes[2] || 0.0);
+        emulator.update_righty(gamepad?.axes[3] || 0.0);
 
         if (gamepad?.buttons[TOUCHPAD].pressed && !switchingDigitalMode) {
           switchingDigitalMode = true
@@ -395,25 +400,6 @@
           fileReader.readAsArrayBuffer(file)
         })
       }
-
-      /**
-       *              <li><label>Up:</label> W key</li>
-              <li><label>Down:</label> S key</li>
-              <li><label>Left:</label> A key</li>
-              <li><label>Right:</label> D key</li>
-              <li><label>Cross button:</label> K key</li>
-              <li><label>Circle button:</label> L key</li>
-              <li><label>Square button:</label> J key</li>
-              <li><label>Triangle button:</label> I key</li>
-              <li><label>L1 button:</label> C key</li>
-              <li><label>R1 button:</label> V key</li>
-              <li><label>L2 button:</label> Z key</li>
-              <li><label>R2 button:</label> X key</li>
-              <li><label>L3 button:</label> 1 key</li>
-              <li><label>R3 button:</label> 2 key</li>
-              <li><label>Select:</label> Tab</li>
-              <li><label>Start:</label> Enter</li>
-       */
 
       document.addEventListener("keydown", (e) => {
         e.preventDefault()

@@ -115,6 +115,14 @@ impl WasmEmulator {
     for sample in samples.iter() {
       self.audio_samples.push_back(*sample);
     }
+
+    if self.audio_samples.len() > 32768 {
+      console_log!("yes it happened");
+
+      while self.audio_samples.len() > 32768 {
+        self.audio_samples.pop_front().unwrap();
+      }
+    }
   }
 
   pub fn toggle_digital_mode(&mut self) -> bool {
@@ -158,5 +166,41 @@ impl WasmEmulator {
     let (width, height) = self.cpu.bus.gpu.get_dimensions();
 
     vec![width, height]
+  }
+
+  pub fn update_leftx(&mut self, val: f32) {
+    let joypad = &mut self.cpu.bus.controllers.joypad;
+
+    let normalized_value = Self::get_normalized_value(val);
+
+    joypad.set_leftx(normalized_value);
+  }
+
+  fn get_normalized_value(val: f32) -> u8 {
+    (val * 128.0 + 128.0) as u8
+  }
+
+  pub fn update_lefty(&mut self, val: f32) {
+    let joypad = &mut self.cpu.bus.controllers.joypad;
+
+    let normalized_value = Self::get_normalized_value(val);
+
+    joypad.set_lefty(normalized_value);
+  }
+
+  pub fn update_rightx(&mut self, val: f32) {
+    let joypad = &mut self.cpu.bus.controllers.joypad;
+
+    let normalized_value = Self::get_normalized_value(val);
+
+    joypad.set_rightx(normalized_value);
+  }
+
+  pub fn update_righty(&mut self, val: f32) {
+    let joypad = &mut self.cpu.bus.controllers.joypad;
+
+    let normalized_value = Self::get_normalized_value(val);
+
+    joypad.set_righty(normalized_value);
   }
 }
