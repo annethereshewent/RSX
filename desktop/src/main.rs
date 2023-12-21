@@ -1,4 +1,4 @@
-use std::{fs::{self, File}, env};
+use std::{fs::{self}, env};
 
 pub mod sdl_frontend;
 
@@ -18,7 +18,7 @@ pub fn main() {
 
   let sdl_context = sdl2::init().unwrap();
 
-  let mut cpu = CPU::new(fs::read("../SCPH1001.BIN").unwrap(), fs::read(filepath).unwrap(), false);
+  let mut cpu = CPU::new(fs::read("../SCPH1001.BIN").unwrap(), filepath, false);
 
   let mut frontend = SdlFrontend::new(&sdl_context);
 

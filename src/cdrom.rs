@@ -1,4 +1,4 @@
-use std::{rc::Rc, cell::Cell, collections::VecDeque, fs::File, io::{SeekFrom, Read, Seek}};
+use std::{rc::Rc, cell::Cell, collections::VecDeque, fs::{File, self}, io::{SeekFrom, Read, Seek}};
 
 use crate::{cpu::interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}, spu::{SPU, voices::{POS_ADPCM_TABLE, NEG_ADPCM_TABLE}}};
 
@@ -204,7 +204,8 @@ pub struct Cdrom {
   report_interrupts: bool,
   xa_filter: bool,
   sector_size: bool,
-  game_file: Vec<u8>,
+  game_bytes: Option<Vec<u8>>,
+  game_file: Option<File>,
   sector_header: CdHeader,
   sector_subheader: CdSubheader,
   sector_buffer: Vec<u8>,
@@ -233,7 +234,16 @@ pub struct Cdrom {
 }
 
 impl Cdrom {
-  pub fn new(interrupts: Rc<Cell<InterruptRegisters>>, game_file: Vec<u8>) -> Self {
+  pub fn new(interrupts: Rc<Cell<InterruptRegisters>>, file: &String, is_wasm: bool) -> Self {
+    let mut game_bytes = None;
+    let mut game_file = None;
+
+    if is_wasm {
+      game_bytes = Some(fs::read(file).unwrap())
+    } else {
+      game_file = Some(File::open(file).unwrap());
+    }
+
     Self {
       interrupts,
       index: 0,
@@ -266,7 +276,6 @@ impl Cdrom {
       report_interrupts: false,
       xa_filter: false,
       sector_size: false,
-      game_file,
       sector_header: CdHeader {
         mm: 0,
         ss: 0,
@@ -297,7 +306,9 @@ impl Cdrom {
       sixstep: 6,
       ringbuf: [[0; 0x20]; 2],
       subq: SubchannelQ::new(),
-      file_pointer: 0
+      file_pointer: 0,
+      game_bytes,
+      game_file
     }
   }
 
@@ -444,9 +455,18 @@ impl Cdrom {
     self.push_stat();
 
     self.file_pointer = self.get_seek_pointer() as usize;
-    let end_length = self.file_pointer + 24;
 
-    let mut buf = self.game_file[self.file_pointer..end_length].to_vec();
+
+    let mut buf: Vec<u8> = vec![0; 24];
+
+    if let Some(game_file) = &mut self.game_file {
+      game_file.seek(SeekFrom::Start(self.file_pointer as u64)).unwrap();
+      game_file.read_exact(&mut buf).unwrap();
+    } else if let Some(game_bytes) = &self.game_bytes {
+      let end_length = self.file_pointer + 24;
+
+      buf = game_bytes[self.file_pointer..end_length].to_vec();
+    }
 
     let header = CdHeader::new(&mut buf);
     let subheader = CdSubheader::new(&mut buf);
@@ -512,11 +532,18 @@ impl Cdrom {
       todo!("unimplemented bits per sample given")
     }
 
-    // accomodate for having reading the header data
-    self.file_pointer += 24;
+    let mut buffer: Vec<u8> = vec![0; 0x914];
 
-    let end_length = self.file_pointer + 0x914;
-    let buffer = self.game_file[self.file_pointer..end_length].to_vec();
+    if let Some(game_file) = &mut self.game_file {
+      game_file.read_exact(&mut buffer).unwrap();
+    } else if let Some(game_bytes) = &self.game_bytes {
+      // accomodate for having reading the header data
+      self.file_pointer += 24;
+
+      let end_length = self.file_pointer + 0x914;
+
+      buffer = game_bytes[self.file_pointer..end_length].to_vec();
+    }
 
     let channels = self.sector_subheader.channels();
 
@@ -634,9 +661,13 @@ impl Cdrom {
   }
 
   fn read_data(&mut self) {
-    let end_length = self.file_pointer + self.sector_buffer.len();
-
-    self.sector_buffer = self.game_file[self.file_pointer..end_length].to_vec();
+    if let Some(game_file) = &mut self.game_file {
+      game_file.seek(SeekFrom::Start(self.file_pointer as u64)).unwrap();
+      game_file.read_exact(&mut self.sector_buffer).unwrap();
+    } else if let Some(game_bytes) = &self.game_bytes {
+      let end_length = self.file_pointer + self.sector_buffer.len();
+      self.sector_buffer = game_bytes[self.file_pointer..end_length].to_vec();
+    }
 
     if self.interrupt_flags == 0 {
       self.interrupt_flags = 0x1;

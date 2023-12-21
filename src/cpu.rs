@@ -1,4 +1,4 @@
-use std::{rc::Rc, cell::Cell, fs::{File, self}};
+use std::{rc::Rc, cell::Cell, fs::{self}};
 
 use crate::{cpu::instruction::Instruction, gpu::{CYCLES_PER_SCANLINE, NUM_SCANLINES_PER_FRAME, GPU_FREQUENCY}, util};
 
@@ -134,7 +134,7 @@ pub struct CPU {
 }
 
 impl CPU {
-  pub fn new(bios: Vec<u8>, game_file: Vec<u8>, is_wasm: bool) -> Self {
+  pub fn new(bios: Vec<u8>, game_file: &String, is_wasm: bool) -> Self {
     let interrupts = Rc::new(Cell::new(InterruptRegisters::new()));
     let dma = Rc::new(Cell::new(DMA::new()));
 
