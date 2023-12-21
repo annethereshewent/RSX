@@ -234,16 +234,7 @@ pub struct Cdrom {
 }
 
 impl Cdrom {
-  pub fn new(interrupts: Rc<Cell<InterruptRegisters>>, file: &String, is_wasm: bool) -> Self {
-    let mut game_bytes = None;
-    let mut game_file = None;
-
-    if is_wasm {
-      game_bytes = Some(fs::read(file).unwrap())
-    } else {
-      game_file = Some(File::open(file).unwrap());
-    }
-
+  pub fn new(interrupts: Rc<Cell<InterruptRegisters>>, game_file: Option<File>, game_bytes: Option<Vec<u8>>, is_wasm: bool) -> Self {
     Self {
       interrupts,
       index: 0,

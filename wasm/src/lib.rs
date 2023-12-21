@@ -54,7 +54,7 @@ impl WasmEmulator {
   pub fn new(bios: &[u8], game_data: &[u8]) -> Self {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
     Self {
-      cpu: CPU::new(bios.to_vec(), game_data.to_vec(), true),
+      cpu: CPU::new(bios.to_vec(), None, Some(game_data.to_vec()), true),
       audio_samples: VecDeque::new()
     }
   }
