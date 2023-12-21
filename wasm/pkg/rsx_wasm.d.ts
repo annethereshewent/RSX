@@ -2,18 +2,6 @@
 /* eslint-disable */
 /**
 */
-export enum LowInput {
-  ButtonSelect = 0,
-  ButtonL3 = 1,
-  ButtonR3 = 2,
-  ButtonStart = 3,
-  ButtonUp = 4,
-  ButtonRight = 5,
-  ButtonDown = 6,
-  ButtonLeft = 7,
-}
-/**
-*/
 export enum HighInput {
   ButtonL2 = 0,
   ButtonR2 = 1,
@@ -23,6 +11,18 @@ export enum HighInput {
   ButtonCircle = 5,
   ButtonCross = 6,
   ButtonSquare = 7,
+}
+/**
+*/
+export enum LowInput {
+  ButtonSelect = 0,
+  ButtonL3 = 1,
+  ButtonR3 = 2,
+  ButtonStart = 3,
+  ButtonUp = 4,
+  ButtonRight = 5,
+  ButtonDown = 6,
+  ButtonLeft = 7,
 }
 /**
 */

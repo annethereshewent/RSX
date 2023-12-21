@@ -116,12 +116,8 @@ impl WasmEmulator {
       self.audio_samples.push_back(*sample);
     }
 
-    if self.audio_samples.len() > 32768 {
-      console_log!("yes it happened");
-
-      while self.audio_samples.len() > 32768 {
-        self.audio_samples.pop_front().unwrap();
-      }
+    while self.audio_samples.len() > 65536 {
+      self.audio_samples.pop_front().unwrap();
     }
   }
 
