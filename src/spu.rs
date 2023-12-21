@@ -152,7 +152,9 @@ impl SPU {
   fn update_echo(&mut self) {
     for i in 0..self.voices.len() {
       if (self.echo_on >> i) & 0b1 == 1 {
-        self.voices[i].update_echo();
+        self.voices[i].update_echo(true);
+      } else {
+        self.voices[i].update_echo(false);
       }
     }
   }

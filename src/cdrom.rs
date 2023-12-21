@@ -1,4 +1,4 @@
-use std::{rc::Rc, cell::Cell, collections::VecDeque, fs::{File, self}, io::{SeekFrom, Read, Seek}};
+use std::{rc::Rc, cell::Cell, collections::VecDeque, fs::File, io::{SeekFrom, Read, Seek}};
 
 use crate::{cpu::interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt}, spu::{SPU, voices::{POS_ADPCM_TABLE, NEG_ADPCM_TABLE}}};
 
@@ -234,7 +234,7 @@ pub struct Cdrom {
 }
 
 impl Cdrom {
-  pub fn new(interrupts: Rc<Cell<InterruptRegisters>>, game_file: Option<File>, game_bytes: Option<Vec<u8>>, is_wasm: bool) -> Self {
+  pub fn new(interrupts: Rc<Cell<InterruptRegisters>>, game_file: Option<File>, game_bytes: Option<Vec<u8>>) -> Self {
     Self {
       interrupts,
       index: 0,

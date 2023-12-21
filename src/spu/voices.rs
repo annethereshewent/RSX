@@ -95,8 +95,8 @@ impl Voice {
     }
   }
 
-  pub fn update_echo(&mut self) {
-    self.reverb = true;
+  pub fn update_echo(&mut self, val: bool) {
+    self.reverb = val;
   }
 
   pub fn update_noise(&mut self, val: bool) {

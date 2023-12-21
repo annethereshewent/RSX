@@ -58,7 +58,7 @@ impl Bus {
       gpu: GPU::new(interrupts.clone()),
       spu: SPU::new(),
       timers: Timers::new(interrupts.clone()),
-      cdrom: Cdrom::new(interrupts.clone(), game_file, game_bytes, is_wasm),
+      cdrom: Cdrom::new(interrupts.clone(), game_file, game_bytes),
       controllers: Controllers::new(interrupts.clone(), is_wasm),
       counter: Counter::new(),
       interrupts,
