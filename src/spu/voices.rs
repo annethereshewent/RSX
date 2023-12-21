@@ -208,7 +208,7 @@ impl Voice {
     let f0 = POS_ADPCM_TABLE[filter];
     let f1 = NEG_ADPCM_TABLE[filter];
 
-    // there are 14 samples to fetch after getting the header
+    // there are 14 bytes to fetch after getting the header
     for i in 0..7 {
       let mut samples = sound_ram.read_16(self.current_address);
 
