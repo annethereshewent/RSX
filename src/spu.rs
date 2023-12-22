@@ -238,8 +238,7 @@ impl SPU {
     let mut cd_left = 0.0;
     let mut cd_right = 0.0;
 
-    self.update_voices()
-;
+    self.update_voices();
     self.tick_noise();
 
     if !self.cd_left_buffer.is_empty() {
