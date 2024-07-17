@@ -1,4 +1,4 @@
-use std::{fs::{self, File}, env};
+use std::{collections::VecDeque, env, fs::{self, File}, sync::{Arc, Mutex}};
 
 pub mod sdl_frontend;
 
@@ -14,13 +14,21 @@ pub fn main() {
     panic!("please specify a path to a game.");
   }
 
+  let audio_samples = Arc::new(Mutex::new(VecDeque::new()));
+
   let filepath = &args[1];
 
   let sdl_context = sdl2::init().unwrap();
 
-  let mut cpu = CPU::new(fs::read("../SCPH1001.BIN").unwrap(), Some(File::open(filepath).unwrap()), None, false);
+  let mut cpu = CPU::new(
+    fs::read("../SCPH1001.BIN").unwrap(),
+    Some(File::open(filepath).unwrap()),
+    None,
+    false,
+    audio_samples.clone()
+  );
 
-  let mut frontend = SdlFrontend::new(&sdl_context);
+  let mut frontend = SdlFrontend::new(&sdl_context, audio_samples);
 
   if args.len() == 3 {
     let exe_file = &args[2];
@@ -34,6 +42,5 @@ pub fn main() {
 
     frontend.render(&mut cpu.bus.gpu);
     frontend.handle_events(&mut cpu);
-    frontend.push_samples(cpu.bus.spu.audio_buffer.drain(..).collect());
   }
 }

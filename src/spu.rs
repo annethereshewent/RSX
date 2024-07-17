@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, sync::{Arc, Mutex}};
 
 use crate::cpu::interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt};
 use self::{voices::Voice, spu_control::{SpuControlRegister, RamTransferMode}, reverb::Reverb, volume_sweep::VolumeSweep};
@@ -12,7 +12,7 @@ pub mod volume_sweep;
 pub const FIFO_CAPACITY: usize = 32;
 pub const SPU_RAM_SIZE: usize = 0x80000; // 512 kb
 
-pub const NUM_SAMPLES: usize = 32768;
+pub const NUM_SAMPLES: usize = 1024*8*2;
 
 pub struct SoundRam {
   data: Box<[u8]>,
@@ -67,7 +67,7 @@ impl DataTransfer {
 }
 
 pub struct SPU {
-  pub audio_buffer: Vec<i16>,
+  pub audio_buffer: Arc<Mutex<VecDeque<i16>>>,
   pub previous_value: i16,
   cpu_cycles: i32,
   voices: [Voice; 24],
@@ -103,7 +103,7 @@ pub struct SPU {
 pub const CPU_TO_APU_CYCLES: i32 = 768;
 
 impl SPU {
-  pub fn new() -> Self {
+  pub fn new(audio_buffer: Arc<Mutex<VecDeque<i16>>>) -> Self {
     Self {
       // interrupts,
       cpu_cycles: 0,
@@ -129,7 +129,7 @@ impl SPU {
       sound_ram: SoundRam::new(),
       reverb: Reverb::new(),
       endx: 0,
-      audio_buffer: Vec::with_capacity(NUM_SAMPLES),
+      audio_buffer,
       previous_value: 0,
       noise_level: 1,
       noise_timer: 0,
@@ -221,9 +221,9 @@ impl SPU {
   }
 
   fn update_voices(&mut self) {
-    self.update_endx();
-    self.update_key_off();
     self.update_key_on();
+    self.update_key_off();
+    self.update_endx();
   }
 
   // tick for one APU cycle
@@ -260,10 +260,10 @@ impl SPU {
       let (sample_left, sample_right) = voice.get_samples(self.noise_level);
 
       if i == 1 {
-        self.sound_ram.write_16(self.capture_index + 0x800, SPU::to_i16(sample_left) as u16);
+        self.sound_ram.write_16(self.capture_index + 0x800, voice.modulator as u16);
       }
       if i == 3 {
-        self.sound_ram.write_16(self.capture_index + 0xc00, SPU::to_i16(sample_left) as u16);
+        self.sound_ram.write_16(self.capture_index + 0xc00, voice.modulator as u16);
       }
 
       output_left += sample_left;
@@ -325,8 +325,10 @@ impl SPU {
   }
 
   fn push_sample(&mut self, sample: f32) {
-    if self.audio_buffer.len() < NUM_SAMPLES {
-      self.audio_buffer.push(SPU::to_i16(sample));
+    let mut audio_buffer = self.audio_buffer.lock().unwrap();
+
+    if audio_buffer.len() < NUM_SAMPLES {
+      audio_buffer.push_back(SPU::to_i16(sample));
     }
   }
 

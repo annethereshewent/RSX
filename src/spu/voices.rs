@@ -54,8 +54,8 @@ pub const NEG_ADPCM_TABLE: [i32; 5] = [0, 0, -52, -55, -60];
 
 #[derive(Copy, Clone)]
 pub struct Voice {
-  volume_left: VolumeSweep,
-  volume_right: VolumeSweep,
+  pub volume_left: VolumeSweep,
+  pub volume_right: VolumeSweep,
   pitch: u16,
   start_address: u32,
   repeat_address: u32,
@@ -124,6 +124,9 @@ impl Voice {
   }
 
   pub fn update_key_off(&mut self) {
+    if self.adsr.state == AdsrState::Disabled || self.adsr.state == AdsrState::Release {
+      return;
+    }
     self.adsr.state = AdsrState::Release;
     self.adsr.cycles = 0;
   }

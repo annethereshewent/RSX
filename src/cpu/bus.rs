@@ -1,4 +1,4 @@
-use std::{rc::Rc, cell::Cell, fs::File};
+use std::{cell::Cell, collections::VecDeque, fs::File, rc::Rc, sync::{Arc, Mutex}};
 
 use crate::{gpu::GPU, spu::SPU, cdrom::Cdrom, controllers::Controllers};
 
@@ -51,12 +51,20 @@ pub struct Bus {
 }
 
 impl Bus {
-  pub fn new(bios: Vec<u8>, interrupts: Rc<Cell<InterruptRegisters>>, dma: Rc<Cell<DMA>>, game_file: Option<File>, game_bytes: Option<Vec<u8>>, is_wasm: bool) -> Self {
+  pub fn new(
+    bios: Vec<u8>,
+    interrupts: Rc<Cell<InterruptRegisters>>,
+    dma: Rc<Cell<DMA>>,
+    game_file: Option<File>,
+    game_bytes: Option<Vec<u8>>,
+    is_wasm: bool,
+    audio_samples: Arc<Mutex<VecDeque<i16>>>) -> Self
+  {
     Self {
       bios,
       ram: vec![0; RAM_SIZE].into_boxed_slice(),
       gpu: GPU::new(interrupts.clone()),
-      spu: SPU::new(),
+      spu: SPU::new(audio_samples),
       timers: Timers::new(interrupts.clone()),
       cdrom: Cdrom::new(interrupts.clone(), game_file, game_bytes),
       controllers: Controllers::new(interrupts.clone(), is_wasm),
