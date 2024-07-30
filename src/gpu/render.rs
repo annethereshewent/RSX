@@ -425,51 +425,48 @@ impl GPU {
     let mut color = c[0];
 
     while curr_p.y < max_y {
-      curr_p.x = min_x;
-      while curr_p.x < max_x {
-        let (boundary1, boundary2) = self.get_triangle_boundaries(p, p01_slope, p12_slope, p02_slope, curr_p);
+      let (boundary1, boundary2) = self.get_triangle_boundaries(p, p01_slope, p12_slope, p02_slope, curr_p);
 
-        let (curr_min_x, curr_max_x) = if p02_is_left {
-          (boundary1, boundary2)
-        } else {
-          (boundary2, boundary1)
-        };
+      let (curr_min_x, curr_max_x) = if p02_is_left {
+        (boundary1, boundary2)
+      } else {
+        (boundary2, boundary1)
+      };
+      curr_p.x = curr_min_x;
+      while curr_p.x < curr_max_x {
+        // render the pixel
+        if is_shaded {
+          GPU::interpolate_color(&mut color, curr_p, r_base, g_base, b_base, &color_d);
 
-        if curr_p.x >= curr_min_x && curr_p.x < curr_max_x {
-          // render the pixel
-          if is_shaded {
-            GPU::interpolate_color(&mut color, curr_p, r_base, g_base, b_base, &color_d);
-
-            if self.stat.dither_enabled {
-              self.dither(curr_p, &mut color);
-            }
+          if self.stat.dither_enabled {
+            self.dither(curr_p, &mut color);
           }
-
-          let mut output = color;
-
-          if is_textured {
-            let mut uv = GPU::interpolate_texture_coordinates(curr_p, u_base_fp, v_base_fp, &texture_d);
-
-            uv = self.mask_texture_coordinates(uv);
-
-            if let Some(mut texture) = self.get_texture(uv, clut) {
-              if is_blended {
-                self.blend_colors(&mut texture, &output);
-
-                if self.stat.dither_enabled {
-                  self.dither(curr_p, &mut texture);
-                }
-              }
-
-              output = texture;
-            } else {
-              curr_p.x += 1;
-              continue;
-            }
-          }
-
-          self.render_pixel(curr_p, output, is_textured, semi_transparent);
         }
+
+        let mut output = color;
+
+        if is_textured {
+          let mut uv = GPU::interpolate_texture_coordinates(curr_p, u_base_fp, v_base_fp, &texture_d);
+
+          uv = self.mask_texture_coordinates(uv);
+
+          if let Some(mut texture) = self.get_texture(uv, clut) {
+            if is_blended {
+              self.blend_colors(&mut texture, &output);
+
+              if self.stat.dither_enabled {
+                self.dither(curr_p, &mut texture);
+              }
+            }
+
+            output = texture;
+          } else {
+            curr_p.x += 1;
+            continue;
+          }
+        }
+
+        self.render_pixel(curr_p, output, is_textured, semi_transparent);
         curr_p.x += 1;
       }
       curr_p.y += 1;
