@@ -1,4 +1,4 @@
-pub struct Instruction(u32);
+pub struct Instruction(pub u32);
 
 impl Instruction {
 

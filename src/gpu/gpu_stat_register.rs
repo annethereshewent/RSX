@@ -1,4 +1,4 @@
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum TextureColors {
   FourBit = 0,
   EightBit = 1,
@@ -11,7 +11,7 @@ pub enum Field {
   Top = 1
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum SemiTransparency {
   Half,
   Add,

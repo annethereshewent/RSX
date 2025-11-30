@@ -1,4 +1,4 @@
-use std::{rc::Rc, cell::Cell, fs::{self, File}};
+use std::{cell::Cell, collections::HashSet, fs::{self, File}, rc::Rc};
 
 use crate::{cpu::instruction::Instruction, gpu::{CYCLES_PER_SCANLINE, NUM_SCANLINES_PER_FRAME, GPU_FREQUENCY}, util};
 
@@ -13,6 +13,7 @@ pub mod interrupt;
 pub mod timers;
 pub mod gte;
 pub mod mdec;
+pub mod disassembler;
 
 // 33.868MHZ
 pub const CPU_FREQUENCY: f64 = 33_868_800.0;
@@ -130,7 +131,8 @@ pub struct CPU {
   pub gte: Gte,
   pub debug_on: bool,
   output: String,
-  pub exe_file: Option<String>
+  pub exe_file: Option<String>,
+  pub found: HashSet<u32>,
 }
 
 impl CPU {
@@ -166,7 +168,8 @@ impl CPU {
       gte: Gte::new(),
       debug_on: false,
       output: "".to_string(),
-      exe_file: None
+      exe_file: None,
+      found: HashSet::new()
     }
   }
 
@@ -283,6 +286,15 @@ impl CPU {
     self.pc = self.next_pc;
     self.next_pc = self.next_pc.wrapping_add(4);
 
+    if !self.found.contains(&self.current_pc) && self.debug_on {
+      println!(
+          "[Opcode: 0x{:x}] [PC: 0x{:x}] {}",
+          instr,
+          self.current_pc,
+          self.disassemble(instr)
+      );
+      self.found.insert(self.current_pc);
+    }
     self.tick_instruction();
 
     self.execute(Instruction::new(instr));

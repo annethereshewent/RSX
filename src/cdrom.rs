@@ -723,9 +723,8 @@ impl Cdrom {
       } else {
         self.controller_mode = ControllerMode::CommandTransfer;
       }
-
-      self.controller_cycles += cycles;
     }
+    self.controller_cycles += cycles;
   }
 
   fn controller_param_transfer(&mut self) {

@@ -340,19 +340,19 @@ impl GPU {
     let mut max_y = cmp::max(p[0].y, cmp::max(p[1].y, p[2].y));
 
     if (max_x >= 1024 && min_x >= 1024) || (max_x < 0 && min_x < 0) {
-        return;
+      return;
     }
 
     if (max_y >= 512 && min_y >= 512) || (max_y < 0 && min_y < 0) {
-        return;
+      return;
     }
 
     if (max_x - min_x) >= 1024 {
-        return;
+      return;
     }
 
     if (max_y - min_y) >= 512 {
-        return;
+      return;
     }
 
     min_x = cmp::max(min_x, self.drawing_area_left as i32);
@@ -453,6 +453,7 @@ impl GPU {
             uv = self.mask_texture_coordinates(uv);
 
             if let Some(mut texture) = self.get_texture(uv, clut) {
+
               if is_blended {
                 self.blend_colors(&mut texture, &output);
 
@@ -558,6 +559,7 @@ impl GPU {
     pixel |= ((color.r as u16) & 0xf8) >> 3;
     pixel |= ((color.g as u16) & 0xf8) << 2;
     pixel |= ((color.b as u16) & 0xf8) << 7;
+    pixel |= (color.a as u16) << 15;
 
     pixel
   }

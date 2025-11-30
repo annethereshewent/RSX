@@ -43,6 +43,7 @@ pub struct Bus {
   pub mdec: Mdec,
   pub controllers: Controllers,
   pub cycles: i32,
+  total_cycles: usize,
   pub cache_control: u32,
   exp2_buffer: Vec<u8>,
   scratchpad: Box<[u8]>,
@@ -69,7 +70,8 @@ impl Bus {
       mdec: Mdec::new(),
       scratchpad: vec![0; 0x400].into_boxed_slice(),
       last_device_sync: [0; 4],
-      last_sync: 0
+      last_sync: 0,
+      total_cycles: 0
     }
   }
 
@@ -418,6 +420,7 @@ impl Bus {
 
   pub fn tick(&mut self, cycles: i32) {
     self.cycles += cycles;
+    self.total_cycles += cycles as usize;
 
     // syncing cdrom and dma on every tick since it was causing issues otherwise.
     self.cdrom.tick_counter(cycles, &mut self.spu);
