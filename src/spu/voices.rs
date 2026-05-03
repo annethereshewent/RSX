@@ -1,4 +1,4 @@
-use super::{adsr::{Adsr, AdsrState}, SPU, SoundRam};
+use super::{adsr::{Adsr, AdsrState}, SPU, SoundRam, volume_sweep::VolumeSweep};
 
 pub const MAX_SAMPLES: usize = 28;
 
@@ -52,11 +52,10 @@ pub const GAUSS_TABLE: [i32; 512] = [
 pub const POS_ADPCM_TABLE: [i32; 5] = [0, 60, 115, 98, 122];
 pub const NEG_ADPCM_TABLE: [i32; 5] = [0, 0, -52, -55, -60];
 
-
 #[derive(Copy, Clone)]
 pub struct Voice {
-  volume_left: i16,
-  volume_right: i16,
+  pub volume_left: VolumeSweep,
+  pub volume_right: VolumeSweep,
   pitch: u16,
   start_address: u32,
   repeat_address: u32,
@@ -76,8 +75,8 @@ pub struct Voice {
 impl Voice {
   pub fn new() -> Self {
     Self {
-      volume_left: 0,
-      volume_right: 0,
+      volume_left: VolumeSweep::new(),
+      volume_right: VolumeSweep::new(),
       pitch: 0,
       start_address: 0,
       repeat_address: 0,
@@ -95,8 +94,8 @@ impl Voice {
     }
   }
 
-  pub fn update_echo(&mut self) {
-    self.reverb = true;
+  pub fn update_echo(&mut self, val: bool) {
+    self.reverb = val;
   }
 
   pub fn update_noise(&mut self, val: bool) {
@@ -125,6 +124,9 @@ impl Voice {
   }
 
   pub fn update_key_off(&mut self) {
+    if self.adsr.state == AdsrState::Disabled || self.adsr.state == AdsrState::Release {
+      return;
+    }
     self.adsr.state = AdsrState::Release;
     self.adsr.cycles = 0;
   }
@@ -144,8 +146,11 @@ impl Voice {
 
     self.modulator = SPU::to_i16(sample);
 
-    let volume_left = SPU::to_f32(self.volume_left);
-    let volume_right = SPU::to_f32(self.volume_right);
+    let volume_left = SPU::to_f32(self.volume_left.volume);
+    let volume_right = SPU::to_f32(self.volume_right.volume);
+
+    self.volume_left.tick();
+    self.volume_right.tick();
 
     (sample * volume_left, sample * volume_right)
   }
@@ -208,7 +213,7 @@ impl Voice {
     let f0 = POS_ADPCM_TABLE[filter];
     let f1 = NEG_ADPCM_TABLE[filter];
 
-    // there are 14 samples to fetch after getting the header
+    // there are 14 bytes to fetch after getting the header
     for i in 0..7 {
       let mut samples = sound_ram.read_16(self.current_address);
 
@@ -281,8 +286,8 @@ impl Voice {
 
   pub fn read_16(&self, offset: u32) -> u16 {
     match offset {
-      0 => (self.volume_left / 2) as u16,
-      2 => (self.volume_right / 2) as u16,
+      0 => (self.volume_left.volume / 2) as u16,
+      2 => (self.volume_right.volume / 2) as u16,
       4 => self.pitch,
       6 => (self.start_address / 8) as u16,
       8 => self.adsr.value as u16,
@@ -295,8 +300,26 @@ impl Voice {
 
   pub fn write_16(&mut self, offset: u32, value: u16) {
     match offset {
-      0 => self.volume_left = ((value * 2) & 0x7fff) as i16,
-      2 => self.volume_right = ((value * 2) & 0x7fff) as i16,
+      // 0 => self.volume_left = ((value * 2) & 0x7fff) as i16,
+      // 2 => self.volume_right = ((value * 2) & 0x7fff) as i16,
+      0 => {
+        if (value >> 15) & 0b1 == 0 {
+          self.volume_left.volume = ((value * 2) & 0x7fff) as i16;
+          self.volume_left.is_active = false;
+        } else {
+          self.volume_left.set_envelope_params(value);
+          self.volume_left.is_active = true;
+        }
+      }
+      2 => {
+        if (value >> 15) & 0b1 == 0 {
+          self.volume_right.volume = ((value * 2) & 0x7fff) as i16;
+          self.volume_right.is_active = false;
+        } else {
+          self.volume_right.set_envelope_params(value);
+          self.volume_right.is_active = true;
+        }
+      }
       4 => self.pitch = value,
       6 => self.start_address = (value as u32) * 8,
       8 => {

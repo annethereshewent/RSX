@@ -145,7 +145,7 @@ impl Adsr {
         return;
       }
 
-      if (direction == AdsrDirection::Increasing && self.current_volume >= target as i16) || (direction == AdsrDirection::Decreasing && self.current_volume <= target as i16) {
+      if (direction == AdsrDirection::Increasing && self.current_volume as i32 >= target) || (direction == AdsrDirection::Decreasing && self.current_volume as i32 <= target) {
         self.cycles = 0;
         self.state = next;
       }

@@ -154,10 +154,10 @@ function passStringToWasm0(arg, malloc, realloc) {
 }
 /**
 */
-export const HighInput = Object.freeze({ ButtonL2:0,"0":"ButtonL2",ButtonR2:1,"1":"ButtonR2",ButtonL1:2,"2":"ButtonL1",ButtonR1:3,"3":"ButtonR1",ButtonTriangle:4,"4":"ButtonTriangle",ButtonCircle:5,"5":"ButtonCircle",ButtonCross:6,"6":"ButtonCross",ButtonSquare:7,"7":"ButtonSquare", });
+export const LowInput = Object.freeze({ ButtonSelect:0,"0":"ButtonSelect",ButtonL3:1,"1":"ButtonL3",ButtonR3:2,"2":"ButtonR3",ButtonStart:3,"3":"ButtonStart",ButtonUp:4,"4":"ButtonUp",ButtonRight:5,"5":"ButtonRight",ButtonDown:6,"6":"ButtonDown",ButtonLeft:7,"7":"ButtonLeft", });
 /**
 */
-export const LowInput = Object.freeze({ ButtonSelect:0,"0":"ButtonSelect",ButtonL3:1,"1":"ButtonL3",ButtonR3:2,"2":"ButtonR3",ButtonStart:3,"3":"ButtonStart",ButtonUp:4,"4":"ButtonUp",ButtonRight:5,"5":"ButtonRight",ButtonDown:6,"6":"ButtonDown",ButtonLeft:7,"7":"ButtonLeft", });
+export const HighInput = Object.freeze({ ButtonL2:0,"0":"ButtonL2",ButtonR2:1,"1":"ButtonR2",ButtonL1:2,"2":"ButtonL1",ButtonR1:3,"3":"ButtonR1",ButtonTriangle:4,"4":"ButtonTriangle",ButtonCircle:5,"5":"ButtonCircle",ButtonCross:6,"6":"ButtonCross",ButtonSquare:7,"7":"ButtonSquare", });
 /**
 */
 export class WasmEmulator {

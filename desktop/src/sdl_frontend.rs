@@ -1,20 +1,22 @@
-use std::{collections::{HashMap, VecDeque}, ops::DerefMut};
+use std::{collections::{HashMap, VecDeque}, ops::DerefMut, sync::{Arc, Mutex}};
 
 use rsx::{gpu::GPU, cpu::CPU, controllers::joypad::{LowInput, HighInput}};
 use sdl2::{video::Window, EventPump, event::Event, render::Canvas, pixels::PixelFormatEnum, audio::{AudioCallback, AudioSpecDesired, AudioDevice}, Sdl, keyboard::Keycode, controller::{GameController, Button, Axis}};
 
 pub struct PsxAudioCallback {
-  audio_samples: VecDeque<i16>
+  audio_samples: Arc<Mutex<VecDeque<i16>>>
 }
 
 impl AudioCallback for PsxAudioCallback {
   type Channel = i16;
 
   fn callback(&mut self, buf: &mut [Self::Channel]) {
-    let len = self.audio_samples.len();
+    let mut audio_samples = self.audio_samples.lock().unwrap();
+
+    let len = audio_samples.len();
 
     let (last_left, last_right) = if len > 1 {
-      (self.audio_samples[len - 2], self.audio_samples[len - 1])
+      (audio_samples[len - 2], audio_samples[len - 1])
     } else {
       (0, 0)
     };
@@ -22,7 +24,7 @@ impl AudioCallback for PsxAudioCallback {
     let mut index = 0;
 
     for b in buf.iter_mut() {
-      *b = if let Some(sample) = self.audio_samples.pop_front() {
+      *b = if let Some(sample) = audio_samples.pop_front() {
         sample
       } else {
         if  index % 2 == 0 { last_left } else { last_right }
@@ -31,14 +33,6 @@ impl AudioCallback for PsxAudioCallback {
       index += 1;
     }
 
-  }
-}
-
-impl PsxAudioCallback {
-  pub fn push_samples(&mut self, samples: Vec<i16>) {
-    for sample in samples.iter() {
-      self.audio_samples.push_back(*sample);
-    }
   }
 }
 
@@ -52,7 +46,7 @@ pub struct SdlFrontend {
 }
 
 impl SdlFrontend {
-  pub fn new(sdl_context: &Sdl) -> Self {
+  pub fn new(sdl_context: &Sdl, audio_samples: Arc<Mutex<VecDeque<i16>>>) -> Self {
 
     let video = sdl_context.video().unwrap();
 
@@ -89,13 +83,13 @@ impl SdlFrontend {
     let spec = AudioSpecDesired {
       freq: Some(44100),
       channels: Some(2),
-      samples: Some(512)
+      samples: Some(4096)
     };
 
     let device = audio_subsystem.open_playback(
       None,
       &spec,
-      |_| PsxAudioCallback { audio_samples: VecDeque::new() }
+      |_| PsxAudioCallback { audio_samples }
     ).unwrap();
 
     device.resume();
@@ -245,10 +239,6 @@ impl SdlFrontend {
         _ => {},
     };
     }
-  }
-
-  pub fn push_samples(&mut self, samples: Vec<i16>) {
-    self.device.lock().deref_mut().push_samples(samples);
   }
 
   pub fn render(&mut self, gpu: &mut GPU) {
