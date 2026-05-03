@@ -277,10 +277,6 @@ impl CPU {
       return;
     }
 
-    if self.debug_on {
-      println!("executing instruction {:032b} at address {:08x}", instr, self.current_pc);
-    }
-
     self.update_tty();
 
     self.pc = self.next_pc;
