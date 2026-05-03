@@ -238,14 +238,14 @@ impl CPU {
       }
     }
 
-    self.current_pc = self.pc;
-
-    if self.current_pc == 0x80030000 {
+    if self.pc == 0x80030000 {
       if let Some(exe_file) = &self.exe_file {
         let exe_file = exe_file.clone();
         self.load_exe(exe_file.as_str());
       }
     }
+
+    self.current_pc = self.pc;
 
     if self.current_pc & 0b11 != 0 {
       self.cop0.bad_vaddr = self.current_pc;

@@ -1,4 +1,4 @@
-use std::{fs::{self, File}, env};
+use std::{env, fs::{self, File}, path::Path};
 
 pub mod sdl_frontend;
 
@@ -11,21 +11,28 @@ pub fn main() {
   let args: Vec<String> = env::args().collect();
 
   if args.len() < 2 {
-    panic!("please specify a path to a game.");
+    panic!("please specify a path to a game or PS exe.");
   }
 
-  let filepath = &args[1];
+  let filepath = Path::new(&args[1]);
 
   let sdl_context = sdl2::init().unwrap();
 
-  let mut cpu = CPU::new(fs::read("../SCPH1001.BIN").unwrap(), Some(File::open(filepath).unwrap()), None, false);
+  let file_extension = filepath.extension().unwrap_or_default().to_str().unwrap_or_default();
+
+  let bios_data = fs::read("../SCPH1001.BIN").unwrap();
+
+  let mut cpu = if file_extension == "exe" {
+    let mut cpu = CPU::new(bios_data, None, None, false);
+    cpu.exe_file = Some(args[1].to_string());
+
+    cpu
+  } else {
+    CPU::new(bios_data, Some(File::open(filepath).unwrap()), None, false)
+  };
 
   let mut frontend = SdlFrontend::new(&sdl_context);
 
-  if args.len() == 3 {
-    let exe_file = &args[2];
-    cpu.exe_file = Some(exe_file.clone());
-  }
   loop {
     cpu.run_frame();
     cpu.bus.gpu.cap_fps();
