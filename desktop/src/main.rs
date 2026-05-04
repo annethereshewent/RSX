@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, env, fs::{self, File}, path::Path, sync::{Arc, Mutex}};
+use std::{env, fs::{self, File}, path::Path};
 
 pub mod sdl_frontend;
 
@@ -16,8 +16,6 @@ pub fn main() {
 
   let filepath = Path::new(&args[1]);
 
-  let audio_samples = Arc::new(Mutex::new(VecDeque::new()));
-
   let sdl_context = sdl2::init().unwrap();
 
   let file_extension = filepath.extension().unwrap_or_default().to_str().unwrap_or_default();
@@ -25,15 +23,15 @@ pub fn main() {
   let bios_data = fs::read("../SCPH1001.BIN").unwrap();
 
   let mut cpu = if file_extension == "exe" {
-    let mut cpu = CPU::new(bios_data, None, None, false, audio_samples.clone());
+    let mut cpu = CPU::new(bios_data, None, None, false);
     cpu.exe_file = Some(args[1].to_string());
 
     cpu
   } else {
-    CPU::new(bios_data, Some(File::open(filepath).unwrap()), None, false, audio_samples.clone())
+    CPU::new(bios_data, Some(File::open(filepath).unwrap()), None, false)
   };
 
-  let mut frontend = SdlFrontend::new(&sdl_context, audio_samples);
+  let mut frontend = SdlFrontend::new(&sdl_context);
 
   loop {
     cpu.run_frame();
@@ -43,5 +41,6 @@ pub fn main() {
 
     frontend.render(&mut cpu.bus.gpu);
     frontend.handle_events(&mut cpu);
+    frontend.push_samples(cpu.bus.spu.audio_buffer.drain(..).collect());
   }
 }

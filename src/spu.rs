@@ -1,18 +1,17 @@
-use std::{collections::VecDeque, sync::{Arc, Mutex}};
+use std::collections::VecDeque;
 
 use crate::cpu::interrupt::{interrupt_registers::InterruptRegisters, interrupt_register::Interrupt};
-use self::{voices::Voice, spu_control::{SpuControlRegister, RamTransferMode}, reverb::Reverb, volume_sweep::VolumeSweep};
+use self::{voices::Voice, spu_control::{SpuControlRegister, RamTransferMode}, reverb::Reverb};
 
 pub mod voices;
 pub mod adsr;
 pub mod spu_control;
 pub mod reverb;
-pub mod volume_sweep;
 
 pub const FIFO_CAPACITY: usize = 32;
 pub const SPU_RAM_SIZE: usize = 0x80000; // 512 kb
 
-pub const NUM_SAMPLES: usize = 1024*8*2;
+pub const NUM_SAMPLES: usize = 32768;
 
 pub struct SoundRam {
   data: Box<[u8]>,
@@ -67,12 +66,12 @@ impl DataTransfer {
 }
 
 pub struct SPU {
-  pub audio_buffer: Arc<Mutex<VecDeque<i16>>>,
+  pub audio_buffer: Vec<i16>,
   pub previous_value: i16,
   cpu_cycles: i32,
   voices: [Voice; 24],
-  volume_left: VolumeSweep,
-  volume_right: VolumeSweep,
+  volume_left: i16,
+  volume_right: i16,
   reverb_volume_left: i16,
   reverb_volume_right: i16,
   external_volume_left: i16,
@@ -97,19 +96,19 @@ pub struct SPU {
   pub cd_left_buffer: VecDeque<i16>,
   pub cd_right_buffer: VecDeque<i16>,
   capture_index: u32,
-  writing_to_capture_half: bool,
+  writing_to_capture_half: bool
 }
 
 pub const CPU_TO_APU_CYCLES: i32 = 768;
 
 impl SPU {
-  pub fn new(audio_buffer: Arc<Mutex<VecDeque<i16>>>) -> Self {
+  pub fn new() -> Self {
     Self {
       // interrupts,
       cpu_cycles: 0,
       voices: [Voice::new(); 24],
-      volume_left: VolumeSweep::new(),
-      volume_right: VolumeSweep::new(),
+      volume_left: 0,
+      volume_right: 0,
       reverb_volume_left: 0,
       reverb_volume_right: 0,
       external_volume_left: 0,
@@ -129,7 +128,7 @@ impl SPU {
       sound_ram: SoundRam::new(),
       reverb: Reverb::new(),
       endx: 0,
-      audio_buffer,
+      audio_buffer: Vec::with_capacity(NUM_SAMPLES),
       previous_value: 0,
       noise_level: 1,
       noise_timer: 0,
@@ -153,9 +152,7 @@ impl SPU {
   fn update_echo(&mut self) {
     for i in 0..self.voices.len() {
       if (self.echo_on >> i) & 0b1 == 1 {
-        self.voices[i].update_echo(true);
-      } else {
-        self.voices[i].update_echo(false);
+        self.voices[i].update_echo();
       }
     }
   }
@@ -221,9 +218,9 @@ impl SPU {
   }
 
   fn update_voices(&mut self) {
-    self.update_key_on();
-    self.update_key_off();
     self.update_endx();
+    self.update_key_off();
+    self.update_key_on();
   }
 
   // tick for one APU cycle
@@ -239,7 +236,8 @@ impl SPU {
     let mut cd_left = 0.0;
     let mut cd_right = 0.0;
 
-    self.update_voices();
+    self.update_voices()
+;
     self.tick_noise();
 
     if !self.cd_left_buffer.is_empty() {
@@ -260,10 +258,10 @@ impl SPU {
       let (sample_left, sample_right) = voice.get_samples(self.noise_level);
 
       if i == 1 {
-        self.sound_ram.write_16(self.capture_index + 0x800, voice.modulator as u16);
+        self.sound_ram.write_16(self.capture_index + 0x800, SPU::to_i16(sample_left) as u16);
       }
       if i == 3 {
-        self.sound_ram.write_16(self.capture_index + 0xc00, voice.modulator as u16);
+        self.sound_ram.write_16(self.capture_index + 0xc00, SPU::to_i16(sample_left) as u16);
       }
 
       output_left += sample_left;
@@ -281,13 +279,8 @@ impl SPU {
       modulator = voice.modulator;
     }
 
-    output_left *= SPU::to_f32(self.volume_left.volume);
-    output_right *= SPU::to_f32(self.volume_right.volume);
-
-    if self.control.mute_spu() {
-      output_left = 0.0;
-      output_right = 0.0;
-    }
+    output_left *= SPU::to_f32(self.volume_left);
+    output_right *= SPU::to_f32(self.volume_right);
 
     if self.control.cd_audio_enable() {
       output_left += cd_left * SPU::to_f32(self.cd_volume_left);
@@ -317,18 +310,13 @@ impl SPU {
       interrupts.status.set_interrupt(Interrupt::Spu);
     }
 
-    self.volume_left.tick();
-    self.volume_right.tick();
-
     self.push_sample(output_left);
     self.push_sample(output_right);
   }
 
   fn push_sample(&mut self, sample: f32) {
-    let mut audio_buffer = self.audio_buffer.lock().unwrap();
-
-    if audio_buffer.len() < NUM_SAMPLES {
-      audio_buffer.push_back(SPU::to_i16(sample));
+    if self.audio_buffer.len() < NUM_SAMPLES {
+      self.audio_buffer.push(SPU::to_i16(sample));
     }
   }
 
@@ -373,8 +361,8 @@ impl SPU {
 
         self.voices[voice].read_16(offset)
       }
-      0x1f80_1d80 => (self.volume_left.volume / 2) as u16,
-      0x1f80_1d82 => (self.volume_right.volume / 2) as u16,
+      0x1f80_1d80 => self.volume_left as u16,
+      0x1f80_1d82 => self.volume_right as u16,
       0x1f80_1d84 => self.reverb_volume_left as u16,
       0x1f80_1d86 => self.reverb_volume_right as u16,
       0x1f80_1d88 => self.key_on as u16,
@@ -423,24 +411,8 @@ impl SPU {
 
         self.voices[voice].write_16(offset, val);
       },
-      0x1f80_1d80 => {
-        if (val >> 15 & 0b1) == 0 {
-          self.volume_left.volume = (val * 2) as i16;
-          self.volume_left.is_active = false;
-        } else {
-          self.volume_left.is_active = true;
-          self.volume_left.set_envelope_params(val);
-        }
-      }
-      0x1f80_1d82 => {
-        if (val >> 15 & 0b1) == 0 {
-          self.volume_right.volume = (val * 2) as i16;
-          self.volume_right.is_active = false;
-        } else {
-          self.volume_right.set_envelope_params(val);
-          self.volume_right.is_active = true;
-        }
-      }
+      0x1f80_1d80 => self.volume_left = val as i16,
+      0x1f80_1d82 => self.volume_right = val as i16,
       0x1f80_1d84 => self.reverb_volume_left = val as i16,
       0x1f80_1d86 => self.reverb_volume_right = val as i16,
       0x1f80_1d88 => {
